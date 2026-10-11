@@ -272,7 +272,7 @@ export default function BusinessOwnerRegister() {
                   ) : (
                     <FiUploadCloud size={18} className="text-gray-400 shrink-0" />
                   )}
-                  <span className="text-sm text-gray-600 truncate">
+                  <span className="min-w-0 text-sm text-gray-600 leading-snug wrap-anywhere">
                     {formData.business_permit_file ? formData.business_permit_file.name : 'Click to upload PDF or Word document'}
                   </span>
                   <input

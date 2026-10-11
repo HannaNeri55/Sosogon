@@ -80,7 +80,8 @@ export default function ManageUsers() {
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          {/* Phones: keep columns readable and let the table scroll sideways. */}
+          <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">User</th>

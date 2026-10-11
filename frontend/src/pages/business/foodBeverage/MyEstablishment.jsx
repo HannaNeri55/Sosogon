@@ -147,7 +147,7 @@ export default function MyEstablishment() {
             )}
             <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
               <FiUpload className="text-gray-400 shrink-0" size={18} />
-              <span className="text-sm text-gray-600 truncate">
+              <span className="min-w-0 text-sm text-gray-600 leading-snug wrap-anywhere">
                 {newImages.length > 0 ? `${newImages.length} new photo(s) selected` : 'Click to add photos (JPEG, PNG, WebP)'}
               </span>
               <input

@@ -45,6 +45,8 @@ class CategorySeeder extends Seeder
             $cat['updated_at'] = now();
         }
 
-        DB::table('categories')->insert($categories);
+        // Upsert on the unique (name, type) index, so running the seeder again updates
+        // icons instead of adding a second copy of every category.
+        DB::table('categories')->upsert($categories, ['name', 'type'], ['icon', 'updated_at']);
     }
 }

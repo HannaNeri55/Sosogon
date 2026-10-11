@@ -113,7 +113,7 @@ export default function ManageHeroSlides() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-8 border border-gray-100 mb-8 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing hero slide' : 'New hero slide'}</p>
           <input className="input-field" placeholder="Eyebrow (small label above title)" value={formData.eyebrow} onChange={(e) => setFormData({ ...formData, eyebrow: e.target.value })} />
           <input className="input-field" placeholder="Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
@@ -159,7 +159,8 @@ export default function ManageHeroSlides() {
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          {/* Phones: keep columns readable and let the table scroll sideways. */}
+          <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Slide</th>

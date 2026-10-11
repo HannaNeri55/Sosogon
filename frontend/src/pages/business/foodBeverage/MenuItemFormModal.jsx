@@ -90,7 +90,7 @@ export default function MenuItemFormModal({ item, onClose, onSaved }) {
             )}
             <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
               <FiUpload className="text-gray-400 shrink-0" size={18} />
-              <span className="text-sm text-gray-600 truncate">
+              <span className="min-w-0 text-sm text-gray-600 leading-snug wrap-anywhere">
                 {image ? image.name : 'Click to add a photo (JPEG, PNG, WebP)'}
               </span>
               <input

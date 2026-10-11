@@ -70,7 +70,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
           <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Submission Status</h1>
         </div>
         {onAddNew && (
-          <button onClick={onAddNew} className="btn-primary flex items-center gap-2">
+          <button onClick={onAddNew} className="btn-primary w-full sm:w-auto justify-center flex items-center gap-2">
             <FiPlus size={16} /> Add Another Listing
           </button>
         )}
@@ -141,8 +141,9 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
                   </div>
                 </form>
               ) : (
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                // Phones: the status badge sits above the title so the text gets the full width.
+                <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
                     <h3 className="font-heading font-semibold text-xl text-gray-900">{submission.business_name}</h3>
                     <p className="text-sm text-gray-500 capitalize mt-1">{submission.type.replace('_', ' ')}</p>
                     <p className="text-gray-600 mt-3">{submission.description}</p>
@@ -155,10 +156,10 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
                       </div>
                     )}
                     <div className="flex gap-4 mt-4">
-                      <button onClick={() => startEdit(submission)} className="flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-sm font-medium">
+                      <button onClick={() => startEdit(submission)} className="flex items-center gap-1.5 py-2 sm:py-0 text-primary-600 hover:text-primary-700 text-sm font-medium">
                         <FiEdit2 size={13} /> Edit
                       </button>
-                      <button onClick={() => handleDelete(submission.id)} className="flex items-center gap-1.5 text-red-600 hover:text-red-700 text-sm font-medium">
+                      <button onClick={() => handleDelete(submission.id)} className="flex items-center gap-1.5 py-2 sm:py-0 text-red-600 hover:text-red-700 text-sm font-medium">
                         <FiTrash2 size={13} /> Delete
                       </button>
                     </div>

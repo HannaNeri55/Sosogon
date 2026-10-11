@@ -33,6 +33,7 @@ const TouristRegister = lazy(() => import('./pages/public/TouristRegister'))
 const BusinessOwnerRegister = lazy(() => import('./pages/public/BusinessOwnerRegister'))
 const RegistrationPending = lazy(() => import('./pages/public/RegistrationPending'))
 const Forbidden = lazy(() => import('./pages/public/Forbidden'))
+const NotFound = lazy(() => import('./pages/public/NotFound'))
 
 // Tourist pages
 const TouristDashboard = lazy(() => import('./pages/tourist/TouristDashboard'))
@@ -99,6 +100,8 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+          {/* Any URL no other route matches (React Router ranks "*" last). */}
+          <Route path="*" element={<NotFound />} />
         </Route>
 
         {/* Tourist Routes */}

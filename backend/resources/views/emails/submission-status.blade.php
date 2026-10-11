@@ -2,10 +2,18 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{-- Phones: less padding so the text gets the width. Inline styles below stay for clients that ignore <style>. --}}
+    <style>
+        @media (max-width: 600px) {
+            .email-wrap { padding: 16px 10px !important; }
+            .email-card { padding: 20px !important; }
+        }
+    </style>
 </head>
 <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; margin: 0; padding: 0; background: #f3f4f6;">
-    <div style="max-width: 560px; margin: 0 auto; padding: 32px 24px;">
-        <div style="background: #ffffff; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
+    <div class="email-wrap" style="max-width: 560px; margin: 0 auto; padding: 32px 24px;">
+        <div class="email-card" style="background: #ffffff; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
             <h2 style="color: #111827; margin-top: 0;">
                 @if($submission->status === 'approved')
                     Your submission has been approved

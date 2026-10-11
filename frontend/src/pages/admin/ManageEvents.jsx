@@ -107,7 +107,7 @@ export default function ManageEvents() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-8 border border-gray-100 mb-8 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing event' : 'New event'}</p>
           <input className="input-field" placeholder="Event title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
           <textarea className="input-field" rows={4} placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
@@ -162,7 +162,8 @@ export default function ManageEvents() {
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          {/* Phones: keep columns readable and let the table scroll sideways. */}
+          <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Event</th>
@@ -180,7 +181,11 @@ export default function ManageEvents() {
                     <p className="text-xs text-gray-400 mt-0.5">{item.municipality?.name || 'Province-wide'}</p>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {item.start_date}{item.end_date && item.end_date !== item.start_date ? ` \u2013 ${item.end_date}` : ''}
+                    {/* Each date stays whole; a range may wrap only between the two dates. */}
+                    <span className="whitespace-nowrap">{item.start_date}</span>
+                    {item.end_date && item.end_date !== item.start_date && (
+                      <> <span className="whitespace-nowrap">{`\u2013 ${item.end_date}`}</span></>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>

@@ -141,7 +141,7 @@ export default function SubmitListing({ onSuccess }) {
             <label className="block text-sm font-medium text-gray-700 mb-2">Business Permit</label>
             <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
               <FiUpload className="text-gray-400 shrink-0" size={18} />
-              <span className="text-sm text-gray-600 flex items-center gap-1.5 truncate">
+              <span className="min-w-0 text-sm text-gray-600 flex items-center gap-1.5 leading-snug wrap-anywhere">
                 {formData.business_permit ? (
                   <><FiFile size={14} className="text-primary-600 shrink-0" />{formData.business_permit.name}</>
                 ) : (
@@ -163,7 +163,7 @@ export default function SubmitListing({ onSuccess }) {
             <label className="block text-sm font-medium text-gray-700 mb-2">Listing Photo</label>
             <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
               <FiUpload className="text-gray-400 shrink-0" size={18} />
-              <span className="text-sm text-gray-600 flex items-center gap-1.5 truncate">
+              <span className="min-w-0 text-sm text-gray-600 flex items-center gap-1.5 leading-snug wrap-anywhere">
                 {formData.image ? (
                   <><FiFile size={14} className="text-primary-600 shrink-0" />{formData.image.name}</>
                 ) : (
@@ -179,8 +179,8 @@ export default function SubmitListing({ onSuccess }) {
             </label>
           </div>
 
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit for Approval'}
+        <button type="submit" className="btn-primary w-full sm:w-auto justify-center" disabled={loading}>
+
         </button>
       </form>
     </div>

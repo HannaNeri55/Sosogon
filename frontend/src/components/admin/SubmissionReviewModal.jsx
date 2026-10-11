@@ -53,14 +53,14 @@ export default function SubmissionReviewModal({ submission, onClose, onApprove, 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100">
-          <div>
+        <div className="flex items-start justify-between gap-3 p-5 sm:p-6 pb-4 border-b border-gray-100">
+          <div className="min-w-0">
             <h2 className="text-lg font-heading font-semibold text-gray-900">{submission.business_name}</h2>
             <p className="text-sm text-gray-500 capitalize">
               {submission.type.replace('_', ' ')} &middot; Submitted {formatDate(submission.created_at)}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[submission.status] || 'bg-gray-100 text-gray-700'}`}>
               {submission.status}
             </span>
@@ -70,13 +70,13 @@ export default function SubmissionReviewModal({ submission, onClose, onApprove, 
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-5">
           {submission.image_path && (
             <img
               src={getImageUrl(submission.image_path)}
               alt={submission.business_name}
               onError={(e) => { e.currentTarget.src = IMAGE_FALLBACK_SVG }}
-              className="w-full h-56 object-cover rounded-lg"
+              className="w-full h-44 sm:h-56 object-cover rounded-lg"
             />
           )}
 
@@ -115,7 +115,8 @@ export default function SubmissionReviewModal({ submission, onClose, onApprove, 
           )}
         </div>
 
-        <div className="p-6 pt-4 border-t border-gray-100">
+        {/* Phones: the decision buttons stay at the bottom of the screen while the details scroll. */}
+        <div className="sticky bottom-0 bg-white sm:static p-5 sm:p-6 pt-4 border-t border-gray-100">
           {isPending && mode ? (
             <div>
               <label htmlFor="review-notes" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -134,24 +135,24 @@ export default function SubmissionReviewModal({ submission, onClose, onApprove, 
                 <button
                   onClick={confirm}
                   disabled={busy}
-                  className={`px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${mode === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                  className={`flex-1 sm:flex-none px-4 py-2.5 sm:py-2 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${mode === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
                 >
                   {mode === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
                 </button>
                 <button
                   onClick={() => { setMode(null); setNotes('') }}
-                  className="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:border-gray-300 text-sm font-medium transition-colors"
+                  className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:border-gray-300 text-sm font-medium transition-colors"
                 >
                   Back
                 </button>
               </div>
             </div>
           ) : isPending ? (
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setMode('approve')} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors">
+            <div className="flex gap-2 sm:justify-end">
+              <button onClick={() => setMode('approve')} className="flex-1 sm:flex-none justify-center flex items-center gap-1.5 px-4 py-2.5 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors">
                 <FiCheck size={15} /> Approve
               </button>
-              <button onClick={() => setMode('reject')} className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors">
+              <button onClick={() => setMode('reject')} className="flex-1 sm:flex-none justify-center flex items-center gap-1.5 px-4 py-2.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition-colors">
                 <FiX size={15} /> Reject
               </button>
             </div>
