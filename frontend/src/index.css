@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+    --color-primary-50: #f0f9ff;
+    --color-primary-100: #e0f2fe;
+    --color-primary-200: #bae6fd;
+    --color-primary-300: #7dd3fc;
+    --color-primary-400: #38bdf8;
+    --color-primary-500: #0ea5e9;
+    --color-primary-600: #0284c7;
+    --color-primary-700: #0369a1;
+    --color-primary-800: #075985;
+    --color-primary-900: #0c4a6e;
+
+    --color-secondary-50: #EBF5FB;
+    --color-secondary-500: #2B7FBF;
+    --color-secondary-600: #236A9F;
+    --color-secondary-700: #1B557F;
+    --color-accent-50: #FEF6E6;
+    --color-accent-400: #F0B94D;
+    --color-accent-500: #E8A838;
+    --color-accent-600: #D4952E;
+    --font-heading: "Poppins", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@layer base {
+    body {
+        @apply font-body text-gray-900 antialiased;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        @apply font-heading;
+    }
+}
+
+@layer components {
+    .btn-primary {
+        @apply bg-primary-500 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-primary-600 transition-colors duration-200 inline-flex items-center gap-2;
+    }
+
+    .btn-secondary {
+        @apply bg-white text-primary-500 border border-primary-500 px-6 py-2.5 rounded-lg font-medium hover:bg-primary-50 transition-colors duration-200 inline-flex items-center gap-2;
+    }
+
+    .btn-accent {
+        @apply bg-accent-500 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-accent-600 transition-colors duration-200 inline-flex items-center gap-2;
+    }
+
+    .input-field {
+        @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all duration-200;
+    }
+
+    .card {
+        @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200;
+    }
+}

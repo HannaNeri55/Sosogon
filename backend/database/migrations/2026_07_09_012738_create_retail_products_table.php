@@ -1,0 +1,53 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('retail_products', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->nullable()->constrained();
+            $table->string('name');
+            $table->text('description');
+            $table->string('product_type', 100);
+            $table->foreignId('municipality_id')->constrained();
+            $table->foreignId('barangay_id')->constrained();
+            $table->string('address', 500)->nullable();
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
+            $table->decimal('price', 10, 2)->nullable();
+            $table->string('contact_number', 20)->nullable();
+            $table->enum('status', ['pending', 'approved', 'rejected', 'archived'])->default('pending');
+            $table->unsignedInteger('view_count')->default(0);
+            $table->timestamp('approved_at')->nullable();
+            $table->foreignId('approved_by')->nullable()->constrained('users');
+            $table->timestamps();
+        });
+
+        Schema::create('retail_product_images', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('retail_product_id')->constrained()->cascadeOnDelete();
+            $table->string('image_path', 500);
+            $table->string('thumbnail_path', 500);
+            $table->boolean('is_primary')->default(false);
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('retail_product_images');
+        Schema::dropIfExists('retail_products');
+    }
+};

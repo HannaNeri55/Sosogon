@@ -1,0 +1,6 @@
+# OS / editor files (backend/ and frontend/ have their own .gitignore for app files)
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
