@@ -33,10 +33,5 @@ RUN composer dump-autoload --optimize --no-dev \
 
 EXPOSE 80
 
-# Config is cached at start (not build) because Render injects env vars at runtime.
-# Only `migrate --force` runs here — never migrate:fresh or db:seed against production.
-CMD php artisan config:cache \
- && php artisan route:cache \
- && php artisan view:cache \
- && php artisan migrate --force \
- && apache2-foreground
+# Caches config, runs migrations, then starts Apache. See docker/start.sh.
+CMD ["sh", "/var/www/html/docker/start.sh"]
