@@ -70,7 +70,7 @@ export default function DestinationDetail() {
   }
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!destination) return <div className="p-8 text-center">Destination not found</div>
+  if (!destination) return <div className="p-6 sm:p-8 text-center">Destination not found</div>
 
   const imageUrl = getImageUrl(destination.images?.[0])
 
@@ -109,7 +109,7 @@ export default function DestinationDetail() {
           )}
         </div>
 
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Location</h2>
           <LocationMap
             latitude={destination.latitude}
@@ -119,7 +119,7 @@ export default function DestinationDetail() {
         </div>
 
         {/* Reviews */}
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-6">Ratings and Reviews</h2>
 
           {isAuthenticated && isTourist && (

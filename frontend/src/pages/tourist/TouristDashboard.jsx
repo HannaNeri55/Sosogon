@@ -7,6 +7,7 @@ import { getDestinations } from '../../api/destinations'
 import { useAuth } from '../../contexts/AuthContext'
 import { StarDisplay } from '../../components/common/StarRating'
 import { getImageUrl, formatTripCost } from '../../utils/helpers'
+import { placeFor } from '../../utils/itineraryStops'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 export default function TouristDashboard() {
@@ -42,15 +43,16 @@ export default function TouristDashboard() {
 
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
+  // Ordered by the planned sequence, not the time text ("1:30 PM" would sort before "8:30 AM").
   const day1Stops = latestItinerary?.items
     ?.filter((item) => item.day_number === 1)
-    ?.sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || '')) || []
+    ?.sort((a, b) => a.sequence - b.sequence) || []
 
   return (
     <div className="bg-white min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-8">
           <div>
             <p className="text-gray-900 font-heading font-bold text-lg">Sorsogon Tourist Dashboard</p>
             <p className="text-gray-500 text-xs mt-0.5">{today}</p>
@@ -67,7 +69,7 @@ export default function TouristDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
           {/* Latest itinerary hero card */}
-          <div className="lg:col-span-2 bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+          <div className="lg:col-span-2 bg-white border border-gray-100 shadow-sm rounded-2xl p-4 sm:p-6">
             {latestItinerary ? (
               <>
                 <div className="flex items-center justify-between mb-4">
@@ -127,7 +129,7 @@ export default function TouristDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
           {/* Day 1 timeline */}
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 sm:p-6">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">
               {latestItinerary ? 'Day 1 Timeline' : 'Timeline'}
             </p>
@@ -144,7 +146,7 @@ export default function TouristDashboard() {
                     <div className="pb-4">
                       <p className="text-primary-600 text-xs font-medium">{stop.time_slot}</p>
                       <p className="text-gray-900 text-sm font-medium mt-0.5">
-                        {stop.destination?.name || `Destination ${stop.destination_id}`}
+                        {placeFor(stop).listing?.name || 'Place no longer available'}
                       </p>
                     </div>
                   </div>
@@ -154,7 +156,7 @@ export default function TouristDashboard() {
           </div>
 
           {/* My Itineraries */}
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">My Itineraries</p>
               <Link to="/my-itineraries" className="text-primary-600 text-xs hover:text-primary-700">View all</Link>
@@ -174,7 +176,7 @@ export default function TouristDashboard() {
           </div>
 
           {/* My Reviews */}
-          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">My Reviews</p>
               <Link to="/my-reviews" className="text-primary-600 text-xs hover:text-primary-700">View all</Link>
@@ -195,7 +197,7 @@ export default function TouristDashboard() {
         </div>
 
         {/* Discover */}
-        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Discover Sorsogon</p>
             <Link to="/destinations" className="text-primary-600 text-xs hover:text-primary-700">See all</Link>

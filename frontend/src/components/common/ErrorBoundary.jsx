@@ -47,7 +47,7 @@ export default class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6">
               <FiAlertTriangle size={32} className="text-red-600" />
             </div>

@@ -135,7 +135,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   className="sr-only"
                 />
                 {isSelected ? <FiCheckCircle size={14} className="shrink-0" /> : <FiMapPin size={14} className="shrink-0 text-gray-300" />}
-                <span className="truncate">{m.name}</span>
+                <span className="min-w-0 leading-tight">{m.name}</span>
               </label>
             )
           })}

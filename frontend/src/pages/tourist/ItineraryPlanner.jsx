@@ -195,14 +195,14 @@ export default function ItineraryPlanner() {
           <p className="flex items-center gap-1.5 text-primary-600 font-medium mb-2">
             <FiCompass size={16} /> AI Planner
           </p>
-          <h1 className="text-4xl font-heading font-bold text-gray-900">Plan Your Trip</h1>
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Plan Your Trip</h1>
           <p className="text-gray-600 mt-3 max-w-2xl">
             Enter your travel preferences and we'll generate a personalized itinerary using verified local destinations from your chosen municipalities in Sorsogon.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          <div className="bg-white rounded-xl p-8 border border-gray-100">
+          <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
               <div className="flex items-center gap-2">
                 <FiSliders size={18} className="text-primary-500" />
@@ -219,7 +219,7 @@ export default function ItineraryPlanner() {
             <ItineraryPreferenceForm onSubmit={handleGenerate} loading={loading || claiming} limitReached={limitReached} />
           </div>
 
-          <div className="bg-white rounded-xl p-8 border border-gray-100">
+          <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
             <div className="flex items-center justify-between gap-2 mb-6">
               <div className="flex items-center gap-2">
                 <FiMap size={18} className="text-primary-500" />

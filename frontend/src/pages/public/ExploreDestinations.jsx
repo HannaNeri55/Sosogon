@@ -89,11 +89,12 @@ export default function ExploreDestinations() {
             {/* Category filter - kept from the existing filter bar; the
                 reference site's screenshots don't show one, but it's a
                 working feature so it stays, just relocated. */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
+            {/* Phones: one swipeable row instead of many wrapped rows. */}
+            <div className="flex items-center gap-2 mb-6 overflow-x-auto -mx-4 px-4 pb-1 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0">
               <button
                 type="button"
                 onClick={() => updateFilters({ category_id: '' })}
-                className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                className={`shrink-0 whitespace-nowrap px-3.5 py-2 sm:py-1.5 rounded-full text-sm font-medium border transition-colors ${
                   !filters.category_id
                     ? 'bg-primary-500 text-white border-primary-500'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
@@ -106,7 +107,7 @@ export default function ExploreDestinations() {
                   key={c.id}
                   type="button"
                   onClick={() => updateFilters({ category_id: c.id })}
-                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  className={`shrink-0 whitespace-nowrap px-3.5 py-2 sm:py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     String(filters.category_id) === String(c.id)
                       ? 'bg-primary-500 text-white border-primary-500'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'

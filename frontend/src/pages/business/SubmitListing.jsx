@@ -63,10 +63,10 @@ export default function SubmitListing({ onSuccess }) {
     <div>
       <div className="mb-8">
         <p className="text-primary-600 font-medium mb-2">Business Owner Portal</p>
-        <h1 className="text-4xl font-heading font-bold text-gray-900">Submit Business Listing</h1>
+        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Submit Business Listing</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl p-8 border border-gray-100 space-y-8 max-w-4xl">
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100 space-y-8 max-w-4xl">
         <div>
           <SectionLabel icon={FiInfo}>Business Details</SectionLabel>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

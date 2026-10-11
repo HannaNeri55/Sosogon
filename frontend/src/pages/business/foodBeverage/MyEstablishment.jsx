@@ -96,7 +96,7 @@ export default function MyEstablishment() {
           />
         </div>
 
-        <form onSubmit={handleSubmit} className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-100 space-y-6 h-fit">
+        <form onSubmit={handleSubmit} className="lg:col-span-2 bg-white rounded-xl p-4 sm:p-6 border border-gray-100 space-y-6 h-fit">
           <h2 className="text-lg font-heading font-semibold text-gray-900">Establishment Details</h2>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>

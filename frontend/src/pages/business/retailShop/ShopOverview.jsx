@@ -7,7 +7,7 @@ import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
 const STATUS_COPY = {
-  approved: { label: 'Approved', style: 'bg-green-100 text-green-700', note: 'Your shop is live on the Sosogon platform.' },
+  approved: { label: 'Approved', style: 'bg-green-100 text-green-700', note: 'Your shop is live on the Sorsogon platform.' },
   pending: { label: 'Pending Review', style: 'bg-yellow-100 text-yellow-700', note: 'The Bulan Tourism Office is reviewing your latest submission.' },
   rejected: { label: 'Rejected', style: 'bg-red-100 text-red-700', note: 'Your last update was rejected. Edit your shop details and resubmit.' },
   archived: { label: 'Archived', style: 'bg-gray-100 text-gray-700', note: 'This shop is archived and not visible to tourists.' },
@@ -36,7 +36,7 @@ export default function ShopOverview() {
         <h1 className="text-3xl font-heading font-bold text-gray-900">{shop.name}</h1>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <FiShoppingBag size={22} />
@@ -56,11 +56,11 @@ export default function ShopOverview() {
         <StatCard icon={FiPackage} label="Product Capacity" value={`${products.length} / 20`} accent="secondary" />
       </div>
 
-      <div className="bg-white rounded-xl p-6 border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4">
           <div>
             <h2 className="text-xl font-heading font-semibold text-gray-900">What Tourists Currently See</h2>
-            <p className="text-sm text-gray-500 mt-1">Only approved products are visible on the public Sosogon platform. This is a browsing catalog only — tourists cannot order or reserve items online.</p>
+            <p className="text-sm text-gray-500 mt-1">Only approved products are visible on the public Sorsogon platform. This is a browsing catalog only — tourists cannot order or reserve items online.</p>
           </div>
           {shop.status === 'approved' && (
             <Link

@@ -18,7 +18,7 @@ export default function MyReviews() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-8">
           <p className="text-primary-600 font-medium mb-2">Tourist</p>
-          <h1 className="text-4xl font-heading font-bold text-gray-900">My Reviews</h1>
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">My Reviews</h1>
         </div>
 
         {reviews.length === 0 ? (
@@ -28,7 +28,7 @@ export default function MyReviews() {
         ) : (
           <div className="space-y-4">
             {reviews.map((review) => (
-              <div key={review.id} className="bg-white rounded-xl p-6 border border-gray-100">
+              <div key={review.id} className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-heading font-semibold text-lg text-gray-900">{review.rateable?.name || 'Item'}</h3>
                   <StarDisplay rating={review.score} size={16} />

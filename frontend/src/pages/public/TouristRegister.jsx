@@ -86,7 +86,7 @@ export default function TouristRegister() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-primary-50/40 flex items-center justify-center px-4 py-12">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-lg shadow-gray-200/60 border border-gray-100 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-600" />
-        <div className="p-8">
+        <div className="p-6 sm:p-8">
           <div className="text-center mb-8">
             <div className="w-14 h-14 rounded-full bg-primary-50 ring-4 ring-primary-50/50 flex items-center justify-center mx-auto mb-4">
               <FiCompass size={26} className="text-primary-600" />

@@ -151,10 +151,10 @@ export default function RoomManagement() {
                   </div>
 
                   <div className="flex gap-4">
-                    <button onClick={() => openEdit(room)} className="flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-sm font-medium">
+                    <button onClick={() => openEdit(room)} className="flex items-center gap-1.5 py-2 sm:py-0 text-primary-600 hover:text-primary-700 text-sm font-medium">
                       <FiEdit2 size={13} /> Edit
                     </button>
-                    <button onClick={() => handleDelete(room.id)} className="flex items-center gap-1.5 text-red-600 hover:text-red-700 text-sm font-medium">
+                    <button onClick={() => handleDelete(room.id)} className="flex items-center gap-1.5 py-2 sm:py-0 text-red-600 hover:text-red-700 text-sm font-medium">
                       <FiTrash2 size={13} /> Delete
                     </button>
                   </div>

@@ -110,10 +110,10 @@ export default function MenuManagement() {
                 <p className="text-sm font-semibold text-primary-700 mb-3">₱{Number(item.price).toFixed(2)}</p>
 
                 <div className="mt-auto flex gap-4">
-                  <button onClick={() => openEdit(item)} className="flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-sm font-medium">
+                  <button onClick={() => openEdit(item)} className="flex items-center gap-1.5 py-2 sm:py-0 text-primary-600 hover:text-primary-700 text-sm font-medium">
                     <FiEdit2 size={13} /> Edit
                   </button>
-                  <button onClick={() => handleDelete(item.id)} className="flex items-center gap-1.5 text-red-600 hover:text-red-700 text-sm font-medium">
+                  <button onClick={() => handleDelete(item.id)} className="flex items-center gap-1.5 py-2 sm:py-0 text-red-600 hover:text-red-700 text-sm font-medium">
                     <FiTrash2 size={13} /> Delete
                   </button>
                 </div>

@@ -70,31 +70,40 @@ export default function Navbar() {
           </div>
 
           {/* Mobile toggle */}
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2">
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="lg:hidden p-2 -mr-2"
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+          >
             {mobileOpen ? <FiX size={24} /> : <FiMenu size={24} />}
           </button>
         </div>
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="lg:hidden pb-4 border-t border-gray-100 pt-4">
+          <div className="lg:hidden pb-4 border-t border-gray-100 pt-3 space-y-0.5">
             {publicLinks.map((link) => (
-              <NavLink key={link.to} to={link.to} onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 text-sm text-gray-600 hover:text-primary-600">
+              <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={() => setMobileOpen(false)}
+                className={({ isActive }) =>
+                  `block px-3 py-3 rounded-lg text-base ${
+                    isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700 hover:bg-gray-50 hover:text-primary-600'
+                  }`
+                }>
                 {link.label}
               </NavLink>
             ))}
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-3 pt-3 border-t border-gray-100">
               {isAuthenticated ? (
-                <Link to={getDashboardLink()} onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary-600">
-                  <span className="w-6 h-6 rounded-full bg-primary-50 border border-primary-200 flex items-center justify-center text-xs">{initial}</span>
+                <Link to={getDashboardLink()} onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium text-primary-600 hover:bg-primary-50">
+                  <span className="w-7 h-7 rounded-full bg-primary-50 border border-primary-200 flex items-center justify-center text-sm">{initial}</span>
                   Dashboard
                 </Link>
               ) : (
-                <>
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm text-gray-600">Login</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-sm font-medium text-primary-600">Register</Link>
-                </>
+                <div className="grid grid-cols-2 gap-3 px-3 pt-1">
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="btn-secondary justify-center text-center">Login</Link>
+                  <Link to="/get-started" onClick={() => setMobileOpen(false)} className="btn-primary justify-center text-center">Register</Link>
+                </div>
               )}
             </div>
           </div>

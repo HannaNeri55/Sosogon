@@ -80,7 +80,7 @@ function BudgetCard({ itinerary }) {
   const travelers = Number(itinerary.travelers) || 1
 
   return (
-    <div className="bg-white rounded-xl p-6 border border-gray-100 mb-6">
+    <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 mb-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <p className="flex items-center gap-1.5 text-primary-600 font-medium">
           <FiDollarSign size={16} /> Trip Budget
@@ -367,7 +367,7 @@ export default function ItineraryView() {
   }
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!itinerary) return <div className="p-8 text-center text-gray-500">Itinerary not found</div>
+  if (!itinerary) return <div className="p-6 sm:p-8 text-center text-gray-500">Itinerary not found</div>
 
   const grouped = {}
   itinerary.items?.forEach((item) => {
@@ -401,7 +401,7 @@ export default function ItineraryView() {
           <FiArrowLeft size={15} /> Back to My Itineraries
         </Link>
 
-        <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100 mb-8">
+        <div className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
             <div className="min-w-0">
               <p className="text-primary-600 font-medium mb-2">Generated Itinerary</p>
@@ -452,7 +452,7 @@ export default function ItineraryView() {
         </div>
 
         {(stays.length > 0 || editMode) && (
-          <div className="bg-white rounded-xl p-6 border border-gray-100 mb-6">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 mb-6">
             <p className="flex items-center gap-1.5 text-primary-600 font-medium mb-1">
               <FiHome size={16} /> {stays.length > 1 ? 'Your Stays' : 'Your Stay'}
             </p>
@@ -516,8 +516,9 @@ export default function ItineraryView() {
         <div className="fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Editing itinerary</p>
-              <p className="text-xs text-gray-500">
+              {/* Phones: just the change count, so the buttons keep their room. */}
+              <p className="hidden sm:block text-sm font-semibold text-gray-900">Editing itinerary</p>
+              <p className="text-sm sm:text-xs text-gray-600 sm:text-gray-500 leading-tight">
                 {changeCount === 0 ? 'No changes yet' : `${changeCount} unsaved change${changeCount !== 1 ? 's' : ''}`}
               </p>
             </div>
@@ -532,14 +533,14 @@ export default function ItineraryView() {
               <button
                 onClick={toggleEditMode}
                 disabled={saving}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <FiX size={15} /> Discard
               </button>
               <button
                 onClick={handleSaveChanges}
                 disabled={saving || changeCount === 0}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
                 <FiSave size={15} /> {saving ? 'Saving...' : 'Save changes'}
               </button>

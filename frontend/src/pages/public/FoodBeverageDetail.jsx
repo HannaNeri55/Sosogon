@@ -23,7 +23,7 @@ export default function FoodBeverageDetail() {
   }, [id])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!item) return <div className="p-8 text-center">Item not found</div>
+  if (!item) return <div className="p-6 sm:p-8 text-center">Item not found</div>
 
   const imageUrl = getImageUrl(item.images?.[0])
 
@@ -85,7 +85,7 @@ export default function FoodBeverageDetail() {
           </div>
         )}
 
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Location</h2>
           <LocationMap latitude={item.latitude} longitude={item.longitude} title={item.name} />
         </div>

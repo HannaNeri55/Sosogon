@@ -58,7 +58,7 @@ export default function Home() {
 
   return (
     <div>
-      <HeroSlideshow />
+      <HeroSlideshow size="full" />
 
       {/* Stats strip */}
       <section className="bg-white border-b border-gray-100 py-10">
@@ -78,24 +78,24 @@ export default function Home() {
       </section>
 
       {/* Explore by category */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-12 sm:py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <Reveal className="text-center mb-10">
+          <Reveal className="text-center mb-8 sm:mb-10">
             <p className="text-primary-600 font-medium mb-2">Get Around</p>
-            <h2 className="text-3xl font-heading font-bold text-gray-900">Explore Sorsogon by Category</h2>
+            <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Explore Sorsogon by Category</h2>
           </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {CATEGORIES.map((c, i) => (
               <Reveal key={c.to} delay={i * 100}>
                 <Link
                   to={c.to}
-                  className="group block bg-white rounded-xl border border-gray-100 p-6 h-full hover:border-primary-300 hover:shadow-md transition-all duration-300"
+                  className="group block bg-white rounded-xl border border-gray-100 p-4 sm:p-6 h-full hover:border-primary-300 hover:shadow-md transition-all duration-300"
                 >
-                  <div className="w-12 h-12 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center mb-4 group-hover:bg-primary-500 group-hover:text-white transition-colors duration-300">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary-500 group-hover:text-white transition-colors duration-300">
                     <c.icon size={22} />
                   </div>
-                  <h3 className="font-heading font-semibold text-gray-900 mb-1">{c.label}</h3>
-                  <p className="text-sm text-gray-500">{c.description}</p>
+                  <h3 className="text-sm sm:text-base font-heading font-semibold text-gray-900 mb-1 wrap-break-word">{c.label}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500">{c.description}</p>
                 </Link>
               </Reveal>
             ))}
@@ -104,12 +104,12 @@ export default function Home() {
       </section>
 
       {/* Featured Destinations */}
-      <section className="py-16 bg-white">
+      <section className="py-12 sm:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
             <div>
               <p className="text-primary-600 font-medium mb-2">Featured Places</p>
-              <h2 className="text-3xl font-heading font-bold text-gray-900">Explore Sorsogon</h2>
+              <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Explore Sorsogon</h2>
             </div>
             <Link to="/destinations" className="text-primary-600 font-medium hover:text-primary-700">
               View all destinations
@@ -126,9 +126,9 @@ export default function Home() {
       </section>
 
       {/* AI Planner CTA */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-12 sm:py-16 bg-gray-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <Reveal className="bg-primary-50 rounded-2xl p-8 lg:p-12 text-center">
+          <Reveal className="bg-primary-50 rounded-2xl p-6 sm:p-8 lg:p-12 text-center">
             <p className="text-primary-600 font-medium mb-2">AI-Based Itinerary Planning</p>
             <h2 className="text-3xl font-heading font-bold text-gray-900 mb-4">
               Let Sorsogon plan your trip
@@ -143,12 +143,12 @@ export default function Home() {
 
       {/* Featured Accommodations */}
       {featuredAccommodations.length > 0 && (
-        <section className="py-16 bg-white">
+        <section className="py-12 sm:py-16 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Where to Stay</p>
-                <h2 className="text-3xl font-heading font-bold text-gray-900">Featured Accommodations</h2>
+                <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Featured Accommodations</h2>
               </div>
               <Link to="/accommodations" className="text-primary-600 font-medium hover:text-primary-700">
                 View all accommodations
@@ -167,12 +167,12 @@ export default function Home() {
 
       {/* Taste of Sorsogon */}
       {featuredFood.length > 0 && (
-        <section className="py-16 bg-gray-50">
+        <section className="py-12 sm:py-16 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Taste</p>
-                <h2 className="text-3xl font-heading font-bold text-gray-900">A Taste of Sorsogon</h2>
+                <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">A Taste of Sorsogon</h2>
               </div>
               <Link to="/food-beverage" className="text-primary-600 font-medium hover:text-primary-700">
                 View all food & beverage
@@ -191,12 +191,12 @@ export default function Home() {
 
       {/* Local Products */}
       {featuredProducts.length > 0 && (
-        <section className="py-16 bg-white">
+        <section className="py-12 sm:py-16 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Shop Local</p>
-                <h2 className="text-3xl font-heading font-bold text-gray-900">Local Products</h2>
+                <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Local Products</h2>
               </div>
               <Link to="/shops" className="text-primary-600 font-medium hover:text-primary-700">
                 View all shops
@@ -215,12 +215,12 @@ export default function Home() {
 
       {/* Events and Announcements */}
       {(events.length > 0 || announcements.length > 0) && (
-        <section className="py-16 bg-gray-50">
+        <section className="py-12 sm:py-16 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Happenings</p>
-                <h2 className="text-3xl font-heading font-bold text-gray-900">Events and Announcements</h2>
+                <h2 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Events and Announcements</h2>
               </div>
               <Link to="/events" className="text-primary-600 font-medium hover:text-primary-700">
                 View all

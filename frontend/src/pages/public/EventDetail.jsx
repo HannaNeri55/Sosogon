@@ -20,7 +20,7 @@ export default function EventDetail() {
   }, [id])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!event) return <div className="p-8 text-center text-gray-500">Event not found.</div>
+  if (!event) return <div className="p-6 sm:p-8 text-center text-gray-500">Event not found.</div>
 
   const dateLabel =
     event.end_date && event.end_date !== event.start_date

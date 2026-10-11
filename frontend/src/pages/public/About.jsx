@@ -54,7 +54,7 @@ export default function About() {
       </section>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 space-y-8">
-        <Reveal className="bg-white rounded-xl p-8 border border-gray-100">
+        <Reveal className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
           <div className="flex items-center gap-2 mb-4">
             <FiTarget className="text-primary-600" size={20} />
             <h2 className="text-2xl font-heading font-semibold text-gray-900">Purpose of STIM</h2>
@@ -64,7 +64,7 @@ export default function About() {
           </p>
         </Reveal>
 
-        <Reveal className="bg-white rounded-xl p-8 border border-gray-100">
+        <Reveal className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
           <div className="flex items-center gap-2 mb-4">
             <FiMapPin className="text-primary-600" size={20} />
             <h2 className="text-2xl font-heading font-semibold text-gray-900">Province of Sorsogon</h2>
@@ -74,7 +74,7 @@ export default function About() {
           </p>
         </Reveal>
 
-        <Reveal className="bg-white rounded-xl p-8 border border-gray-100">
+        <Reveal className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
           <div className="flex items-center gap-2 mb-4">
             <FiUsers className="text-primary-600" size={20} />
             <h2 className="text-2xl font-heading font-semibold text-gray-900">Role of the Tourism Office</h2>
@@ -85,7 +85,7 @@ export default function About() {
         </Reveal>
 
         <Reveal>
-          <div className="bg-white rounded-xl p-8 border border-gray-100">
+          <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100">
             <div className="flex items-center gap-2 mb-6">
               <FiCompass className="text-primary-600" size={20} />
               <h2 className="text-2xl font-heading font-semibold text-gray-900">Explore the Platform</h2>

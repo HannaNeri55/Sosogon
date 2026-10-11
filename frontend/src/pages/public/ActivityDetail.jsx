@@ -20,7 +20,7 @@ export default function ActivityDetail() {
   }, [id])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!activity) return <div className="p-8 text-center text-gray-500">Activity not found.</div>
+  if (!activity) return <div className="p-6 sm:p-8 text-center text-gray-500">Activity not found.</div>
 
   const thingsToDo = activity.things_to_do?.split('\n').map((s) => s.trim()).filter(Boolean) || []
 

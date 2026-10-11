@@ -23,7 +23,7 @@ export default function AccommodationDetail() {
   }, [id])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!item) return <div className="p-8 text-center">Accommodation not found</div>
+  if (!item) return <div className="p-6 sm:p-8 text-center">Accommodation not found</div>
 
   const imageUrl = getImageUrl(item.images?.[0])
 
@@ -60,7 +60,7 @@ export default function AccommodationDetail() {
         </div>
 
         {item.rooms?.length > 0 && (
-          <div className="card p-8">
+          <div className="card p-6 sm:p-8">
             <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-1">Rooms</h2>
             <p className="text-sm text-gray-500 mb-5">
               Status is updated manually by the property owner and is for information only — contact the property directly to arrange a stay.
@@ -104,7 +104,7 @@ export default function AccommodationDetail() {
         )}
 
         {item.amenities?.length > 0 && (
-          <div className="card p-8">
+          <div className="card p-6 sm:p-8">
             <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Amenities</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {item.amenities.map((a) => (
@@ -117,7 +117,7 @@ export default function AccommodationDetail() {
           </div>
         )}
 
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Location</h2>
           <LocationMap latitude={item.latitude} longitude={item.longitude} title={item.name} />
         </div>

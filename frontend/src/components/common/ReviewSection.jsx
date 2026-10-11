@@ -30,7 +30,7 @@ export default function ReviewSection({ item, rateableType, onReviewed }) {
   }
 
   return (
-    <div className="card p-8">
+    <div className="card p-6 sm:p-8">
       <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-6">Ratings and Reviews</h2>
 
       {isAuthenticated && isTourist && (

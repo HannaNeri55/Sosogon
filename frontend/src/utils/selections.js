@@ -43,7 +43,9 @@ export function roomsSummary(rooms) {
 }
 
 export function roomLabel(room) {
-  return [room.category, room.room_number && `Room ${room.room_number}`].filter(Boolean).join(' · ')
+  // Owners often type the number as "Room 101" already; don't show "Room Room 101".
+  const number = room.room_number && (/^room\b/i.test(room.room_number) ? room.room_number : `Room ${room.room_number}`)
+  return [room.category, number].filter(Boolean).join(' · ')
 }
 
 // The itinerary's booked rooms that are at this stay's accommodation.

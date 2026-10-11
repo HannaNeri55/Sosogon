@@ -67,7 +67,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
         <div>
           <p className="text-primary-600 font-medium mb-2">Business Owner Portal</p>
-          <h1 className="text-4xl font-heading font-bold text-gray-900">Submission Status</h1>
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Submission Status</h1>
         </div>
         {onAddNew && (
           <button onClick={onAddNew} className="btn-primary flex items-center gap-2">
@@ -91,7 +91,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
       ) : (
         <div className="space-y-4">
           {submissions.map((submission) => (
-            <div key={submission.id} className="bg-white rounded-xl p-6 border border-gray-100">
+            <div key={submission.id} className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
               {editingId === submission.id ? (
                 <form onSubmit={handleUpdate} className="space-y-4">
                   <input

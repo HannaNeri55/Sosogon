@@ -34,7 +34,7 @@ export default function SavedItineraries() {
         <div className="flex flex-wrap items-end justify-between mb-8 gap-4">
           <div>
             <p className="text-primary-600 font-medium mb-2">Tourist</p>
-            <h1 className="text-4xl font-heading font-bold text-gray-900">Saved Itineraries</h1>
+            <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Saved Itineraries</h1>
             {total > 0 && (
               <p className="text-sm text-gray-500 mt-2">
                 {total} itinerar{total !== 1 ? 'ies' : 'y'} saved
@@ -59,7 +59,7 @@ export default function SavedItineraries() {
                 <Link
                   key={item.id}
                   to={`/itineraries/${item.id}`}
-                  className="flex items-center gap-4 bg-white rounded-xl p-6 border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
+                  className="flex items-center gap-4 bg-white rounded-xl p-4 sm:p-6 border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
                 >
                   <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
                     <FiCompass size={20} />

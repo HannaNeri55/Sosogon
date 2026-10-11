@@ -22,7 +22,7 @@ export default function RetailShopDetail() {
   }, [id])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!shop) return <div className="p-8 text-center">Shop not found</div>
+  if (!shop) return <div className="p-6 sm:p-8 text-center">Shop not found</div>
 
   const imageUrl = getImageUrl(shop.images?.[0])
 

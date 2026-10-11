@@ -26,7 +26,7 @@ export default function StayCard({ stay, itinerary, pending = {}, editMode, onCh
   const changed = Boolean(pending.accommodation)
 
   return (
-    <div className={`rounded-xl border p-5 ${changed ? 'border-primary-300 ring-1 ring-primary-100' : 'border-gray-100'} bg-white`}>
+    <div className={`rounded-xl border p-4 sm:p-5 ${changed ? 'border-primary-300 ring-1 ring-primary-100' : 'border-gray-100'} bg-white`}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           {town && (

@@ -23,7 +23,7 @@ export default function RoleSelection() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-primary-50/40 flex items-center justify-center px-4 py-12">
       <div className="max-w-2xl w-full">
         <div className="text-center mb-10">
-          <img src="/logo.png" alt="Sosogon" className="h-12 mx-auto mb-6" onError={(e) => { e.target.style.display = 'none' }} />
+          <img src="/logo.png" alt="Sorsogon" className="h-12 mx-auto mb-6" onError={(e) => { e.target.style.display = 'none' }} />
           <h1 className="text-3xl font-heading font-bold text-gray-900 mb-3">Welcome to STIM</h1>
           <p className="text-gray-600">Select how you would like to use the platform</p>
         </div>

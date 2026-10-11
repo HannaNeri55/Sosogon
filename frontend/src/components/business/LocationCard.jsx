@@ -32,7 +32,7 @@ export default function LocationCard({ address, municipality, municipalityId, on
   }
 
   return (
-    <div className="bg-white rounded-xl p-6 border border-gray-100">
+    <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-heading font-semibold text-gray-900">Location</h2>
         {!editing && (

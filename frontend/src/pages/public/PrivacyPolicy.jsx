@@ -99,7 +99,7 @@ export default function PrivacyPolicy() {
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 space-y-6">
         {SECTIONS.map((section, i) => (
-          <Reveal key={section.title} className="bg-white rounded-xl p-8 border border-gray-100" delay={Math.min(i * 40, 300)}>
+          <Reveal key={section.title} className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100" delay={Math.min(i * 40, 300)}>
             <h2 className="text-xl font-heading font-semibold text-gray-900 mb-3">{section.title}</h2>
             {section.body.map((paragraph) => (
               <p key={paragraph} className="text-gray-600 leading-relaxed mb-3 last:mb-0">

@@ -36,44 +36,48 @@ export default function SelectionEditor({ title, options, picks, onChange, showQ
             const option = byId.get(pick.id)
             if (!option) return null
             return (
-              <li key={pick.id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2">
+              // Phones: name takes the first line, the quantity/price/remove controls wrap below it.
+              <li key={pick.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-white p-2">
                 <img src={getImageUrl(option.image)} alt={option.name} className="w-11 h-11 rounded-md object-cover shrink-0 bg-gray-100" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] sm:basis-auto">
                   <p className="text-sm font-medium text-gray-900 truncate">{option.name}</p>
                   <p className="text-xs text-gray-500">{formatPeso(option.price)}{showQuantity && ' each'}</p>
                 </div>
-                {showQuantity && (
-                  <div className="flex items-center rounded-lg border border-gray-200">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(pick.id, pick.quantity - 1)}
-                      disabled={pick.quantity <= 1}
-                      className="p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
-                      aria-label="Fewer"
-                    >
-                      <FiMinus size={12} />
-                    </button>
-                    <span className="w-7 text-center text-sm font-medium text-gray-800">{pick.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(pick.id, pick.quantity + 1)}
-                      disabled={pick.quantity >= MAX_QUANTITY}
-                      className="p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
-                      aria-label="More"
-                    >
-                      <FiPlus size={12} />
-                    </button>
-                  </div>
-                )}
-                <span className="w-20 text-right text-sm font-semibold text-gray-800">{formatPeso(option.price * pick.quantity)}</span>
-                <button
-                  type="button"
-                  onClick={() => onChange(picks.filter((p) => p.id !== pick.id))}
-                  className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50"
-                  title="Remove"
-                >
-                  <FiTrash2 size={14} />
-                </button>
+                <div className="flex items-center gap-3 ml-auto">
+                  {showQuantity && (
+                    <div className="flex items-center rounded-lg border border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(pick.id, pick.quantity - 1)}
+                        disabled={pick.quantity <= 1}
+                        className="p-2 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                        aria-label="Fewer"
+                      >
+                        <FiMinus size={12} />
+                      </button>
+                      <span className="w-7 text-center text-sm font-medium text-gray-800">{pick.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(pick.id, pick.quantity + 1)}
+                        disabled={pick.quantity >= MAX_QUANTITY}
+                        className="p-2 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                        aria-label="More"
+                      >
+                        <FiPlus size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <span className="w-20 text-right text-sm font-semibold text-gray-800">{formatPeso(option.price * pick.quantity)}</span>
+                  <button
+                    type="button"
+                    onClick={() => onChange(picks.filter((p) => p.id !== pick.id))}
+                    className="p-2 sm:p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50"
+                    title="Remove"
+                    aria-label="Remove"
+                  >
+                    <FiTrash2 size={14} />
+                  </button>
+                </div>
               </li>
             )
           })}

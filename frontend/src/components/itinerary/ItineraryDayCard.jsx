@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { placeFor } from '../../utils/itineraryStops'
 import { addDays, format, parseISO } from 'date-fns'
 import {
   FiClock,
@@ -50,44 +51,6 @@ const NEW_STOP_BADGES = {
 }
 
 const FIELD = 'text-sm text-gray-800 bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400'
-
-// Stops can be a destination, the tourist's accommodation (a free day or a meal there), a
-// food place (breakfast, lunch or dinner) or a souvenir shop; this normalizes whichever
-// listing the stop points at.
-function placeFor(stop) {
-  // Older itineraries split destinations (and free days) into a morning and an afternoon block.
-  const part = stop.notes?.match(/^(Morning|Afternoon)/)?.[1]
-  const withPart = (label) => [part, label].filter(Boolean).join(' · ')
-
-  switch (stop.item_type) {
-    case 'accommodation': {
-      const meal = stop.notes?.match(/^(Breakfast|Lunch|Dinner) at/)?.[1]
-      return {
-        listing: stop.accommodation,
-        link: stop.accommodation && `/accommodations/${stop.accommodation.id}`,
-        badge: meal ? `${meal} at your stay` : withPart('Free day'),
-      }
-    }
-    case 'food_beverage':
-      return {
-        listing: stop.food_beverage,
-        link: stop.food_beverage && `/food-beverage/${stop.food_beverage.id}`,
-        badge: stop.notes?.match(/^(Breakfast|Lunch|Dinner)/)?.[1] || 'Food stop',
-      }
-    case 'retail_shop':
-      return {
-        listing: stop.retail_shop,
-        link: stop.retail_shop && `/shops/${stop.retail_shop.id}`,
-        badge: 'Souvenir shopping',
-      }
-    default:
-      return {
-        listing: stop.destination,
-        link: stop.destination && `/destinations/${stop.destination.id}`,
-        badge: withPart(stop.destination?.category?.name),
-      }
-  }
-}
 
 // A lunch break is its own food stop, but it happens during the visit listed before it.
 function isLunchBreakDuring(stop, host) {
@@ -308,8 +271,8 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
         isDeleted ? 'border-red-200 opacity-70' : swapped || isNew ? 'border-primary-300 ring-1 ring-primary-100' : 'border-gray-200'
       }`}
     >
-      <div className="flex gap-4 p-4">
-        <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+      <div className="flex flex-wrap sm:flex-nowrap gap-3 sm:gap-4 p-3 sm:p-4">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden shrink-0 bg-gray-100">
           <img src={getImageUrl(imagePath)} alt={shown?.name || 'Stop'} className="w-full h-full object-cover" loading="lazy" />
         </div>
         <div className="min-w-0 flex-1">
@@ -328,13 +291,14 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
           {swapped && <p className="text-xs text-gray-500 truncate">Replaces {listing?.name}</p>}
           {!swapped && shown?.subtitle && <p className="text-xs text-gray-500 truncate">{shown.subtitle}</p>}
         </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        {/* Phones: actions get their own full-width row so the place name keeps its width. */}
+        <div className="flex w-full gap-2 sm:w-auto sm:flex-col sm:items-end shrink-0">
           {onSwap && (
             <button
               type="button"
               onClick={onSwap}
               disabled={isDeleted}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-40 transition-colors"
+              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 disabled:opacity-40 transition-colors"
             >
               <FiRepeat size={13} /> Change place
             </button>
@@ -342,7 +306,7 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
           <button
             type="button"
             onClick={onDelete}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+            className={`flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-medium rounded-lg border transition-colors ${
               isDeleted ? 'text-gray-600 border-gray-200 hover:bg-gray-50' : 'text-red-600 border-red-200 hover:bg-red-50'
             }`}
           >
@@ -430,9 +394,9 @@ export default function ItineraryDayCard({
   )
 
   return (
-    <div className="card p-6 sm:p-8">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3">
+    <div className="card p-4 sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-full bg-primary-500 text-white font-heading font-bold text-sm flex items-center justify-center shrink-0">
             {dayNumber}
           </div>
@@ -452,7 +416,7 @@ export default function ItineraryDayCard({
           <button
             type="button"
             onClick={() => onAddStop(dayNumber)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary-500 rounded-lg hover:bg-primary-600 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-medium text-white bg-primary-500 rounded-lg hover:bg-primary-600 transition-colors"
           >
             <FiPlus size={14} /> Add stop
           </button>
@@ -493,7 +457,7 @@ export default function ItineraryDayCard({
           const next = rows[index + 1]?.stop
 
           return (
-            <div key={stop.id ?? index} className="flex gap-4">
+            <div key={stop.id ?? index} className="flex gap-3 sm:gap-4">
               <div className="flex flex-col items-center">
                 <div className="w-9 h-9 rounded-full bg-primary-50 border-2 border-primary-500 text-primary-600 text-xs font-bold flex items-center justify-center shrink-0">
                   {index + 1}
