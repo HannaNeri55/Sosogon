@@ -65,7 +65,7 @@ export default function ManageUsers() {
     <div>
       <div className="mb-6">
         <p className="text-primary-600 font-medium mb-2">Admin</p>
-        <h1 className="text-4xl font-heading font-bold text-gray-900">Manage Users</h1>
+        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Manage Users</h1>
       </div>
 
       <div className="relative mb-5 max-w-sm">

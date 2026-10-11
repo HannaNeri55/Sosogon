@@ -28,7 +28,7 @@ export default function ActivityDetail() {
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-start justify-between gap-4 mb-6">
-          <h1 className="font-heading font-extrabold text-3xl sm:text-4xl uppercase text-secondary-700">
+          <h1 className="min-w-0 wrap-break-word font-heading font-extrabold text-3xl sm:text-4xl uppercase text-secondary-700">
             {activity.name}
           </h1>
           <Link

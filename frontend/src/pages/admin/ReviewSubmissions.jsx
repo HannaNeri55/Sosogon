@@ -153,7 +153,7 @@ export default function ReviewSubmissions() {
     <div>
       <div className="mb-6">
         <p className="text-primary-600 font-medium mb-2">Admin</p>
-        <h1 className="text-4xl font-heading font-bold text-gray-900">Review Business Submissions</h1>
+        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Review Business Submissions</h1>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">

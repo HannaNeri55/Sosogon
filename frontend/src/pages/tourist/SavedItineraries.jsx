@@ -31,7 +31,7 @@ export default function SavedItineraries() {
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-        <div className="flex items-end justify-between mb-8 gap-4">
+        <div className="flex flex-wrap items-end justify-between mb-8 gap-4">
           <div>
             <p className="text-primary-600 font-medium mb-2">Tourist</p>
             <h1 className="text-4xl font-heading font-bold text-gray-900">Saved Itineraries</h1>

@@ -106,7 +106,7 @@ export default function Home() {
       {/* Featured Destinations */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <Reveal className="flex items-end justify-between mb-8">
+          <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
             <div>
               <p className="text-primary-600 font-medium mb-2">Featured Places</p>
               <h2 className="text-3xl font-heading font-bold text-gray-900">Explore Sorsogon</h2>
@@ -145,7 +145,7 @@ export default function Home() {
       {featuredAccommodations.length > 0 && (
         <section className="py-16 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <Reveal className="flex items-end justify-between mb-8">
+            <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Where to Stay</p>
                 <h2 className="text-3xl font-heading font-bold text-gray-900">Featured Accommodations</h2>
@@ -169,7 +169,7 @@ export default function Home() {
       {featuredFood.length > 0 && (
         <section className="py-16 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <Reveal className="flex items-end justify-between mb-8">
+            <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Taste</p>
                 <h2 className="text-3xl font-heading font-bold text-gray-900">A Taste of Sorsogon</h2>
@@ -193,7 +193,7 @@ export default function Home() {
       {featuredProducts.length > 0 && (
         <section className="py-16 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <Reveal className="flex items-end justify-between mb-8">
+            <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Shop Local</p>
                 <h2 className="text-3xl font-heading font-bold text-gray-900">Local Products</h2>
@@ -217,7 +217,7 @@ export default function Home() {
       {(events.length > 0 || announcements.length > 0) && (
         <section className="py-16 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <Reveal className="flex items-end justify-between mb-8">
+            <Reveal className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-8">
               <div>
                 <p className="text-primary-600 font-medium mb-2">Happenings</p>
                 <h2 className="text-3xl font-heading font-bold text-gray-900">Events and Announcements</h2>

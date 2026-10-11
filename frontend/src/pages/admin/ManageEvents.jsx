@@ -96,10 +96,10 @@ export default function ManageEvents() {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
-          <h1 className="text-4xl font-heading font-bold text-gray-900">Manage Events</h1>
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Manage Events</h1>
         </div>
         <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
           {showForm ? 'Close Form' : 'Add Event'}
