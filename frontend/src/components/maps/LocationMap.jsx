@@ -1,19 +1,30 @@
-import GoogleMapView from './GoogleMapView'
+import LeafletMapView from './LeafletMapView'
+import MapMessage from './MapMessage'
+import { toCoordinates } from './mapsConfig'
 
-export default function LocationMap({ latitude, longitude, title }) {
-  const center = {
-    lat: parseFloat(latitude) || 12.6744,
-    lng: parseFloat(longitude) || 123.8756,
+/**
+ * The Location section map of a detail page: a pin at this listing's own saved
+ * coordinates. Without valid coordinates it says the location isn't verified yet,
+ * never a guessed or town-centre pin.
+ */
+export default function LocationMap({ latitude, longitude, title, address, height = '400px' }) {
+  const point = toCoordinates(latitude, longitude)
+
+  if (!point) {
+    return (
+      <MapMessage height={height}>
+        The exact location of {title || 'this place'} has not been verified yet.
+        {address && <span className="mt-1 block text-gray-500">Address: {address}</span>}
+      </MapMessage>
+    )
   }
 
-  const markers = [
-    {
-      id: 1,
-      lat: center.lat,
-      lng: center.lng,
-      title: title || 'Location',
-    },
-  ]
-
-  return <GoogleMapView center={center} markers={markers} zoom={14} />
+  return (
+    <LeafletMapView
+      center={point}
+      zoom={16}
+      height={height}
+      markers={[{ id: 'place', lat: point.lat, lng: point.lng, title: title || 'Location', subtitle: address }]}
+    />
+  )
 }
