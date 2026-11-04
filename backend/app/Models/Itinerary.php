@@ -28,6 +28,7 @@ class Itinerary extends Model
         'end_date',
         'food_preference',
         'accommodation_type',
+        'transport_preference',
         'additional_preferences',
         'ai_response_raw',
         'total_distance_km',

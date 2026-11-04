@@ -7,7 +7,9 @@ import { getImageUrl, IMAGE_FALLBACK_SVG } from '../../utils/helpers'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import Pagination from '../../components/common/Pagination'
 import PageHero from '../../components/common/PageHero'
-import LocationFilterSidebar from '../../components/common/LocationFilterSidebar'
+import LocationFilterSidebar from '../../components/common/LocationFilterSidebar'
+import useUrlFilters from '../../hooks/useUrlFilters'
+import useListingScroll from '../../hooks/useListingScroll'
 
 const PRODUCT_TYPES = ['Souvenir', 'Local Food Product', 'Handicraft', 'Clothing']
 
@@ -16,7 +18,7 @@ export default function RetailProducts() {
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useUrlFilters({
     q: '',
     product_type: '',
     municipality_id: '',
@@ -45,6 +47,9 @@ export default function RetailProducts() {
       ignore = true
     }
   }, [filters])
+
+  useListingScroll(!loading)
+
 
   const updateFilters = (patch) => setFilters((prev) => ({ ...prev, ...patch, page: 1 }))
   const resultCount = pagination.total ?? items.length

@@ -1,7 +1,9 @@
+
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import PublicLayout from './layouts/PublicLayout'
 import AdminLayout from './layouts/AdminLayout'
+import ApprovalsLayout from './layouts/ApprovalsLayout'
 import AccommodationOwnerLayout from './layouts/AccommodationOwnerLayout'
 import FoodBeverageOwnerLayout from './layouts/FoodBeverageOwnerLayout'
 import RetailShopOwnerLayout from './layouts/RetailShopOwnerLayout'
@@ -27,6 +29,7 @@ const ForgotPassword = lazy(() => import('./pages/public/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/public/ResetPassword'))
 const PrivacyPolicy = lazy(() => import('./pages/public/PrivacyPolicy'))
 const TermsAndConditions = lazy(() => import('./pages/public/TermsAndConditions'))
+const PhotoCredits = lazy(() => import('./pages/public/PhotoCredits'))
 const RoleSelection = lazy(() => import('./pages/public/RoleSelection'))
 const AdminLogin = lazy(() => import('./pages/public/AdminLogin'))
 const TouristRegister = lazy(() => import('./pages/public/TouristRegister'))
@@ -53,16 +56,25 @@ const MenuManagement = lazy(() => import('./pages/business/foodBeverage/MenuMana
 const ShopOverview = lazy(() => import('./pages/business/retailShop/ShopOverview'))
 const MyShop = lazy(() => import('./pages/business/retailShop/MyShop'))
 const ProductManagement = lazy(() => import('./pages/business/retailShop/ProductManagement'))
+const GuestReviews = lazy(() => import('./pages/business/GuestReviews'))
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const ManageDestinations = lazy(() => import('./pages/admin/ManageDestinations'))
-const ManageActivities = lazy(() => import('./pages/admin/ManageActivities'))
 const ManageEvents = lazy(() => import('./pages/admin/ManageEvents'))
 const ManageHeroSlides = lazy(() => import('./pages/admin/ManageHeroSlides'))
 const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'))
 const ReviewSubmissions = lazy(() => import('./pages/admin/ReviewSubmissions'))
+const ReviewListings = lazy(() => import('./pages/admin/ReviewListings'))
+const AdminGuestReviews = lazy(() => import('./pages/admin/GuestReviews'))
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'))
+const ViolationRecords = lazy(() => import('./pages/admin/ViolationRecords'))
+const AccountAppeals = lazy(() => import('./pages/admin/AccountAppeals'))
+const AccountActivityLog = lazy(() => import('./pages/admin/AccountActivityLog'))
+const AccountStatus = lazy(() => import('./pages/account/AccountStatus'))
+const ListingLocations = lazy(() => import('./pages/admin/ListingLocations'))
+const OwnerRegistrations = lazy(() => import('./pages/admin/OwnerRegistrations'))
+const ReviewItems = lazy(() => import('./pages/admin/ReviewItems'))
 const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'))
 
 export default function App() {
@@ -100,6 +112,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+          <Route path="/photo-credits" element={<PhotoCredits />} />
           {/* Any URL no other route matches (React Router ranks "*" last). */}
           <Route path="*" element={<NotFound />} />
         </Route>
@@ -112,6 +125,11 @@ export default function App() {
           <Route path="/my-reviews" element={<MyReviews />} />
         </Route>
 
+        {/* Account Health: tourists and business owners; still reachable while suspended or deactivated */}
+        <Route element={<ProtectedRoute roles={['tourist', 'business_owner']} allowRestricted><PublicLayout /></ProtectedRoute>}>
+          <Route path="/account/status" element={<AccountStatus />} />
+        </Route>
+
         {/* Business Owner entry point - full-screen onboarding/submission flow, no dashboard chrome */}
         <Route path="/business" element={<ProtectedRoute roles={['business_owner', 'admin']}><BusinessOnboarding /></ProtectedRoute>} />
 
@@ -120,6 +138,7 @@ export default function App() {
           <Route index element={<PropertyOverview />} />
           <Route path="property" element={<MyProperty />} />
           <Route path="rooms" element={<RoomManagement />} />
+          <Route path="reviews" element={<GuestReviews portalLabel="Accommodation Owner Portal" />} />
         </Route>
 
         {/* Food & Beverage Owner Routes - specialized dashboard once an establishment is approved */}
@@ -127,6 +146,7 @@ export default function App() {
           <Route index element={<EstablishmentOverview />} />
           <Route path="establishment" element={<MyEstablishment />} />
           <Route path="menu" element={<MenuManagement />} />
+          <Route path="reviews" element={<GuestReviews portalLabel="Food & Beverage Owner Portal" />} />
         </Route>
 
         {/* Local Products Owner Routes - specialized dashboard once a shop is approved */}
@@ -134,18 +154,30 @@ export default function App() {
           <Route index element={<ShopOverview />} />
           <Route path="shop" element={<MyShop />} />
           <Route path="products" element={<ProductManagement />} />
+          <Route path="reviews" element={<GuestReviews portalLabel="Local Products Owner Portal" />} />
         </Route>
 
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminLayout /></ProtectedRoute>}>
           <Route index element={<AdminDashboard />} />
           <Route path="destinations" element={<ManageDestinations />} />
-          <Route path="activities" element={<ManageActivities />} />
           <Route path="events" element={<ManageEvents />} />
           <Route path="hero-slides" element={<ManageHeroSlides />} />
           <Route path="announcements" element={<ManageAnnouncements />} />
-          <Route path="submissions" element={<ReviewSubmissions />} />
+          <Route path="listing-locations" element={<ListingLocations />} />
+          {/* Registration & Approvals: three independent stages, same URLs as before, shared tabs */}
+          <Route element={<ApprovalsLayout />}>
+            <Route path="owner-registrations" element={<OwnerRegistrations />} />
+            <Route path="submissions" element={<ReviewSubmissions />} />
+            <Route path="listing-reviews" element={<ReviewListings />} />
+          </Route>
+          <Route path="approvals" element={<Navigate to="/admin/owner-registrations" replace />} />
+          <Route path="item-reviews" element={<ReviewItems />} />
+          <Route path="guest-reviews" element={<AdminGuestReviews />} />
           <Route path="users" element={<ManageUsers />} />
+          <Route path="violations" element={<ViolationRecords />} />
+          <Route path="appeals" element={<AccountAppeals />} />
+          <Route path="account-log" element={<AccountActivityLog />} />
           <Route path="reports" element={<ReportsAnalytics />} />
         </Route>
       </Routes>

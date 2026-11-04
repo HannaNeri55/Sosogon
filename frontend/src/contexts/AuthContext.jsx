@@ -69,12 +69,23 @@ export function AuthProvider({ children }) {
 
   useIdleLogout(user, handleIdle)
 
+  // Merge fresh fields (e.g. account_state after a suspension ends) into the signed-in user.
+  const updateUser = useCallback((patch) => {
+    setUser((current) => {
+      if (!current) return current
+      const next = { ...current, ...patch }
+      sessionStorage.setItem('user', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   const value = {
     user,
     loading,
     login,
     register,
     logout,
+    updateUser,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isTourist: user?.role === 'tourist',

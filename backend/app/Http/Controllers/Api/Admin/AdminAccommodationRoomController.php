@@ -2,24 +2,36 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\ReviewsItemChanges;
 use App\Http\Controllers\Controller;
 use App\Models\AccommodationRoom;
+use App\Models\AccommodationRoomImage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminAccommodationRoomController extends Controller
 {
+    use ReviewsItemChanges;
+
     public function index(Request $request): JsonResponse
     {
-        $query = AccommodationRoom::with(['images', 'accommodation:id,name,user_id', 'accommodation.user:id,name']);
+        $query = AccommodationRoom::with(['images', 'accommodation:id,name,user_id,status,municipality_id', 'accommodation.user:id,name', 'accommodation.municipality:id,name']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
+        // Approved rooms with proposed changes awaiting review.
+        if ($request->input('changes') === 'pending') {
+            $query->where('pending_changes->status', 'pending');
+        }
+
         $perPage = min((int) $request->input('per_page', 100), 200);
 
-        return response()->json($query->orderByDesc('created_at')->paginate($perPage));
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        $this->withPendingChanges($page->getCollection());
+
+        return response()->json($page);
     }
 
     public function approve(Request $request, int $id): JsonResponse
@@ -48,5 +60,39 @@ class AdminAccommodationRoomController extends Controller
         ]);
 
         return response()->json(['message' => 'Room rejected.']);
+    }
+
+    public function approveChanges(Request $request, int $id): JsonResponse
+    {
+        return $this->approveItemChanges($request, AccommodationRoom::class, $id, function (AccommodationRoom $room, array $pending) {
+            $delete = [];
+            foreach ($room->images()->whereIn('id', $pending['remove_image_ids'] ?? [])->get() as $image) {
+                $delete[] = [$image->image_path, $image->thumbnail_path];
+                $image->delete();
+            }
+
+            $order = ($room->images()->max('sort_order') ?? -1) + 1;
+            foreach ($pending['new_images'] ?? [] as $image) {
+                AccommodationRoomImage::create([
+                    'room_id' => $room->id,
+                    'image_path' => $image['image_path'],
+                    'thumbnail_path' => $image['thumbnail_path'],
+                    'sort_order' => $order++,
+                    'is_primary' => false,
+                ]);
+            }
+
+            // Keep exactly one cover while photos remain.
+            if (! $room->images()->where('is_primary', true)->exists() && ($first = $room->images()->orderBy('sort_order')->first())) {
+                $first->update(['is_primary' => true]);
+            }
+
+            return $delete;
+        });
+    }
+
+    public function rejectChanges(Request $request, int $id): JsonResponse
+    {
+        return $this->rejectItemChanges($request, AccommodationRoom::class, $id);
     }
 }

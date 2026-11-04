@@ -1,31 +1,45 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { FiCheck, FiMapPin, FiPhone, FiClock, FiDollarSign } from 'react-icons/fi'
-import { getAccommodation } from '../../api/accommodations'
-import LocationMap from '../../components/maps/LocationMap'
-import ListingCard from '../../components/cards/ListingCard'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import ReviewSection from '../../components/common/ReviewSection'
-import DetailHero from '../../components/common/DetailHero'
-import DetailInfoRow from '../../components/common/DetailInfoRow'
-import { getImageUrl } from '../../utils/helpers'
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { FiMapPin, FiPhone, FiClock, FiDollarSign, FiKey } from "react-icons/fi";
+import { approxRange, estimateOf } from "../../utils/estimates";
+import { getAccommodation } from "../../api/accommodations";
+import LocationMap from "../../components/maps/LocationMap";
+import NearbyPlaces from "../../components/common/NearbyPlaces";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import ReviewSection from "../../components/common/ReviewSection";
+import GuestReviewCarousel from "../../components/common/GuestReviewCarousel";
+import DetailHero from "../../components/common/DetailHero";
+import DetailLayout from "../../components/detail/DetailLayout";
+import DetailSection from "../../components/detail/DetailSection";
+import FactsCard from "../../components/detail/FactsCard";
+import AmenityGrid from "../../components/detail/AmenityGrid";
+import DiningInfo from "../../components/detail/DiningInfo";
+import RoomTypeList from "../../components/detail/RoomTypeList";
+import RoomCard from "../../components/rooms/RoomCard";
+import RoomDetailsModal from "../../components/rooms/RoomDetailsModal";
 
 export default function AccommodationDetail() {
-  const { id } = useParams()
-  const [item, setItem] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { id } = useParams();
+  const [item, setItem] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const closeRoom = useCallback(() => setSelectedRoom(null), []);
 
-  const load = () => getAccommodation(id).then(setItem).finally(() => setLoading(false))
+  const load = () =>
+    getAccommodation(id)
+      .then(setItem)
+      .finally(() => setLoading(false));
 
   useEffect(() => {
-    load()
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id]);
 
-  if (loading) return <LoadingSpinner size="lg" />
-  if (!item) return <div className="p-6 sm:p-8 text-center">Accommodation not found</div>
+  if (loading) return <LoadingSpinner size="lg" />;
 
-  const imageUrl = getImageUrl(item.images?.[0])
+  if (!item) {
+    return <div className="p-6 sm:p-8 text-center">Accommodation not found</div>;
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -33,127 +47,113 @@ export default function AccommodationDetail() {
         backTo="/accommodations"
         backLabel="Back to Accommodations"
         badge={item.type}
-        badgeClassName="bg-secondary-500"
         title={item.name}
         subtitle={item.address}
         rating={item.average_rating}
         reviewCount={item.ratings?.length}
-        imageUrl={imageUrl}
+        images={item.images || []}
         imageAlt={item.name}
-        latitude={item.latitude}
-        longitude={item.longitude}
-        website={item.website}
+        sample={item.is_sample}
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 space-y-8">
-        <div>
-          <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">About this place</h2>
-          <p className="text-gray-600 leading-relaxed mb-6">{item.description}</p>
-          <div className="border-t border-gray-100 pt-4">
-            <DetailInfoRow icon={FiMapPin} label="Address">{item.address}</DetailInfoRow>
-            <DetailInfoRow icon={FiPhone} label="Contact">{item.contact_number || 'Not available'}</DetailInfoRow>
-            <DetailInfoRow icon={FiClock} label="Operating Hours">{item.operating_hours || 'Not specified'}</DetailInfoRow>
-            <DetailInfoRow icon={FiDollarSign} label="Price Range">
-              <span className="capitalize">{item.price_range}</span>
-            </DetailInfoRow>
-          </div>
+      <DetailLayout
+        aside={
+          <FactsCard
+            facts={[
+              { icon: FiMapPin, label: "Address", value: item.address },
+              { icon: FiPhone, label: "Contact", value: item.contact_number || "Not available" },
+              { icon: FiClock, label: "Operating Hours", value: item.operating_hours || "Not specified" },
+              {
+                icon: FiDollarSign,
+                label: "Price Range",
+                value: item.price_range && (
+                  <span>
+                    <span className="capitalize">{item.price_range}</span>
+                    {/* Real room prices take precedence: the estimate only shows when no room has one. */}
+                    {estimateOf(item, "nightly_rate") && !item.rooms?.some((room) => Number(room.price) > 0) &&
+                      ` · ${approxRange(estimateOf(item, "nightly_rate"), " / night")}`}
+                  </span>
+                ),
+              },
+              ...(estimateOf(item, "check_in")
+                ? [{
+                    icon: FiKey,
+                    label: "Check-in / Check-out",
+                    value: `Usually ${estimateOf(item, "check_in")} / ${estimateOf(item, "check_out")} (confirm with the property)`,
+                  }]
+                : []),
+            ]}
+            latitude={item.latitude}
+            longitude={item.longitude}
+            website={item.website}
+          />
+        }
+      >
+        <DetailSection title="About this place">
+          <p className="text-gray-700 leading-relaxed whitespace-pre-line">{item.description}</p>
+        </DetailSection>
+
+        <DetailSection
+          title={item.rooms?.length > 0 || !item.room_types?.length ? "Rooms" : "Room Types"}
+          subtitle={item.rooms?.length > 0 ? "Select a room to see its photos, features and details." : undefined}
+        >
+          {item.rooms?.length > 0 ? (
+            <>
+              {/* Compact cards; a click opens that room's full details. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                {item.rooms.map((room) => (
+                  <RoomCard key={room.id} room={room} onOpen={setSelectedRoom} />
+                ))}
+              </div>
+              <p className="mt-5 text-xs text-gray-500">
+                Room occupancy is updated manually by the property owner and is for information only. Contact the
+                property directly to confirm availability and arrange a stay.
+              </p>
+
+              {selectedRoom && <RoomDetailsModal key={selectedRoom.id} room={selectedRoom} onClose={closeRoom} />}
+            </>
+          ) : item.room_types?.length > 0 ? (
+            <>
+              <RoomTypeList types={item.room_types} />
+              <p className="mt-5 text-xs text-gray-500">
+                The room types this property offers. Rates shown are as published and may change; availability isn't
+                confirmed. Contact the property directly to book.
+              </p>
+            </>
+          ) : (
+            <AmenityGrid
+              emptyTitle="Room information coming soon"
+              emptyText="This accommodation has not published its room information yet. Please contact the property directly for room types, rates, and availability."
+            />
+          )}
+        </DetailSection>
+
+        <DetailSection title="Amenities & Facilities">
+          <AmenityGrid
+            items={item.amenities || []}
+            emptyTitle="Amenities information coming soon"
+            emptyText="This property has not provided its amenities yet. Please contact the accommodation for details."
+          />
+        </DetailSection>
+
+        {item.dining_details && (
+          <DetailSection title="Dining">
+            <DiningInfo details={item.dining_details} />
+          </DetailSection>
+        )}
+
+        <DetailSection title="Location">
+          <LocationMap latitude={item.latitude} longitude={item.longitude} title={item.name} address={item.address} />
+        </DetailSection>
+
+        <GuestReviewCarousel item={item} />
+
+        <NearbyPlaces data={item} name={item.name} kind="accommodation" />
+
+        <div id="reviews" className="scroll-mt-24">
+          <ReviewSection item={item} rateableType="accommodation" onReviewed={load} />
         </div>
-
-        {item.rooms?.length > 0 && (
-          <div className="card p-6 sm:p-8">
-            <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-1">Rooms</h2>
-            <p className="text-sm text-gray-500 mb-5">
-              Status is updated manually by the property owner and is for information only — contact the property directly to arrange a stay.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {item.rooms.map((room) => {
-                const roomImageUrl = getImageUrl(room.images?.[0])
-                const isOccupied = room.occupancy_status === 'occupied'
-                return (
-                  <div
-                    key={room.id}
-                    className="rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col"
-                  >
-                    <div className="relative aspect-4/3 overflow-hidden bg-gray-100">
-                      <img src={roomImageUrl} alt={room.room_number} className="w-full h-full object-cover" />
-                      <span
-                        className={`absolute top-2 right-2 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                          isOccupied ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                        }`}
-                      >
-                        {room.occupancy_status}
-                      </span>
-                    </div>
-                    <div className="p-4 flex-1 flex flex-col">
-                      <p className="font-medium text-gray-900 mb-1 truncate">{room.room_number}</p>
-                      <div className="flex items-center gap-2 mb-1 min-h-5.5 text-sm text-gray-500">
-                        {room.category && (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium capitalize">
-                            {room.category}
-                          </span>
-                        )}
-                        {room.price && <span>₱{Number(room.price).toLocaleString()}</span>}
-                      </div>
-                      <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5em]">{room.description}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {item.amenities?.length > 0 && (
-          <div className="card p-6 sm:p-8">
-            <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Amenities</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {item.amenities.map((a) => (
-                <div key={a} className="flex items-center gap-2 text-sm text-gray-700">
-                  <FiCheck className="text-primary-500 shrink-0" size={16} />
-                  {a}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="card p-6 sm:p-8">
-          <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Location</h2>
-          <LocationMap latitude={item.latitude} longitude={item.longitude} title={item.name} />
-        </div>
-
-        {item.nearby_food_beverages?.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900">Food &amp; Beverage</h2>
-            <p className="text-sm text-gray-500 mt-1 mb-6">The closest verified places to eat near {item.name}.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {item.nearby_food_beverages.map((place) => (
-                <ListingCard
-                  key={place.id}
-                  item={place}
-                  basePath="/food-beverage"
-                  typeLabel={place.cuisine_type}
-                  distanceKm={place.distance_km}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {item.nearby_retail_shops?.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900">Souvenir Shops</h2>
-            <p className="text-sm text-gray-500 mt-1 mb-6">The closest verified pasalubong shops to {item.name}.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {item.nearby_retail_shops.map((shop) => (
-                <ListingCard key={shop.id} item={shop} basePath="/shops" typeLabel="Pasalubong Shop" distanceKm={shop.distance_km} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <ReviewSection item={item} rateableType="accommodation" onReviewed={load} />
-      </div>
+      </DetailLayout>
     </div>
-  )
+  );
 }

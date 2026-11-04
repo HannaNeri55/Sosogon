@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { getItinerary, deleteItinerary, updateItinerary } from '../../api/itineraries'
 import ItineraryDayCard from '../../components/itinerary/ItineraryDayCard'
 import PlacePickerModal from '../../components/itinerary/PlacePickerModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import BackButton from '../../components/layout/BackButton'
 import toast from 'react-hot-toast'
 import {
-  FiArrowLeft,
   FiCalendar,
   FiActivity,
   FiDollarSign,
@@ -20,8 +20,10 @@ import {
 import { TRAVEL_PACES, BUDGETS, INTERESTS } from '../../utils/constants'
 import { formatTripCost, formatPeso, formatPesoRange } from '../../utils/helpers'
 import { slotError, overlapProblem, firstFreeSlot } from '../../utils/timeSlots'
-import { dishOptions, souvenirOptions, roomOptions, picksTotal, itineraryStays, stayNights, roomsSummary } from '../../utils/selections'
+import { dishOptions, souvenirOptions, roomOptions, picksTotal, itineraryStays, stayNights, stayRooms, roomsSummary } from '../../utils/selections'
+import { costNoteIsEstimate, stayCostIsEstimate } from '../../utils/estimates'
 import StayCard from '../../components/itinerary/StayCard'
+import { transportGuide } from '../../utils/transportGuidance'
 
 // The itinerary_items column holding the listing for each kind of stop.
 const LISTING_COLUMNS = {
@@ -45,23 +47,36 @@ function emptyPendingEdits() {
 const stayKey = (stay) => stay.id ?? 'main'
 
 // What the trip costs by kind of expense, from each stop's cost and the stays.
+// Each row has its lowest (min) and highest (value) amount; they differ for a typical range.
 function budgetBreakdown(itinerary) {
-  const sumOf = (type) =>
-    (itinerary.items || []).filter((i) => i.item_type === type).reduce((sum, i) => sum + (Number(i.cost_max) || 0), 0)
+  const stopsOf = (type) => (itinerary.items || []).filter((i) => i.item_type === type)
+  const sumOf = (type, field = 'cost_max') => stopsOf(type).reduce((sum, i) => sum + (Number(i[field]) || 0), 0)
+  const row = (label, detail, type) => ({ label, detail, min: sumOf(type, 'cost_min'), value: sumOf(type) })
   const booked = itineraryStays(itinerary).filter((stay) => stayNights(stay) > 0)
   const nights = booked.reduce((sum, stay) => sum + stayNights(stay), 0)
   const rooms = itinerary.rooms || []
+  // Shops with souvenirs picked, and shops costed from typical souvenir spending instead.
+  const shops = stopsOf('retail_shop')
+  const picked = shops.filter((s) => s.souvenirs?.length > 0).length
+  const souvenirDetail = picked === shops.length
+    ? 'Recommended souvenirs per shop'
+    : picked === 0
+      ? 'Typical souvenir spending, for the whole group (estimate)'
+      : 'Recommended souvenirs per shop, typical spending (estimate) where none are picked'
   return [
     {
       label: booked.length > 1 ? 'Stays' : 'Stay',
       detail: rooms.length
         ? `${booked.length > 1 ? `${booked.length} stays · ` : ''}${roomsSummary(rooms)} · ${nights} night${nights > 1 ? 's' : ''}`
-        : 'Rooms not set',
+        : itineraryStays(itinerary).length === 0
+          ? 'Not needed — no stay booked'
+          : 'Rooms not set',
+      min: Number(itinerary.accommodation_cost_min) || 0,
       value: Number(itinerary.accommodation_cost_max) || 0,
     },
-    { label: 'Entrance fees', detail: 'All destinations, for the whole group', value: sumOf('destination') },
-    { label: 'Meals', detail: '3 recommended dishes per person, per meal', value: sumOf('food_beverage') },
-    { label: 'Souvenirs', detail: '3 recommended souvenirs per shop', value: sumOf('retail_shop') },
+    row('Entrance fees', 'All destinations, for the whole group', 'destination'),
+    row('Meals', 'Recommended dishes for every meal, for the whole group', 'food_beverage'),
+    row('Souvenirs', souvenirDetail, 'retail_shop'),
   ]
 }
 
@@ -73,9 +88,17 @@ function editProblem({ time_slot, activities }, timeRequired) {
   return null
 }
 
+// Whether any part of the total is an estimate: a stop priced from a typical range or with an
+// estimated menu price, or a stay priced from its price level.
+function includesEstimates(itinerary) {
+  return (itinerary.items || []).some((i) => Number(i.cost_max) > 0 && costNoteIsEstimate(i.cost_note))
+    || itineraryStays(itinerary).some((stay) => stayNights(stay) > 0 && stayCostIsEstimate(stay, stayRooms(stay, itinerary)))
+}
+
 function BudgetCard({ itinerary }) {
   if (itinerary.estimated_cost_max == null) return null
   const rows = budgetBreakdown(itinerary)
+  const estimated = includesEstimates(itinerary)
   const budget = BUDGETS.find((b) => b.value === itinerary.budget)
   const travelers = Number(itinerary.travelers) || 1
 
@@ -98,12 +121,12 @@ function BudgetCard({ itinerary }) {
               <p className="text-sm font-medium text-gray-800">{row.label}</p>
               <p className="text-xs text-gray-500 truncate">{row.detail}</p>
             </dt>
-            <dd className="text-sm font-semibold text-gray-800 shrink-0">{formatPeso(row.value)}</dd>
+            <dd className="text-sm font-semibold text-gray-800 shrink-0">{formatPesoRange(row.min, row.value)}</dd>
           </div>
         ))}
         <div className="flex items-center justify-between gap-4 pt-3">
           <dt className="text-sm font-semibold text-gray-900">
-            Total <span className="font-normal text-gray-500">for {travelers} traveler{travelers > 1 ? 's' : ''}</span>
+            {estimated ? 'Est. total' : 'Total'} <span className="font-normal text-gray-500">for {travelers} traveler{travelers > 1 ? 's' : ''}{estimated && ', includes estimated prices'}</span>
           </dt>
           <dd className="text-lg font-heading font-bold text-primary-600">
             {formatPesoRange(itinerary.estimated_cost_min, itinerary.estimated_cost_max)}
@@ -393,13 +416,8 @@ export default function ItineraryView() {
 
   return (
     <div className={`bg-gray-50 min-h-screen ${editMode ? 'pb-28' : ''}`}>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        <Link
-          to="/my-itineraries"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-primary-600 transition-colors mb-6"
-        >
-          <FiArrowLeft size={15} /> Back to My Itineraries
-        </Link>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-12">
+        <BackButton to="/my-itineraries" label="Back to My Itineraries" className="mb-4" />
 
         <div className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
@@ -451,7 +469,7 @@ export default function ItineraryView() {
           </div>
         </div>
 
-        {(stays.length > 0 || editMode) && (
+        {(stays.length > 0 || editMode || itinerary.accommodation_note) && (
           <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 mb-6">
             <p className="flex items-center gap-1.5 text-primary-600 font-medium mb-1">
               <FiHome size={16} /> {stays.length > 1 ? 'Your Stays' : 'Your Stay'}
@@ -459,10 +477,12 @@ export default function ItineraryView() {
             <p className="text-sm text-gray-500 mb-4">
               {stays.length > 1
                 ? 'One stay per town, in the middle of the places you visit there. Each night is spent in the town where that day ends.'
-                : "You're free to stay somewhere else — this one just keeps every day's travel short."}
+                : stays.length === 1
+                  ? "You're free to stay somewhere else — this one just keeps every day's travel short."
+                  : 'No stay is booked in this plan.'}
             </p>
             {stays.length === 0 ? (
-              <p className="text-sm text-gray-500">No accommodation is set for this trip yet.</p>
+              <p className="text-sm text-gray-500">{itinerary.accommodation_note || 'No accommodation is set for this trip yet.'}</p>
             ) : (
               <div className="space-y-4">
                 {stays.map((stay) => (
@@ -490,6 +510,13 @@ export default function ItineraryView() {
         )}
         <BudgetCard itinerary={itinerary} />
 
+        {/* How directions between stops work for the way the tourist gets around. */}
+        <div className="bg-white rounded-xl p-4 sm:p-5 border border-gray-100 mb-6">
+          <p className="flex items-center gap-1.5 text-primary-600 font-medium">
+            <FiNavigation size={16} /> Getting around · {transportGuide(itinerary.transport_preference).label}
+          </p>
+          <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">{transportGuide(itinerary.transport_preference).overview}</p>
+        </div>
 
         <div className="space-y-6">
           {dayNumbers.map((dayNumber) => (
@@ -507,6 +534,7 @@ export default function ItineraryView() {
               }
               onSwapStop={handleSwapStop}
               overnight={stays.find((stay) => stay.night_days?.includes(dayNumber))}
+              transportPreference={itinerary.transport_preference}
             />
           ))}
         </div>

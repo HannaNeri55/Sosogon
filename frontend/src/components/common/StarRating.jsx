@@ -22,7 +22,9 @@ export function StarInput({ value, onChange }) {
           key={star}
           type="button"
           onClick={() => onChange(star)}
-          className="focus:outline-none"
+          aria-label={`${star} star${star > 1 ? 's' : ''}`}
+          aria-pressed={star === value}
+          className="p-1.5 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <FiStar
             size={24}

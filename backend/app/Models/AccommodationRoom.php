@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPendingChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccommodationRoom extends Model
 {
+    use HasPendingChanges;
+
     protected $fillable = [
         'accommodation_id',
         'room_number',
         'category',
         'price',
         'description',
+        'room_features',
         'occupancy_status',
         'status',
         'admin_notes',
@@ -26,6 +30,7 @@ class AccommodationRoom extends Model
         return [
             'approved_at' => 'datetime',
             'price' => 'decimal:2',
+            'room_features' => 'array',
         ];
     }
 

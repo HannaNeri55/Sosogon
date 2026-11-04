@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
-use App\Models\Accommodation;
 use App\Models\Destination;
-use App\Models\FoodBeverage;
-use App\Models\RetailShop;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DestinationController extends Controller
 {
+    use FindsNearbyPlaces;
+
     public function index(Request $request): JsonResponse
     {
         $query = Destination::published()
@@ -43,7 +43,8 @@ class DestinationController extends Controller
         $allowedSorts = ['name', 'average_rating', 'view_count', 'created_at'];
 
         if ($sortBy === 'featured') {
-            $query->orderByDesc('is_featured')->orderByDesc('created_at');
+            // Admin-chosen featured places first, best rated first among them.
+            $query->orderByDesc('is_featured')->orderByDesc('average_rating')->orderByDesc('created_at');
         } elseif (in_array($sortBy, $allowedSorts)) {
             $query->orderBy($sortBy, $sortDir === 'desc' ? 'desc' : 'asc');
         }
@@ -57,35 +58,32 @@ class DestinationController extends Controller
     public function show(int $id): JsonResponse
     {
         $destination = Destination::published()
-            ->with(['category', 'municipality', 'barangay', 'images', 'ratings.user', 'activities'])
+
+            ->with([
+                'category',
+                'municipality',
+                'barangay',
+                'images',
+                // Newest first, each with the reviewer's public name and any reply.
+                'ratings' => fn ($query) => $query
+                    ->visible()
+                    ->with(['user:id,name', 'reply'])
+                    ->latest()
+                    ->orderByDesc('id'),
+                'activities',
+                'fees',
+                'rates',
+                'amenities',
+                // Typical hours / fee for what the listing doesn't state (shown as approximate).
+                'estimates',
+            ])
+
             ->findOrFail($id);
 
         $destination->increment('view_count');
 
-        // Accommodations, food & beverage spots, and retail products in the same municipality
-        $nearbyAccommodations = Accommodation::approved()
-            ->where('municipality_id', $destination->municipality_id)
-            ->with(['images', 'municipality'])
-            ->limit(6)
-            ->get();
-
-        $nearbyFoodBeverages = FoodBeverage::approved()
-            ->where('municipality_id', $destination->municipality_id)
-            ->with('images')
-            ->limit(6)
-            ->get();
-
-        $nearbyRetailShops = RetailShop::approved()
-            ->where('municipality_id', $destination->municipality_id)
-            ->with('images')
-            ->limit(6)
-            ->get();
-
-        return response()->json([
-            'destination' => $destination,
-            'nearby_accommodations' => $nearbyAccommodations,
-            'nearby_food_beverages' => $nearbyFoodBeverages,
-            'nearby_retail_shops' => $nearbyRetailShops,
-        ]);
+        // Ranked purely by straight-line distance; a destination without usable
+        // coordinates gets empty lists rather than a same-municipality guess.
+        return response()->json(['destination' => $destination] + $this->nearbyPlaces($destination, precision: 3));
     }
 }

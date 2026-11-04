@@ -12,6 +12,7 @@ use App\Models\RetailProduct;
 use App\Models\RetailShop;
 use App\Models\Role;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -92,20 +93,21 @@ class ItineraryGenerationTest extends TestCase
         $this->ids = compact('hill', 'beach', 'falls') + ['hotel' => $hotel->id, 'foodByStay' => $foodByStay->id, 'foodByHill' => $foodByHill->id, 'shop' => $shop->id];
 
         // The AI labels the sunrise and sunset activities "morning" on purpose: the planner
-        // must place them by what they are, not by the label.
+        // must place them by what they are, not by the label. Day 1 is the arrival day, so the
+        // sunrise hill comes on day 2.
         $reply = [
             'title' => 'Three days around Bulan',
             'days' => [
-                ['day_number' => 1, 'destination_id' => $hill, 'reason' => 'Great views.', 'activities' => [
+                ['day_number' => 1, 'destination_id' => $falls, 'reason' => 'Cool water.', 'activities' => [
+                    ['name' => 'Explore the falls', 'duration_minutes' => 120, 'time_of_day' => 'anytime'],
+                ]],
+                ['day_number' => 2, 'destination_id' => $hill, 'reason' => 'Great views.', 'activities' => [
                     ['name' => 'Sunrise Viewing at Hill', 'duration_minutes' => 60, 'time_of_day' => 'morning'],
                     ['name' => 'Nature walk', 'duration_minutes' => 90, 'time_of_day' => 'anytime'],
                 ]],
-                ['day_number' => 2, 'destination_id' => $beach, 'reason' => 'Relaxing shore.', 'activities' => [
+                ['day_number' => 3, 'destination_id' => $beach, 'reason' => 'Relaxing shore.', 'activities' => [
                     ['name' => 'Sunset Watching at Beach', 'duration_minutes' => 60, 'time_of_day' => 'morning'],
                     ['name' => 'Swimming', 'duration_minutes' => 120, 'time_of_day' => 'anytime'],
-                ]],
-                ['day_number' => 3, 'destination_id' => $falls, 'reason' => 'Cool water.', 'activities' => [
-                    ['name' => 'Explore the falls', 'duration_minutes' => 120, 'time_of_day' => 'anytime'],
                 ]],
             ],
         ];
@@ -143,14 +145,14 @@ class ItineraryGenerationTest extends TestCase
         ]);
     }
 
-    private function generate(int $travelers = 2, string $pace = 'moderate'): Itinerary
+    private function generate(int $travelers = 2, string $pace = 'moderate', string $budget = 'budget'): Itinerary
     {
         $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', [
             'municipality_id' => $this->town,
             'num_days' => 3,
             'interests' => ['nature'],
             'travel_pace' => $pace,
-            'budget' => 'budget',
+            'budget' => $budget,
             'travelers' => $travelers,
             'start_date' => now()->addDays(3)->toDateString(),
             'end_date' => now()->addDays(5)->toDateString(),
@@ -165,7 +167,7 @@ class ItineraryGenerationTest extends TestCase
     private function minutes(string $range): array
     {
         return array_map(function ($part) {
-            $t = \Carbon\Carbon::createFromFormat('g:i A', trim($part));
+            $t = Carbon::createFromFormat('g:i A', trim($part));
 
             return $t->hour * 60 + $t->minute;
         }, explode('–', $range));
@@ -195,16 +197,16 @@ class ItineraryGenerationTest extends TestCase
     {
         $itinerary = $this->generate();
 
-        [$start, $end] = $this->activityOn($itinerary, 1, 'Sunrise Viewing');
+        [$start, $end] = $this->activityOn($itinerary, 2, 'Sunrise Viewing');
         $this->assertGreaterThanOrEqual(300, $start);
         $this->assertLessThanOrEqual(390, $end);
 
-        [$start, $end] = $this->activityOn($itinerary, 2, 'Sunset Watching');
+        [$start, $end] = $this->activityOn($itinerary, 3, 'Sunset Watching');
         $this->assertGreaterThanOrEqual(990, $start);
         $this->assertLessThanOrEqual(1080, $end);
 
         // The hill closes at 6 PM, so its visit can't run later.
-        $hillVisit = $itinerary->items->first(fn ($i) => $i->day_number === 1 && $i->item_type === 'destination');
+        $hillVisit = $itinerary->items->first(fn ($i) => $i->day_number === 2 && $i->item_type === 'destination');
         $this->assertLessThanOrEqual(1080, $this->minutes($hillVisit->time_slot)[1]);
     }
 
@@ -214,9 +216,9 @@ class ItineraryGenerationTest extends TestCase
 
         // The beach is for the sunset: the visit starts just in time, after lunch, instead of
         // waiting there from the morning.
-        $beachVisit = $itinerary->items->first(fn ($i) => $i->day_number === 2 && $i->item_type === 'destination');
+        $beachVisit = $itinerary->items->first(fn ($i) => $i->day_number === 3 && $i->item_type === 'destination');
         $this->assertGreaterThanOrEqual(900, $this->minutes($beachVisit->time_slot)[0]);
-        $lunch = $itinerary->items->first(fn ($i) => $i->day_number === 2 && str_starts_with((string) $i->notes, 'Lunch'));
+        $lunch = $itinerary->items->first(fn ($i) => $i->day_number === 3 && str_starts_with((string) $i->notes, 'Lunch'));
         $this->assertNotNull($lunch);
         $this->assertLessThan($beachVisit->sequence, $lunch->sequence);
 
@@ -229,11 +231,14 @@ class ItineraryGenerationTest extends TestCase
     {
         $itinerary = $this->generate(travelers: 5);
 
-        // Dishes: the 3 cheapest on the menu, one each per traveler.
+        // Lunch dishes: one main dish per traveler, the cheapest on the menu (dinner keeps 3,
+        // see ItineraryMealQualityTest).
         $lunch = $itinerary->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill']);
-        $this->assertEqualsCanonicalizing([50.0, 80.0, 120.0], $lunch->dishes->pluck('price')->map(fn ($p) => (float) $p)->all());
+        $this->assertStringStartsWith('Lunch', $lunch->notes);
+        $this->assertEqualsCanonicalizing([50.0], $lunch->dishes->pluck('price')->map(fn ($p) => (float) $p)->all());
         $this->assertTrue($lunch->dishes->every(fn ($d) => $d->pivot->quantity === 5));
-        $this->assertEquals((50 + 80 + 120) * 5, (float) $lunch->cost_max);
+        $this->assertEquals(50 * 5, (float) $lunch->cost_max);
+        $this->assertSame('1 dish × 5', $lunch->cost_note);
 
         // Souvenirs: the 3 cheapest priced products, one of each for the group.
         $shopStop = $itinerary->items->first(fn ($i) => $i->retail_shop_id === $this->ids['shop']);
@@ -250,24 +255,44 @@ class ItineraryGenerationTest extends TestCase
         );
     }
 
+    public function test_moderate_and_luxury_budgets_pick_mid_and_top_range_dishes_souvenirs_and_rooms(): void
+    {
+        $prices = fn ($rows) => $rows->pluck('price')->map(fn ($p) => (float) $p)->sort()->values()->all();
+
+        // Menu 50/80/120/200/300 (its lunch: one dish), souvenirs 30/60/90/400, rooms Standard ₱1,500 / Deluxe ₱2,500 / Suite ₱5,000.
+        $moderate = $this->generate(travelers: 2, budget: 'moderate');
+        $this->assertSame([120.0], $prices($moderate->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill'])->dishes));
+        $this->assertSame([30.0, 60.0, 90.0], $prices($moderate->items->first(fn ($i) => $i->retail_shop_id === $this->ids['shop'])->souvenirs));
+        $this->assertSame(['Deluxe'], $moderate->rooms->pluck('category')->all(), 'The middle room category, enough for 2.');
+
+        $luxury = $this->generate(travelers: 2, budget: 'luxury');
+        $this->assertSame([300.0], $prices($luxury->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill'])->dishes));
+        $this->assertSame([60.0, 90.0, 400.0], $prices($luxury->items->first(fn ($i) => $i->retail_shop_id === $this->ids['shop'])->souvenirs));
+        $this->assertSame(['Suite'], $luxury->rooms->pluck('category')->all(), 'The top room category.');
+        $this->assertGreaterThan((float) $moderate->accommodation_cost_max, (float) $luxury->accommodation_cost_max);
+    }
+
     public function test_the_pace_sets_breakfast_activity_length_and_a_merienda(): void
     {
         $moderate = $this->generate();
         $breakfast = $moderate->items->first(fn ($i) => $i->day_number === 3 && str_starts_with((string) $i->notes, 'Breakfast'));
         $this->assertSame(450, $this->minutes($breakfast->time_slot)[0], 'Moderate breakfast is at 7:30 AM.');
-        [$start, $end] = $this->activityOn($moderate, 1, 'Sunrise Viewing');
+        [$start, $end] = $this->activityOn($moderate, 2, 'Sunrise Viewing');
         $this->assertSame(60, $end - $start);
 
         $relaxed = $this->generate(pace: 'relaxed');
         // No sunrise on a relaxed pace: the activity is kept, 90 minutes, with a note.
-        [$start, $end] = $this->activityOn($relaxed, 1, 'Sunrise Viewing');
+        [$start, $end] = $this->activityOn($relaxed, 2, 'Sunrise Viewing');
         $this->assertSame(90, $end - $start);
         $this->assertGreaterThan(390, $start);
 
-        // One more food place by the hill, for the afternoon merienda after lunch there.
-        FoodBeverage::create($this->listing('Hill Snacks', 12.702, 123.872) + ['cuisine_type' => 'Snacks & Desserts', 'price_range' => 'budget', 'status' => 'approved']);
+        // Snack places by the hotel, where the packed day rests after its sunrise, for the
+        // afternoon merienda after lunch there.
+        foreach (['Snack Corner' => 12.672, 'Kakanin Stall' => 12.673] as $name => $lat) {
+            FoodBeverage::create($this->listing($name, $lat, 123.886) + ['cuisine_type' => 'Snacks & Desserts', 'price_range' => 'budget', 'status' => 'approved']);
+        }
         $packed = $this->generate(pace: 'packed');
-        [$start, $end] = $this->activityOn($packed, 1, 'Sunrise Viewing');
+        [$start, $end] = $this->activityOn($packed, 2, 'Sunrise Viewing');
         $this->assertSame(45, $end - $start);
         $this->assertTrue($packed->items->contains(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda')));
     }
@@ -299,5 +324,21 @@ class ItineraryGenerationTest extends TestCase
         $hillLunch = $itinerary->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill']);
         $this->assertNotNull($hillLunch);
         $this->assertStringContainsString('seafood', $hillLunch->preference_note);
+    }
+
+    public function test_hidden_sample_listings_are_never_planned(): void
+    {
+        config(['listings.show_samples' => false]);
+        Accommodation::whereKey($this->ids['hotel'])->update(['is_sample' => true]);
+        FoodBeverage::whereKey([$this->ids['foodByStay'], $this->ids['foodByHill']])->update(['is_sample' => true]);
+        RetailShop::whereKey($this->ids['shop'])->update(['is_sample' => true]);
+
+        $itinerary = $this->generate();
+
+        $this->assertNotSame($this->ids['hotel'], $itinerary->accommodation_id);
+        $this->assertNotContains($this->ids['hotel'], $itinerary->stays()->pluck('accommodation_id')->all());
+        $this->assertEmpty($itinerary->items->whereIn('food_beverage_id', [$this->ids['foodByStay'], $this->ids['foodByHill']]));
+        $this->assertEmpty($itinerary->items->where('retail_shop_id', $this->ids['shop']));
+        $this->assertTrue($itinerary->rooms->isEmpty(), 'Sample hotel rooms must not be booked.');
     }
 }

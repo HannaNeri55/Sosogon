@@ -66,8 +66,8 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
     <div>
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
         <div>
-          <p className="text-primary-600 font-medium mb-2">Business Owner Portal</p>
-          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Submission Status</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Business Owner Portal</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Submission Status</h1>
         </div>
         {onAddNew && (
           <button onClick={onAddNew} className="btn-primary w-full sm:w-auto justify-center flex items-center gap-2">
@@ -84,14 +84,14 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
       </div>
 
       {submissions.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
+        <div className="bg-white rounded-2xl p-12 text-center border border-gray-200/70 shadow-(--shadow-card)">
           <FiFileText className="mx-auto text-gray-300 mb-3" size={32} />
           <p className="text-gray-500">No submissions yet.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {submissions.map((submission) => (
-            <div key={submission.id} className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
+            <div key={submission.id} className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
               {editingId === submission.id ? (
                 <form onSubmit={handleUpdate} className="space-y-4">
                   <input

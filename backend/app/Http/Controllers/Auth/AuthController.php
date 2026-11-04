@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Business\OwnerApplicationRules;
+use App\Models\BusinessOwnerApplication;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password as PasswordBroker;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -25,22 +29,54 @@ class AuthController extends Controller
             'role' => 'required|in:tourist,business_owner',
             'phone' => 'nullable|string|max:20',
             'business_type' => 'required_if:role,business_owner|nullable|in:accommodation,food_beverage,retail_product',
-        ]);
+        ] + OwnerApplicationRules::forRegistration());
 
         $role = Role::where('name', $validated['role'])->firstOrFail();
+        $isOwner = $validated['role'] === 'business_owner';
 
-        $user = User::create([
-            'role_id' => $role->id,
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'phone' => $validated['phone'] ?? null,
-            'status' => $validated['role'] === 'business_owner' ? 'pending' : 'active',
-            'business_type' => $validated['business_type'] ?? null,
-        ]);
+        // Store the permit first (private disk) so the DB rows can reference it;
+        // remove it again if the account can't be created.
+        $permitPath = $isOwner
+            ? $request->file('business_permit_file')->store('business-permits/registrations', 'local')
+            : null;
+
+        try {
+            $user = DB::transaction(function () use ($validated, $role, $isOwner, $permitPath) {
+                $user = User::create([
+                    'role_id' => $role->id,
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => Hash::make($validated['password']),
+                    'phone' => $validated['phone'] ?? null,
+                    'status' => $isOwner ? 'pending' : 'active',
+                    'business_type' => $validated['business_type'] ?? null,
+                ]);
+
+                if ($isOwner) {
+                    BusinessOwnerApplication::create([
+                        'user_id' => $user->id,
+                        'business_name' => $validated['business_name'],
+                        'business_type' => $validated['business_type'],
+                        'business_address' => $validated['business_address'],
+                        'municipality_id' => $validated['municipality_id'],
+                        'barangay_id' => $validated['barangay_id'] ?? null,
+                        'business_permit_number' => $validated['business_permit_number'],
+                        'business_permit_path' => $permitPath,
+                    ]);
+                }
+
+                return $user;
+            });
+        } catch (\Throwable $e) {
+            if ($permitPath) {
+                Storage::disk('local')->delete($permitPath);
+            }
+
+            throw $e;
+        }
 
         // If business owner, don't return a token (they can't log in yet)
-        if ($validated['role'] === 'business_owner') {
+        if ($isOwner) {
             return response()->json([
                 'message' => 'Registration submitted. Your account is pending admin approval.',
                 'user' => [
@@ -80,11 +116,17 @@ class AuthController extends Controller
 
         $user = User::where('email', $validated['email'])->firstOrFail();
 
-        if ($user->status === 'suspended') {
-            return response()->json(['message' => 'Account suspended. Contact administrator.'], 403);
+        // Closed accounts cannot sign in at all. Suspended or deactivated accounts can, but
+        // EnsureAccountActive limits them to the Account Health page (status and appeals).
+        $user->liftExpiredSuspension();
+        $user->refresh();
+        if ($user->closed_at) {
+            return response()->json(['message' => 'This account has been closed. Contact the Sorsogon Tourism Office if you believe this is a mistake.', 'code' => 'account_closed'], 403);
         }
 
-        if ($user->isBusinessOwner() && $user->status === 'pending') {
+        // A rejected registration may sign in, but only to correct and resubmit it
+        // (EnsureOwnerApproved blocks every other business route).
+        if ($user->isBusinessOwner() && $user->status === 'pending' && ! $user->hasRejectedApplication()) {
             return response()->json([
                 'message' => 'Your account is pending approval. You will be notified once the Tourism Office reviews your application.',
             ], 403);
@@ -100,6 +142,8 @@ class AuthController extends Controller
                 'role' => $user->role->name,
                 'phone' => $user->phone,
                 'business_type' => $user->business_type,
+                'status' => $user->status,
+                'application_status' => $user->ownerApplication?->status, 'account_state' => $user->accountState(), 'suspended_until' => $user->suspended_until?->toIso8601String(),
             ],
             'token' => $token,
         ]);
@@ -187,6 +231,8 @@ class AuthController extends Controller
             'phone' => $user->phone,
             'avatar' => $user->avatar,
             'business_type' => $user->business_type,
+            'status' => $user->status,
+            'application_status' => $user->ownerApplication?->status, 'account_state' => $user->accountState(), 'suspended_until' => $user->suspended_until?->toIso8601String(),
             'created_at' => $user->created_at,
         ]);
     }

@@ -8,15 +8,15 @@ use App\Models\Accommodation;
 use App\Models\AccommodationRoom;
 use App\Models\Destination;
 use App\Models\FoodBeverage;
-use App\Models\MenuItem;
-use App\Models\RetailProduct;
-use Carbon\CarbonInterface;
 use App\Models\Itinerary;
 use App\Models\ItineraryItem;
+use App\Models\MenuItem;
 use App\Models\Municipality;
+use App\Models\RetailProduct;
 use App\Models\RetailShop;
 use App\Models\User;
 use App\Services\ItineraryService;
+use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -212,7 +212,67 @@ class ItineraryController extends Controller
             ]);
         }
 
+        // A one-day trip can't end before it starts.
+        if ($days === 1 && ! empty($validated['arrival_time']) && ! empty($validated['departure_time'])
+            && $validated['departure_time'] <= $validated['arrival_time']) {
+            throw ValidationException::withMessages([
+                'departure_time' => 'For a one-day trip, your departure time must be after your arrival time.',
+            ]);
+        }
+
+        $this->validateStayChoice($validated);
+
         return $validated;
+    }
+
+    /**
+     * The tourist's stay choice: with no accommodation needed, any picked stay or room is
+     * dropped. A picked stay must be an approved listing (with a map location) in one of the
+     * selected towns; a picked room must be an approved, priced room of that stay that isn't
+     * marked occupied, and its room type must sleep the whole group.
+     */
+    private function validateStayChoice(array &$validated): void
+    {
+        $validated['accommodation_needed'] = (bool) ($validated['accommodation_needed'] ?? true);
+        if (! $validated['accommodation_needed']) {
+            unset($validated['accommodation_id'], $validated['room_id']);
+
+            return;
+        }
+        if (empty($validated['accommodation_id'])) {
+            if (! empty($validated['room_id'])) {
+                throw ValidationException::withMessages(['room_id' => 'Choose the accommodation before choosing a room.']);
+            }
+
+            return;
+        }
+
+        $stay = Accommodation::approved()->whereNotNull('latitude')->whereNotNull('longitude')->find($validated['accommodation_id']);
+        if (! $stay) {
+            throw ValidationException::withMessages(['accommodation_id' => 'This accommodation is not available on SOSOGON. Please choose another.']);
+        }
+        if (! in_array((int) $stay->municipality_id, $validated['municipality_ids'], true)) {
+            throw ValidationException::withMessages(['accommodation_id' => "{$stay->name} isn't in one of the municipalities you selected. Choose a stay in one of them."]);
+        }
+        if (empty($validated['room_id'])) {
+            return;
+        }
+
+        $room = AccommodationRoom::approved()->find($validated['room_id']);
+        if (! $room || (int) $room->accommodation_id !== (int) $stay->id) {
+            throw ValidationException::withMessages(['room_id' => "This room doesn't belong to {$stay->name}."]);
+        }
+        if ($room->occupancy_status !== 'unoccupied' || (float) $room->price <= 0) {
+            throw ValidationException::withMessages(['room_id' => 'This room isn\'t offered for booking right now. Please choose another.']);
+        }
+        $travelers = max(1, (int) ($validated['travelers'] ?? 1));
+        [, $sleeps] = $this->itineraryService->roomsForGroup($room, $travelers);
+        if ($sleeps < $travelers) {
+            $type = $room->category ?: 'room';
+            throw ValidationException::withMessages([
+                'room_id' => "{$stay->name}'s {$type} rooms sleep at most {$sleeps} of your {$travelers} travelers. Choose a bigger room type or fewer travelers.",
+            ]);
+        }
     }
 
     private function preferenceRules(): array
@@ -224,15 +284,25 @@ class ItineraryController extends Controller
             'num_days' => 'required|integer|min:1|max:30',
             'interests' => 'required|array|min:1',
             // Added 'history' to the allowed interests
-            'interests.*' => 'string|in:nature,culture,food,adventure,shopping,relaxation,history',
+            'interests.*' => 'string|in:nature,beaches,culture,food,adventure,shopping,relaxation,history',
             'travel_pace' => 'required|in:relaxed,moderate,packed',
             // Added 'medium' to the allowed budgets
             'budget' => 'required|in:budget,moderate,luxury,medium',
             'travelers' => 'nullable|integer|min:1|max:20',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after_or_equal:start_date',
+            // When the tourist arrives on Day 1 ("14:30"); optional, Day 1 assumes mid-morning without it.
+            'arrival_time' => 'nullable|date_format:H:i',
+            // When the tourist leaves on the last day ("17:00"); optional, the last day runs through dinner without it.
+            'departure_time' => 'nullable|date_format:H:i',
+            // Whether the planner books a stay (default yes), and the stay and room picked before generating.
+            'accommodation_needed' => 'sometimes|boolean',
+            'accommodation_id' => 'nullable|integer',
+            'room_id' => 'nullable|integer',
             'food_preference' => 'nullable|string|in:filipino_bicolano,seafood,fast_food,fine_dining,street_food,vegetarian,no_preference',
             'accommodation_type' => 'nullable|string|in:resort,hotel,homestay,budget,no_preference',
+            // How the tourist plans to get around; recorded for later transportation guidance, not used in planning yet.
+            'transport_preference' => 'nullable|string|in:private_car,motorcycle,rented_vehicle,public_transport,no_preference',
             'additional_preferences' => 'nullable|string|max:1000',
             'preferred_destinations' => 'nullable|array',
             'preferred_destinations.*' => 'integer|exists:destinations,id',
@@ -639,6 +709,12 @@ class ItineraryController extends Controller
                     continue;
                 }
                 [$start, $end] = $t['range'];
+                // Like a generated visit, an added or changed one stays within the place's listed
+                // (or typical estimated) opening hours on that day.
+                $date = $itinerary->start_date?->copy()->addDays($day - 1);
+                if ($problem = $service->visitHoursProblem($stop->destination, $start, $end, $date)) {
+                    throw ValidationException::withMessages(['edit_items' => $problem]);
+                }
                 $blocks = $timed
                     ->filter(fn ($o) => $o['stop']->id !== $stop->id && in_array($o['stop']->item_type, $nestable, true)
                         && $o['range'][0] >= $start && $o['range'][1] <= $end)

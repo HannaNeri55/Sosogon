@@ -43,7 +43,7 @@ class EventSeeder extends Seeder
             'municipality' => 'Bulan',
             'description' => 'A thanksgiving for the bounties of land and sea, with fishermen dancing through the streets of Bulan carrying the padaraw torchlights used to draw fish to their nets.',
             'start' => [5, 30],
-            'end' => [5, 30],
+            'end' => [5, 31], // May 30–31 on the Municipality of Bulan's fiesta calendar
         ],
         [
             'title' => 'Agingay Festival & Bulusan Town Fiesta',

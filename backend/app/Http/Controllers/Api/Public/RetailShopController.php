@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\RetailShop;
 use Illuminate\Http\JsonResponse;
@@ -9,6 +10,8 @@ use Illuminate\Http\Request;
 
 class RetailShopController extends Controller
 {
+    use FindsNearbyPlaces;
+
     public function index(Request $request): JsonResponse
     {
         $query = RetailShop::approved()
@@ -43,7 +46,13 @@ class RetailShopController extends Controller
                 'barangay',
                 'images',
                 'products' => fn ($query) => $query->approved()->with('images'),
-                'ratings.user',
+                // An estimated souvenir price range when no products are listed (shown as approximate).
+                'estimates',
+                'ratings' => fn ($query) => $query
+                    ->visible()
+                    ->with(['user:id,name', 'reply'])
+                    ->latest()
+                    ->orderByDesc('id'),
             ])
             ->findOrFail($id);
 
@@ -51,6 +60,6 @@ class RetailShopController extends Controller
         $shop->setAttribute('average_rating', round((float) $shop->ratings->avg('score'), 2));
         $shop->setAttribute('total_reviews', $shop->ratings->count());
 
-        return response()->json($shop);
+        return response()->json($shop->toArray() + $this->nearbyPlaces($shop, 6));
     }
 }

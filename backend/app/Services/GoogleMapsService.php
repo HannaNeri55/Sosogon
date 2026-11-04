@@ -16,7 +16,8 @@ class GoogleMapsService
 
     /**
      * Get distance matrix between destinations.
-     * Returns simplified array of from/to pairs with duration and distance.
+     * Returns simplified array of from/to pairs with duration and distance, each marked with
+     * its source: 'google' (a driving route) or 'estimate' (straight-line distance).
      * Falls back to haversine calculation if API key not configured.
      */
     public function getDistanceMatrix(Collection $destinations): array
@@ -56,6 +57,7 @@ class GoogleMapsService
                                 'to' => $ids[$j],
                                 'duration_min' => (int) ceil($element['duration']['value'] / 60),
                                 'distance_km' => round($element['distance']['value'] / 1000, 1),
+                                'source' => 'google',
                             ];
                         }
                     }
@@ -94,6 +96,8 @@ class GoogleMapsService
                     'to' => $items[$j]->id,
                     'duration_min' => $timeMin,
                     'distance_km' => round($dist, 1),
+                    // Straight-line distance, not a road route.
+                    'source' => 'estimate',
                 ];
             }
         }

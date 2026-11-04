@@ -6,7 +6,11 @@ export const loginUser = async (credentials) => {
 }
 
 export const registerUser = async (data) => {
-  const response = await api.post('/register', data)
+  // Business owner registration sends FormData (permit upload). The client's default
+  // JSON Content-Type would make axios serialize it to JSON and drop the file, so let
+  // the browser set multipart/form-data with its boundary instead.
+  const config = data instanceof FormData ? { headers: { 'Content-Type': undefined } } : undefined
+  const response = await api.post('/register', data, config)
   return response.data
 }
 

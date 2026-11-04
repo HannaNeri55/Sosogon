@@ -32,11 +32,11 @@ export default function EstablishmentOverview() {
   return (
     <div>
       <div className="mb-8">
-        <p className="text-primary-600 font-medium mb-2">Food &amp; Beverage Owner Portal</p>
-        <h1 className="text-3xl font-heading font-bold text-gray-900">{foodBeverage.name}</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Food &amp; Beverage Owner Portal</p>
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">{foodBeverage.name}</h1>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200/70 p-4 sm:p-6 mb-8 flex items-center justify-between flex-wrap gap-4 shadow-(--shadow-card)">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <FiCoffee size={22} />
@@ -56,7 +56,7 @@ export default function EstablishmentOverview() {
         <StatCard icon={FiBook} label="Menu Capacity" value={`${menuItems.length} / 20`} accent="secondary" />
       </div>
 
-      <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4">
           <div>
             <h2 className="text-xl font-heading font-semibold text-gray-900">What Tourists Currently See</h2>

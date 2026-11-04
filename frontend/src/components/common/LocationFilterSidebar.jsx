@@ -52,7 +52,7 @@ export default function LocationFilterSidebar({
       {/* Municipality */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-extrabold tracking-wide text-gray-900 uppercase">
+          <h3 className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
             Municipality
           </h3>
           {municipalityId && (
@@ -90,7 +90,7 @@ export default function LocationFilterSidebar({
 
       {/* Sort By */}
       <div>
-        <h3 className="text-base font-extrabold tracking-wide text-gray-900 uppercase mb-4">Sort By</h3>
+        <h3 className="text-xs font-semibold tracking-wider text-gray-500 uppercase mb-4">Sort By</h3>
         <div className="flex gap-2">
           {SORT_OPTIONS.map((opt) => (
             <button

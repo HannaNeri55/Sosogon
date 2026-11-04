@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Business\FoodBeverage;
 
+use App\Http\Controllers\Concerns\StagesItemChanges;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Business\StoreMenuItemRequest;
 use App\Http\Requests\Business\UpdateMenuItemRequest;
@@ -13,6 +14,8 @@ use Illuminate\Http\Request;
 
 class MenuItemController extends Controller
 {
+    use StagesItemChanges;
+
     public const MAX_ITEMS = 20;
 
     public const CAPACITY_MESSAGE = 'Maximum capacity reached: You have registered the limit of 20 menu items. Delete an existing dish to add a new one.';
@@ -31,7 +34,7 @@ class MenuItemController extends Controller
     {
         $foodBeverage = $this->ownedFoodBeverage($request);
 
-        return response()->json($foodBeverage->menuItems()->orderBy('created_at')->get());
+        return response()->json($foodBeverage->menuItems()->orderBy('created_at')->get()->each->makeVisible('pending_changes'));
     }
 
     public function store(StoreMenuItemRequest $request, ImageOptimizationService $images): JsonResponse
@@ -44,15 +47,14 @@ class MenuItemController extends Controller
 
         $validated = $request->validated();
 
-        $trusted = $foodBeverage->status === 'approved';
-
+        // Every new dish is reviewed before tourists see it, even on a published listing.
         $item = MenuItem::create([
             'food_beverage_id' => $foodBeverage->id,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'price' => $validated['price'],
-            'status' => $trusted ? 'approved' : 'pending',
-            'approved_at' => $trusted ? now() : null,
+            'status' => 'pending',
+            'approved_at' => null,
         ]);
 
         if ($request->hasFile('image')) {
@@ -61,7 +63,7 @@ class MenuItemController extends Controller
         }
 
         return response()->json([
-            'message' => $trusted ? 'Dish added and is now live for tourists.' : 'Dish added. It will be visible to tourists once approved.',
+            'message' => 'Dish added. It will be visible to tourists once approved.',
             'menu_item' => $item->fresh(),
         ], 201);
     }
@@ -73,8 +75,20 @@ class MenuItemController extends Controller
 
         $validated = $request->validated();
 
-        $trusted = $foodBeverage->status === 'approved';
-        $needsReReview = ! $trusted && $item->status !== 'pending';
+        if ($item->status === 'approved' && $foodBeverage->status === 'approved') {
+            // The approved dish stays public; changes wait for review (minor corrections excepted).
+            $values = array_intersect_key($validated, array_flip(['name', 'description', 'price']));
+            $staged = $request->hasFile('image') ? [$images->store($request->file('image'), "menu-items/{$item->id}/pending")] : [];
+            $result = $this->stageItemChanges($item, $values, $request, $staged, [], true);
+
+            return response()->json([
+                'message' => $this->stagedMessage($result, 'dish', $request),
+                'menu_item' => $item->fresh()->makeVisible('pending_changes'),
+            ]);
+        }
+
+        // Not public yet (the dish or its listing isn't approved): edit directly; anything already reviewed goes back to review.
+        $needsReReview = $item->status !== 'pending';
 
         $item->update([
             'name' => $validated['name'] ?? $item->name,
@@ -82,19 +96,7 @@ class MenuItemController extends Controller
             'price' => $validated['price'] ?? $item->price,
         ]);
 
-        if ($trusted) {
-            if ($item->status !== 'approved') {
-                $item->update([
-                    'status' => 'approved',
-                    'admin_notes' => null,
-                    'approved_at' => now(),
-                    // Auto-approved via the parent establishment's trust, not by a
-                    // human review of this specific edit — attribute it to whichever
-                    // admin approved the establishment, rather than losing the trail.
-                    'approved_by' => $foodBeverage->approved_by,
-                ]);
-            }
-        } elseif ($needsReReview) {
+        if ($needsReReview) {
             $item->update([
                 'status' => 'pending',
                 'admin_notes' => null,

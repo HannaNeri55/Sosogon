@@ -26,3 +26,11 @@ export const googleMapsPlaceUrl = ({ lat, lng }) => `https://www.google.com/maps
 
 /** Google Maps directions to exactly these coordinates. */
 export const googleMapsDirectionsUrl = ({ lat, lng }) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+
+/**
+ * Google Maps directions between two coordinates (a public link: no API key or billing).
+ * travelmode is one Google Maps supports — driving, walking, bicycling or transit — or empty
+ * to let Google Maps choose and offer the others.
+ */
+export const googleMapsRouteUrl = (origin, destination, travelmode = '') =>
+  `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}${travelmode ? `&travelmode=${travelmode}` : ''}`

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Business\RetailShop;
 
+use App\Http\Controllers\Concerns\StagesItemChanges;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Business\StoreRetailProductRequest;
 use App\Http\Requests\Business\UpdateRetailProductRequest;
@@ -14,6 +15,8 @@ use Illuminate\Http\Request;
 
 class RetailShopProductController extends Controller
 {
+    use StagesItemChanges;
+
     public const MAX_PRODUCTS = 20;
 
     public const CAPACITY_MESSAGE = 'Maximum capacity reached: You have registered the limit of 20 products. Delete an existing product to feature a new one.';
@@ -32,7 +35,7 @@ class RetailShopProductController extends Controller
     {
         $shop = $this->ownedShop($request);
 
-        return response()->json($shop->products()->with('images')->get());
+        return response()->json($shop->products()->with('images')->get()->each->makeVisible('pending_changes'));
     }
 
     public function store(StoreRetailProductRequest $request, ImageOptimizationService $images): JsonResponse
@@ -45,8 +48,7 @@ class RetailShopProductController extends Controller
 
         $validated = $request->validated();
 
-        $trusted = $shop->status === 'approved';
-
+        // Every new product is reviewed before tourists see it, even in a published shop.
         $product = RetailProduct::create([
             'user_id' => $shop->user_id,
             'retail_shop_id' => $shop->id,
@@ -61,8 +63,8 @@ class RetailShopProductController extends Controller
             'latitude' => $shop->latitude,
             'longitude' => $shop->longitude,
             'contact_number' => $shop->contact_number,
-            'status' => $trusted ? 'approved' : 'pending',
-            'approved_at' => $trusted ? now() : null,
+            'status' => 'pending',
+            'approved_at' => null,
         ]);
 
         if ($request->hasFile('image')) {
@@ -70,7 +72,7 @@ class RetailShopProductController extends Controller
         }
 
         return response()->json([
-            'message' => $trusted ? 'Product added and is now live for tourists.' : 'Product added. It will be visible to tourists once approved.',
+            'message' => 'Product added. It will be visible to tourists once approved.',
             'product' => $product->fresh('images'),
         ], 201);
     }
@@ -81,8 +83,20 @@ class RetailShopProductController extends Controller
 
         $validated = $request->validated();
 
-        $trusted = $product->shop->status === 'approved';
-        $needsReReview = ! $trusted && $product->status !== 'pending';
+        if ($product->status === 'approved' && $product->shop->status === 'approved') {
+            // The approved product stays public; changes wait for review (minor corrections excepted).
+            $values = array_intersect_key($validated, array_flip(['name', 'description', 'price', 'product_type', 'website']));
+            $staged = $request->hasFile('image') ? [$images->store($request->file('image'), "retail-products/{$product->id}/pending")] : [];
+            $result = $this->stageItemChanges($product, $values, $request, $staged, [], true);
+
+            return response()->json([
+                'message' => $this->stagedMessage($result, 'product', $request),
+                'product' => $product->fresh('images')->makeVisible('pending_changes'),
+            ]);
+        }
+
+        // Not public yet (the product or its listing isn't approved): edit directly; anything already reviewed goes back to review.
+        $needsReReview = $product->status !== 'pending';
 
         $product->update([
             'name' => $validated['name'] ?? $product->name,
@@ -92,19 +106,7 @@ class RetailShopProductController extends Controller
             'website' => $validated['website'] ?? $product->website,
         ]);
 
-        if ($trusted) {
-            if ($product->status !== 'approved') {
-                $product->update([
-                    'status' => 'approved',
-                    'admin_notes' => null,
-                    'approved_at' => now(),
-                    // Auto-approved via the parent shop's trust, not by a human
-                    // review of this specific edit — attribute it to whichever
-                    // admin approved the shop, rather than losing the trail.
-                    'approved_by' => $product->shop->approved_by,
-                ]);
-            }
-        } elseif ($needsReReview) {
+        if ($needsReReview) {
             $product->update([
                 'status' => 'pending',
                 'admin_notes' => null,

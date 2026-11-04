@@ -32,5 +32,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Tests never reach a real AI: the faked Gemini endpoint, and no Claude key. -->
+        <env name="AI_PROVIDER" value="gemini" force="true"/>
+        <env name="ANTHROPIC_API_KEY" value="" force="true"/>
+        <env name="GOOGLE_MAPS_API_KEY" value="" force="true"/>
     </php>
 </phpunit>

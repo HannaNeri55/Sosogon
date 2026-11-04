@@ -38,7 +38,7 @@ class BusinessSubmission extends Model
 
     protected function casts(): array
     {
-        return ['reviewed_at' => 'datetime', 'warned_at' => 'datetime', 'latitude' => 'decimal:7', 'longitude' => 'decimal:7'];
+        return ['reviewed_at' => 'datetime', 'warned_at' => 'datetime', 'latitude' => 'decimal:7', 'longitude' => 'decimal:7', 'is_sample' => 'boolean'];
     }
 
     protected function warningDeadline(): Attribute

@@ -14,6 +14,7 @@ import {
   FiAlertTriangle,
   FiCoffee,
   FiMoon,
+  FiExternalLink,
 } from 'react-icons/fi'
 import { StarDisplay } from '../common/StarRating'
 import ActivityEditor from './ActivityEditor'
@@ -21,6 +22,7 @@ import SelectionEditor from './SelectionEditor'
 import { getImageUrl, toDateOnly, formatPeso, formatPesoRange } from '../../utils/helpers'
 import { splitSlot, joinSlot, slotError } from '../../utils/timeSlots'
 import { dishOptions, souvenirOptions, picksFrom } from '../../utils/selections'
+import { legGuidance } from '../../utils/transportGuidance'
 
 function dayDateLabel(startDate, dayNumber) {
   const dateOnly = toDateOnly(startDate)
@@ -51,6 +53,54 @@ const NEW_STOP_BADGES = {
 }
 
 const FIELD = 'text-sm text-gray-800 bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400'
+
+// Older itineraries started a visit's notes with the listing's description, which is shown just
+// above them; only text identical to the description's opening sentences is left out.
+function visitNotes(stop, listing) {
+  const notes = stop.notes || ''
+  const description = (listing?.description || '').replace(/\s+/g, ' ').trim()
+  if (stop.item_type !== 'destination' || !description) return notes
+  let repeated = ''
+  for (const sentence of description.split(/(?<=[.!?])\s+/)) {
+    const next = repeated ? `${repeated} ${sentence}` : sentence
+    if (!notes.startsWith(next)) break
+    repeated = next
+  }
+  return repeated ? notes.slice(repeated.length).trim() : notes
+}
+
+// The trip from one stop to the next: Google Maps directions for how the tourist gets around,
+// and the saved distance and time, labelled as measured or estimated. Without usable map
+// locations, just the saved distance and time, as before.
+function TravelLeg({ from, to, transportPreference }) {
+  const leg = legGuidance(from, to, transportPreference)
+  if (!leg) {
+    if (!to?.distance_from_prev_km && !to?.travel_time_from_prev) return null
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-2 ml-1">
+        <FiNavigation size={11} />
+        {to.distance_from_prev_km && <span>{to.distance_from_prev_km} km</span>}
+        {to.travel_time_from_prev && <span>~{to.travel_time_from_prev} min to next stop</span>}
+      </div>
+    )
+  }
+  const toName = placeFor(to).listing?.name || 'the next stop'
+  return (
+    <div className="mt-2 ml-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+      <FiNavigation size={11} className="text-primary-500 shrink-0" aria-hidden="true" />
+      {leg.facts.map((fact) => <span key={fact}>{fact}</span>)}
+      <a
+        href={leg.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 py-1 font-medium text-primary-600 hover:text-primary-700 hover:underline"
+        aria-label={`${leg.linkLabel} to ${toName} (opens Google Maps)`}
+      >
+        {leg.linkLabel} <FiExternalLink size={11} aria-hidden="true" />
+      </a>
+    </div>
+  )
+}
 
 // A lunch break is its own food stop, but it happens during the visit listed before it.
 function isLunchBreakDuring(stop, host) {
@@ -191,7 +241,7 @@ function StopDetails({ stop, compact = false }) {
           <p className={`text-sm text-gray-500 mt-2 leading-relaxed ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>{listing.description}</p>
         )}
 
-        {stop.notes && <p className="text-sm text-gray-600 mt-2 leading-relaxed">{stop.notes}</p>}
+        {visitNotes(stop, listing) && <p className="text-sm text-gray-600 mt-2 leading-relaxed">{visitNotes(stop, listing)}</p>}
 
         {stop.reason && (
           <p className="flex gap-1.5 text-sm text-gray-700 mt-2 leading-relaxed">
@@ -371,6 +421,7 @@ export default function ItineraryDayCard({
   onAddStop,
   onSwapStop,
   overnight = null,
+  transportPreference = null,
 }) {
   const stops = day.stops || []
   const rows = groupStops(stops)
@@ -477,13 +528,7 @@ export default function ItineraryDayCard({
                   </div>
                 )}
 
-                {!isLast && (next?.distance_from_prev_km || next?.travel_time_from_prev) && (
-                  <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-2 ml-1">
-                    <FiNavigation size={11} />
-                    {next.distance_from_prev_km && <span>{next.distance_from_prev_km} km</span>}
-                    {next.travel_time_from_prev && <span>~{next.travel_time_from_prev} min to next stop</span>}
-                  </div>
-                )}
+                {!isLast && <TravelLeg from={stop} to={next} transportPreference={transportPreference} />}
               </div>
             </div>
           )

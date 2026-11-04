@@ -131,3 +131,25 @@ export function formatTripCost(itinerary, fallback) {
   const travelers = Number(itinerary.travelers) || 1
   return `${range} for ${travelers} traveler${travelers > 1 ? 's' : ''}`
 }
+
+const DEMO_REVIEW_PREFIX = 'Demo Review:'
+
+/** Splits a rating into its display comment and whether it is seeded sample content. */
+export function parseReview(review) {
+  const comment = review?.comment || ''
+  const isDemo = comment.startsWith(DEMO_REVIEW_PREFIX)
+  return { isDemo, comment: isDemo ? comment.slice(DEMO_REVIEW_PREFIX.length).trim() : comment }
+}
+
+/** "350 m away" below 1 km, otherwise "2.4 km away". */
+export function formatDistance(km) {
+  const value = Number(km)
+  if (!Number.isFinite(value)) return ''
+  if (value < 0.01) return 'Under 10 m away'
+  return value < 1 ? `${Math.round(value * 1000)} m away` : `${value.toFixed(1)} km away`
+}
+
+/** Random one-time id, e.g. to let the server reject a repeated form submit. */
+export function oneTimeToken() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}

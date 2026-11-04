@@ -6,9 +6,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import SubmitListing from './SubmitListing'
 import SubmissionStatus from './SubmissionStatus'
+import ApplicationStatus from './ApplicationStatus'
 
 export default function BusinessOnboarding() {
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
+  // The server blocks business actions until the registration is approved; show its status instead.
+  const awaitingApproval = user?.role === 'business_owner' && user?.status && user.status !== 'active'
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState(null)
   const [submissions, setSubmissions] = useState([])
@@ -23,12 +26,33 @@ export default function BusinessOnboarding() {
   }, [])
 
   useEffect(() => {
+    if (awaitingApproval) return
     load().finally(() => setLoading(false))
-  }, [load])
+  }, [load, awaitingApproval])
 
   const handleLogout = async () => {
     await logout()
     navigate('/')
+  }
+
+  if (awaitingApproval) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+            <Link to="/" className="flex items-center gap-2">
+              <img src="/images/Logo.png" alt="Sorsogon" className="h-9 w-auto" />
+            </Link>
+            <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+              <FiLogOut size={16} /> Logout
+            </button>
+          </div>
+        </header>
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+          <ApplicationStatus />
+        </main>
+      </div>
+    )
   }
 
   if (loading) return <LoadingSpinner size="lg" />

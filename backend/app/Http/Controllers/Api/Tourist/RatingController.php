@@ -37,8 +37,8 @@ class RatingController extends Controller
             return;
         }
 
-        $model->average_rating = $model->ratings()->avg('score') ?? 0;
-        $model->total_reviews = $model->ratings()->count();
+        $model->average_rating = $model->ratings()->visible()->avg('score') ?? 0;
+        $model->total_reviews = $model->ratings()->visible()->count();
         $model->save();
     }
 
@@ -52,7 +52,9 @@ class RatingController extends Controller
         ]);
 
         $modelClass = $this->typeMap[$validated['rateable_type']];
-        $modelClass::findOrFail($validated['rateable_id']);
+        $rateable = $modelClass::findOrFail($validated['rateable_id']);
+        // Hidden sample listings can't be reviewed through the API either.
+        abort_if($rateable->is_sample && ! config('listings.show_samples'), 404);
 
         $existing = Rating::where('user_id', $request->user()->id)
             ->where('rateable_type', $modelClass)
@@ -68,7 +70,7 @@ class RatingController extends Controller
             'rateable_type' => $modelClass,
             'rateable_id' => $validated['rateable_id'],
             'score' => $validated['score'],
-            'comment' => $validated['comment'],
+            'comment' => $validated['comment'] ?? null,
         ]);
 
         // Recalculate average

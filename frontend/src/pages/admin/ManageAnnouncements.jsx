@@ -90,7 +90,7 @@ export default function ManageAnnouncements() {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
-          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Manage Announcements</h1>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Announcements</h1>
         </div>
         <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
           {showForm ? 'Close Form' : 'Add Announcement'}
@@ -133,21 +133,21 @@ export default function ManageAnnouncements() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
           <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Announcement</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Status</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Pinned</th>
-                <th className="text-right px-6 py-3 text-sm font-medium text-gray-700">Actions</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Announcement</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Pinned</th>
+                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150">
+                <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
                   <td className="px-6 py-3">
                     <p className="text-sm font-medium text-gray-900">{item.title}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{truncate(item.content, 80)}</p>

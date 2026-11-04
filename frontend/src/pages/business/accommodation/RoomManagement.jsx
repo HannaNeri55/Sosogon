@@ -4,12 +4,22 @@ import { getMyRooms, deleteRoom, toggleRoomOccupancy } from '../../../api/accomm
 import { getImageUrl } from '../../../utils/helpers'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import RoomFormModal from './RoomFormModal'
+import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
+import { withProposedValues } from '../../../components/business/itemChanges'
 import toast from 'react-hot-toast'
 
 const MAX_ROOMS = 10
 
 const CAPACITY_MESSAGE =
   'Maximum capacity reached: You have registered the limit of 10 rooms. Delete an existing room to add a new one.'
+
+const REVIEW_FIELDS = [
+  ['room_number', 'Room'],
+  ['category', 'Category'],
+  ['price', 'Price', (v) => '₱' + Number(v).toLocaleString()],
+  ['description', 'Description'],
+  ['room_features', 'Features'],
+]
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -39,7 +49,8 @@ export default function RoomManagement() {
   }
 
   const openEdit = (room) => {
-    setEditingRoom(room)
+    // Edit what the owner last proposed, so saving again keeps that proposal.
+    setEditingRoom(withProposedValues(room))
     setShowForm(true)
   }
 
@@ -83,8 +94,8 @@ export default function RoomManagement() {
     <div>
       <div className="flex items-end justify-between flex-wrap gap-4 mb-6">
         <div>
-          <p className="text-primary-600 font-medium mb-2">Accommodation Owner Portal</p>
-          <h1 className="text-3xl font-heading font-bold text-gray-900">Room Management</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Accommodation Owner Portal</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Room Management</h1>
           <p className="text-sm text-gray-500 mt-1">{rooms.length} / {MAX_ROOMS} rooms registered</p>
         </div>
         <button
@@ -104,14 +115,14 @@ export default function RoomManagement() {
       )}
 
       {rooms.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
+        <div className="bg-white rounded-2xl p-12 text-center border border-gray-200/70 shadow-(--shadow-card)">
           <FiGrid className="mx-auto text-gray-300 mb-3" size={32} />
           <p className="text-gray-500">No rooms registered yet. Add your first room to get started.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {rooms.map((room) => (
-            <div key={room.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden flex flex-col">
+            <div key={room.id} className="bg-white rounded-2xl border border-gray-200/70 overflow-hidden flex flex-col shadow-(--shadow-card)">
               <img src={getImageUrl(room.images?.[0])} alt={room.room_number} className="w-full h-36 object-cover bg-gray-100" />
               <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-2 mb-1">
@@ -125,6 +136,7 @@ export default function RoomManagement() {
                   {room.price && <span>₱{Number(room.price).toLocaleString()}</span>}
                 </div>
                 {room.description && <p className="text-sm text-gray-500 line-clamp-2 mb-3">{room.description}</p>}
+                <ItemReviewStatus item={room} fields={REVIEW_FIELDS} noun="room" />
 
                 <div className="mt-auto space-y-3">
                   <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">

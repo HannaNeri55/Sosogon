@@ -1,5 +1,6 @@
 export const INTERESTS = [
   { value: 'nature', label: 'Nature' },
+  { value: 'beaches', label: 'Beaches' },
   { value: 'culture', label: 'Culture' },
   { value: 'food', label: 'Food' },
   { value: 'adventure', label: 'Adventure' },
@@ -7,11 +8,29 @@ export const INTERESTS = [
   { value: 'relaxation', label: 'Relaxation' },
 ]
 
-// One destination a day; the pace sets when the day starts and how long each activity takes.
+// Destination category IDs each interest plans from — the same map as the backend's
+// ItineraryService::INTEREST_CATEGORIES (keep them in step). Food and Shopping plan restaurants
+// and souvenir shops, not destinations.
+export const INTEREST_CATEGORY_IDS = {
+  nature: [1, 2, 3, 7, 8],
+  beaches: [1, 8],
+  culture: [4, 5],
+  adventure: [2, 3, 7, 8],
+  relaxation: [1, 6, 8, 9],
+  food: [],
+  shopping: [],
+}
+
+// How many travelers one room of each type sleeps — the backend's ItineraryService::ROOM_CAPACITY
+// (keep them in step); any other room type sleeps 2.
+export const ROOM_CAPACITY = { Standard: 2, Deluxe: 2, Suite: 4, 'Family Room': 6 }
+
+// The pace sets how many attractions a day holds (one fewer on the arrival day), when breakfast
+// is and how unhurried each visit is; meals, rest and travel are planned around them.
 export const TRAVEL_PACES = [
-  { value: 'relaxed', label: 'Relaxed', detail: 'Starts ~8:30 AM · 1½ hrs per activity' },
-  { value: 'moderate', label: 'Moderate', detail: 'Starts ~7:30 AM · 1 hr per activity' },
-  { value: 'packed', label: 'Packed', detail: 'Starts ~6:30 AM · 45 min per activity + merienda' },
+  { value: 'relaxed', label: 'Relaxed', detail: 'Up to 2 attractions a day · breakfast ~8:30 AM · longer visits' },
+  { value: 'moderate', label: 'Moderate', detail: 'Up to 3 attractions a day · breakfast ~7:30 AM' },
+  { value: 'packed', label: 'Packed', detail: 'Up to 4 attractions a day · breakfast ~6:30 AM · afternoon merienda' },
 ]
 
 export const BUDGETS = [
@@ -28,6 +47,16 @@ export const CUISINE_PREFERENCES = [
   { value: 'street_food', label: 'Street Food / Local' },
   { value: 'vegetarian', label: 'Vegetarian-friendly' },
   { value: 'no_preference', label: 'No Preference' },
+]
+
+// How the tourist plans to get around (one choice). Recorded with the request for later
+// transportation guidance; it doesn't change the plan yet.
+export const TRANSPORT_PREFERENCES = [
+  { value: 'private_car', label: 'Private Car', detail: 'Your own car' },
+  { value: 'motorcycle', label: 'Motorcycle', detail: 'Your own motorbike' },
+  { value: 'rented_vehicle', label: 'Rented Vehicle', detail: 'A car, van or motorbike you rent' },
+  { value: 'public_transport', label: 'Public Transportation', detail: 'Jeepneys, tricycles, buses or vans' },
+  { value: 'no_preference', label: 'No Preference', detail: 'Let SOSOGON suggest practical options' },
 ]
 
 export const ACCOMMODATION_TYPES = [

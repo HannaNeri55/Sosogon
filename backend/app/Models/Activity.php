@@ -15,6 +15,9 @@ class Activity extends Model
         'best_time_to_visit',
         'what_to_wear',
         'things_to_do',
+        'price',
+        'duration_minutes',
+        'capacity',
         'image_path',
         'thumbnail_path',
     ];

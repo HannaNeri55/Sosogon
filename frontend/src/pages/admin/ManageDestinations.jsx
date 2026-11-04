@@ -1,225 +1,714 @@
 // frontend/src/pages/admin/ManageDestinations.jsx — full file
-import { useEffect, useMemo, useState } from 'react'
-import { FiSearch, FiEdit2, FiTrash2, FiEye, FiMapPin, FiStar, FiX } from 'react-icons/fi'
-import { getAdminDestinations, createDestination, updateDestination, deleteDestination, deleteDestinationImage, getMunicipalities, getCategories } from '../../api/admin'
-import { getImageUrl } from '../../utils/helpers'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import toast from 'react-hot-toast'
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FiSearch,
+  FiEdit2,
+  FiTrash2,
+  FiEye,
+  FiMapPin,
+  FiStar,
+} from "react-icons/fi";
+import {
+  getAdminDestinations,
+  createDestination,
+  updateDestination,
+  deleteDestination,
+  getMunicipalities,
+  getCategories,
+} from "../../api/admin";
+import { getImageUrl, oneTimeToken } from "../../utils/helpers";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import DestinationPhotoManager from "../../components/admin/DestinationPhotoManager";
+import DestinationActivitiesEditor from "../../components/admin/DestinationActivitiesEditor";
+import { activityDraft, draftDurationMinutes, releaseActivityPreviews } from "../../utils/activityDrafts";
+
+const MAX_NEW_PHOTOS_PER_SAVE = 10;
+import toast from "react-hot-toast";
+import MapLocationPicker from "../../components/maps/MapLocationPicker";
 
 const EMPTY_FORM = {
-  name: '', description: '', category_id: '', municipality_id: '1',
-  address: '', latitude: '', longitude: '', operating_hours: '', entrance_fee: '',
-  contact_number: '', website: '', status: 'published', is_featured: false,
-}
+  name: "",
+  description: "",
+  category_id: "",
+  municipality_id: "1",
+  address: "",
+  latitude: "",
+  longitude: "",
+  operating_hours: "",
+  entrance_fee: "",
+  contact_number: "",
+  website: "",
+  status: "published",
+  is_featured: false,
+
+  fees: [],
+  rates: [],
+  amenities: [],
+  activities: [],
+};
 
 export default function ManageDestinations() {
-  const [items, setItems] = useState([])
-  const [municipalities, setMunicipalities] = useState([])
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState(EMPTY_FORM)
-  const [existingImages, setExistingImages] = useState([])
-  const [search, setSearch] = useState('')
+  const [items, setItems] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [existingImages, setExistingImages] = useState([]);
+  // Staged photo changes, applied only when the form is saved.
+  const [newPhotos, setNewPhotos] = useState([]); // [{ key, file, url }]
+  const [removedImageIds, setRemovedImageIds] = useState([]);
+  const [coverChoice, setCoverChoice] = useState(null); // "e:<id>" | "n:<key>" | null
+  // A save (with photo uploads) can take several seconds. The ref blocks a
+  // second submit immediately; the state drives the disabled button.
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter((item) => item.name?.toLowerCase().includes(q) || item.category?.name?.toLowerCase().includes(q))
-  }, [items, search])
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (item) =>
+        item.name?.toLowerCase().includes(q) ||
+        item.category?.name?.toLowerCase().includes(q),
+    );
+  }, [items, search]);
 
   const loadData = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const data = await getAdminDestinations({ per_page: 100 })
-      setItems(data.data || [])
+      const data = await getAdminDestinations({ per_page: 100 });
+      setItems(data.data || []);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadMeta = async () => {
-    const [m, c] = await Promise.all([getMunicipalities(), getCategories('destination')])
-    setMunicipalities(m)
-    setCategories(c)
-  }
+    const [m, c] = await Promise.all([
+      getMunicipalities(),
+      getCategories("destination"),
+    ]);
+    setMunicipalities(m);
+    setCategories(c);
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData()
-    loadMeta()
-  }, [])
+    loadData();
+    loadMeta();
+  }, []);
 
   const startEdit = (item) => {
-    setEditingId(item.id)
+    setEditingId(item.id);
+
     setFormData({
-      name: item.name || '',
-      description: item.description || '',
-      category_id: item.category_id || '',
-      municipality_id: item.municipality_id || '1',
-      address: item.address || '',
-      latitude: item.latitude || '',
-      longitude: item.longitude || '',
-      operating_hours: item.operating_hours || '',
-      entrance_fee: item.entrance_fee || '',
-      contact_number: item.contact_number || '',
-      website: item.website || '',
-      status: item.status || 'published',
+      name: item.name || "",
+      description: item.description || "",
+      category_id: item.category_id || "",
+      municipality_id: item.municipality_id || "1",
+      address: item.address || "",
+      latitude: item.latitude ?? "",
+      longitude: item.longitude ?? "",
+      operating_hours: item.operating_hours || "",
+      entrance_fee: item.entrance_fee ?? "",
+      contact_number: item.contact_number || "",
+      website: item.website || "",
+      status: item.status || "published",
       is_featured: !!item.is_featured,
-    })
-    setExistingImages(item.images || [])
-    setShowForm(true)
-  }
+
+      fees: (item.fees || []).map((fee) => ({
+        label: fee.label || "",
+        amount: fee.amount ?? "",
+        description: fee.description || "",
+      })),
+
+      rates: (item.rates || []).map((rate) => ({
+        label: rate.label || "",
+        amount: rate.amount ?? "",
+        description: rate.description || "",
+      })),
+
+      amenities: (item.amenities || []).map((amenity) => ({
+        name: amenity.name || "",
+      })),
+
+      activities: (item.activities || []).map((activity) => activityDraft(activity)),
+    });
+
+    setExistingImages(item.images || []);
+    resetPhotoChanges();
+    setShowForm(true);
+  };
+
+    const addDetail = (type) => {
+      const newItem =
+        type === "amenities"
+          ? { name: "" }
+          : { label: "", amount: "", description: "" };
+
+      setFormData((prev) => ({
+        ...prev,
+        [type]: [...prev[type], newItem],
+      }));
+    };
+
+    const updateDetail = (type, index, field, value) => {
+      setFormData((prev) => ({
+        ...prev,
+        [type]: prev[type].map((item, i) =>
+          i === index ? { ...item, [field]: value } : item,
+        ),
+      }));
+    };
+
+    const removeDetail = (type, index) => {
+      setFormData((prev) => ({
+        ...prev,
+        [type]: prev[type].filter((_, i) => i !== index),
+      }));
+    };
+
+  const resetPhotoChanges = () => {
+    setNewPhotos((prev) => {
+      prev.forEach((photo) => URL.revokeObjectURL(photo.url));
+      return [];
+    });
+    setRemovedImageIds([]);
+    setCoverChoice(null);
+  };
 
   const closeForm = () => {
-    setShowForm(false)
-    setEditingId(null)
-    setFormData(EMPTY_FORM)
-    setExistingImages([])
-  }
+    releaseActivityPreviews(formData.activities);
+    setShowForm(false);
+    setEditingId(null);
+    setFormData(EMPTY_FORM);
+    setExistingImages([]);
+    resetPhotoChanges();
+  };
+
+  const addPhotos = (files) => {
+    const room = MAX_NEW_PHOTOS_PER_SAVE - newPhotos.length;
+    if (files.length > room) {
+      toast.error(`You can add up to ${MAX_NEW_PHOTOS_PER_SAVE} new photos per save.`);
+    }
+    const added = files.slice(0, Math.max(0, room)).map((file) => ({
+      key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      url: URL.createObjectURL(file),
+    }));
+    setNewPhotos((prev) => [...prev, ...added]);
+  };
+
+  const removeNewPhoto = (key) => {
+    setNewPhotos((prev) => {
+      const photo = prev.find((p) => p.key === key);
+      if (photo) URL.revokeObjectURL(photo.url);
+      return prev.filter((p) => p.key !== key);
+    });
+    if (coverChoice === `n:${key}`) setCoverChoice(null);
+  };
+
+  const removeExistingPhoto = (id) => {
+    setRemovedImageIds((prev) => [...prev, id]);
+    if (coverChoice === `e:${id}`) setCoverChoice(null);
+  };
+
+  // The cover shown and saved: the admin's choice if still present, otherwise
+  // the current saved cover, otherwise the first remaining photo.
+  const visibleExisting = existingImages.filter((img) => !removedImageIds.includes(img.id));
+  const photoKeys = [
+    ...visibleExisting.map((img) => `e:${img.id}`),
+    ...newPhotos.map((photo) => `n:${photo.key}`),
+  ];
+  const savedCover = visibleExisting.find((img) => img.is_primary);
+  const coverKey = photoKeys.includes(coverChoice)
+    ? coverChoice
+    : savedCover
+      ? `e:${savedCover.id}`
+      : photoKeys[0] ?? null;
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
-      const payload = new FormData()
+      const payload = new FormData();
+      // One-time token: the server refuses a repeat of this exact save.
+      payload.append("save_token", oneTimeToken());
+
+      // Regular destination fields
       Object.keys(formData).forEach((key) => {
-        if (key === 'images') return
-        if (formData[key] !== '' && formData[key] !== null) {
-          // FormData stringifies JS booleans as "true"/"false", which Laravel's
-          // `boolean` validation rule rejects — send "1"/"0" instead.
-          payload.append(key, key === 'is_featured' ? (formData[key] ? '1' : '0') : formData[key])
+        if (["images", "fees", "rates", "amenities", "activities"].includes(key)) return;
+
+        if (formData[key] !== "" && formData[key] !== null) {
+          payload.append(
+            key,
+            key === "is_featured" ? (formData[key] ? "1" : "0") : formData[key],
+          );
         }
-      })
-      if (formData.images && formData.images.length > 0) {
-        formData.images.forEach((file) => payload.append('images[]', file))
+      });
+
+      // Tell Laravel which detail sections should be replaced,
+      // even when the arrays are empty.
+      payload.append("details_present", "1");
+
+      // Multiple entrance fees
+      formData.fees.forEach((fee, index) => {
+        payload.append(`fees[${index}][label]`, fee.label);
+        payload.append(`fees[${index}][amount]`, fee.amount);
+        payload.append(`fees[${index}][description]`, fee.description || "");
+      });
+
+      // Cottage and rental rates
+      formData.rates.forEach((rate, index) => {
+        payload.append(`rates[${index}][label]`, rate.label);
+        payload.append(`rates[${index}][amount]`, rate.amount);
+        payload.append(`rates[${index}][description]`, rate.description || "");
+      });
+
+      // Amenities
+      formData.amenities.forEach((amenity, index) => {
+        payload.append(`amenities[${index}][name]`, amenity.name);
+      });
+
+      // Activities (optional). The full list is sent so removed ones are deleted.
+      payload.append("activities_present", "1");
+      formData.activities.forEach((activity, index) => {
+        const field = (name) => `activities[${index}][${name}]`;
+        if (activity.id) payload.append(field("id"), activity.id);
+        payload.append(field("name"), activity.name.trim());
+        payload.append(field("description"), activity.description || "");
+        payload.append(field("type"), activity.type);
+        payload.append(field("price"), activity.price ?? "");
+        payload.append(field("duration_minutes"), draftDurationMinutes(activity));
+        payload.append(field("capacity"), activity.capacity ?? "");
+        if (activity.newImage) payload.append(field("image"), activity.newImage);
+        else if (activity.removeImage) payload.append(field("remove_image"), "1");
+      });
+
+      // Staged photo changes: new uploads, removals and the cover choice.
+      newPhotos.forEach((photo) => payload.append("images[]", photo.file));
+      removedImageIds.forEach((id) => payload.append("remove_image_ids[]", id));
+      if (coverKey?.startsWith("n:")) {
+        payload.append(
+          "cover_new_index",
+          newPhotos.findIndex((photo) => `n:${photo.key}` === coverKey),
+        );
+      } else if (coverKey?.startsWith("e:") && editingId) {
+        payload.append("cover_image_id", coverKey.slice(2));
       }
 
       if (editingId) {
-        await updateDestination(editingId, payload)
-        toast.success('Destination updated')
+        await updateDestination(editingId, payload);
+        toast.success("Destination updated");
       } else {
-        await createDestination(payload)
-        toast.success('Destination created')
+        await createDestination(payload);
+        toast.success("Destination created");
       }
-      closeForm()
-      loadData()
+      closeForm();
+      loadData();
     } catch (e) {
-      const errors = e.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(editingId ? 'Failed to update destination' : 'Failed to create destination')
+      const errors = e.response?.data?.errors;
+      if (errors)
+        Object.entries(errors).forEach(([field, messages]) => {
+          const activity = field.match(/^activities\.(\d+)\.(\w+)$/);
+          messages.forEach((msg) =>
+            toast.error(
+              activity
+                ? `Activity ${Number(activity[1]) + 1}: ${msg.replace(/activities\.\d+\.(\w+)/, "$1").replace(/_/g, " ")}`
+                : msg,
+            ),
+          );
+        });
+      else
+        toast.error(
+          editingId
+            ? "Failed to update destination"
+            : "Failed to create destination",
+        );
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-  }
-
-  const handleDeleteImage = async (imageId) => {
-    if (!confirm('Remove this image?')) return
-    try {
-      await deleteDestinationImage(editingId, imageId)
-      setExistingImages((prev) => prev.filter((img) => img.id !== imageId))
-      toast.success('Image removed')
-    } catch {
-      toast.error('Failed to remove image')
-    }
-  }
+  };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this destination?')) return
+    if (!confirm("Delete this destination?")) return;
     try {
-      await deleteDestination(id)
-      toast.success('Destination deleted')
-      loadData()
+      await deleteDestination(id);
+      toast.success("Destination deleted");
+      loadData();
     } catch {
-      toast.error('Failed to delete destination')
+      toast.error("Failed to delete destination");
     }
-  }
+  };
 
-  if (loading) return <LoadingSpinner size="lg" />
+  if (loading) return <LoadingSpinner size="lg" />;
 
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
-          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Manage Destinations</h1>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">
+            Manage Destinations
+          </h1>
         </div>
-        <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
-          {showForm ? 'Close Form' : 'Add Destination'}
+        <button
+          onClick={() => (showForm ? closeForm() : setShowForm(true))}
+          disabled={saving}
+          className="btn-primary disabled:opacity-60"
+        >
+          {showForm ? "Close Form" : "Add Destination"}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
-          <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing destination' : 'New destination'}</p>
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5"
+        >
+          <p className="text-sm font-medium text-gray-500">
+            {editingId ? "Editing destination" : "New destination"}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <input className="input-field" placeholder="Destination name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-            <select className="input-field" value={formData.category_id} onChange={(e) => setFormData({ ...formData, category_id: e.target.value })} required>
+            <input
+              className="input-field"
+              placeholder="Destination name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              required
+            />
+            <select
+              className="input-field"
+              value={formData.category_id}
+              onChange={(e) =>
+                setFormData({ ...formData, category_id: e.target.value })
+              }
+              required
+            >
               <option value="">Select category</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </div>
-          <textarea className="input-field" rows={4} placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
-          <input className="input-field" placeholder="Address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required />
-          <select className="input-field" value={formData.municipality_id} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
-            {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          <textarea
+            className="input-field"
+            rows={4}
+            placeholder="Description"
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            required
+          />
+          <input
+            className="input-field"
+            placeholder="Address"
+            value={formData.address}
+            onChange={(e) =>
+              setFormData({ ...formData, address: e.target.value })
+            }
+            required
+          />
+          <select
+            className="input-field"
+            value={formData.municipality_id}
+            onChange={(e) =>
+              setFormData({ ...formData, municipality_id: e.target.value })
+            }
+          >
+            {municipalities.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
           </select>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <input type="number" step="0.0000001" className="input-field" placeholder="Latitude" value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: e.target.value })} required />
-            <input type="number" step="0.0000001" className="input-field" placeholder="Longitude" value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: e.target.value })} required />
-            <input className="input-field" placeholder="Operating hours" value={formData.operating_hours} onChange={(e) => setFormData({ ...formData, operating_hours: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Destination Images
-            </label>
-            {editingId && existingImages.length > 0 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-3">
-                {existingImages.map((img) => (
-                  <div key={img.id} className="relative group">
-                    <img
-                      src={getImageUrl(img)}
-                      alt=""
-                      className="w-full aspect-square rounded-lg object-cover border border-gray-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteImage(img.id)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Remove image"
-                    >
-                      <FiX size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => setFormData({ ...formData, images: Array.from(e.target.files) })}
-              className="input-field"
+          <fieldset className="rounded-xl border border-gray-200 p-4 sm:p-5">
+            <legend className="px-2 text-sm font-semibold text-gray-800">Exact location on the map</legend>
+            <MapLocationPicker
+              required
+              latitude={formData.latitude}
+              longitude={formData.longitude}
+              searchHint={formData.name}
+              onChange={({ latitude, longitude }) => setFormData((prev) => ({ ...prev, latitude, longitude }))}
+              onAddressFound={(found) => setFormData((prev) => (prev.address ? prev : { ...prev, address: found }))}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              {editingId ? 'Upload additional images (JPEG, PNG, WebP, max 5MB each)' : 'Upload up to 10 images (JPEG, PNG, WebP, max 5MB each)'}
-            </p>
-          </div>
+          </fieldset>
+          <input
+            className="input-field"
+            placeholder="Operating hours"
+            value={formData.operating_hours}
+            onChange={(e) =>
+              setFormData({ ...formData, operating_hours: e.target.value })
+            }
+          />
+          <DestinationPhotoManager
+            existingImages={existingImages}
+            removedImageIds={removedImageIds}
+            newPhotos={newPhotos}
+            coverKey={coverKey}
+            isEditing={Boolean(editingId)}
+            onAddFiles={addPhotos}
+            onRemoveExisting={removeExistingPhoto}
+            onUndoRemovals={() => setRemovedImageIds([])}
+            onRemoveNew={removeNewPhoto}
+            onSetCover={setCoverChoice}
+          />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <input type="number" step="0.01" className="input-field" placeholder="Entrance fee" value={formData.entrance_fee} onChange={(e) => setFormData({ ...formData, entrance_fee: e.target.value })} />
-            <input className="input-field" placeholder="Contact number" value={formData.contact_number} onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })} />
-            <select className="input-field" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+            
+            <input
+              className="input-field"
+              placeholder="Contact number"
+              value={formData.contact_number}
+              onChange={(e) =>
+                setFormData({ ...formData, contact_number: e.target.value })
+              }
+            />
+            <select
+              className="input-field"
+              value={formData.status}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value })
+              }
+            >
               <option value="published">Published</option>
               <option value="draft">Draft</option>
             </select>
           </div>
-          <input type="url" className="input-field" placeholder="Website (optional)" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} />
+          <input
+            type="url"
+            className="input-field"
+            placeholder="Website (optional)"
+            value={formData.website}
+            onChange={(e) =>
+              setFormData({ ...formData, website: e.target.value })
+            }
+          />
+
+          {/* Entrance Fees */}
+          <div className="border border-gray-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-gray-900">Entrance Fees</h3>
+              <button
+                type="button"
+                onClick={() => addDetail("fees")}
+                className="btn-primary"
+              >
+                + Add Entrance Fee
+              </button>
+            </div>
+
+            {formData.fees.map((fee, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start"
+              >
+                <input
+                  className="input-field"
+                  placeholder="Fee name (e.g. Adult)"
+                  value={fee.label}
+                  onChange={(e) =>
+                    updateDetail("fees", index, "label", e.target.value)
+                  }
+                  required
+                />
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-field"
+                  placeholder="Amount (PHP)"
+                  value={fee.amount}
+                  onChange={(e) =>
+                    updateDetail("fees", index, "amount", e.target.value)
+                  }
+                  required
+                />
+
+                <input
+                  className="input-field"
+                  placeholder="Description (optional)"
+                  value={fee.description}
+                  onChange={(e) =>
+                    updateDetail("fees", index, "description", e.target.value)
+                  }
+                />
+
+                <button
+                  type="button"
+                  onClick={() => removeDetail("fees", index)}
+                  className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+
+            {formData.fees.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No entrance fees added yet.
+              </p>
+            )}
+          </div>
+
+          {/* Cottage / Rental Rates */}
+          <div className="border border-gray-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-gray-900">
+                Cottage / Rental Rates
+              </h3>
+              <button
+                type="button"
+                onClick={() => addDetail("rates")}
+                className="btn-primary"
+              >
+                + Add Rental Rate
+              </button>
+            </div>
+
+            {formData.rates.map((rate, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start"
+              >
+                <input
+                  className="input-field"
+                  placeholder="Rate name (e.g. Cubo Cottage)"
+                  value={rate.label}
+                  onChange={(e) =>
+                    updateDetail("rates", index, "label", e.target.value)
+                  }
+                  required
+                />
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-field"
+                  placeholder="Amount (PHP)"
+                  value={rate.amount}
+                  onChange={(e) =>
+                    updateDetail("rates", index, "amount", e.target.value)
+                  }
+                  required
+                />
+
+                <input
+                  className="input-field"
+                  placeholder="Description (optional)"
+                  value={rate.description}
+                  onChange={(e) =>
+                    updateDetail("rates", index, "description", e.target.value)
+                  }
+                />
+
+                <button
+                  type="button"
+                  onClick={() => removeDetail("rates", index)}
+                  className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+
+            {formData.rates.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No rental rates added yet.
+              </p>
+            )}
+          </div>
+
+          {/* Amenities */}
+          <div className="border border-gray-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-gray-900">Amenities</h3>
+              <button
+                type="button"
+                onClick={() => addDetail("amenities")}
+                className="btn-primary"
+              >
+                + Add Amenity
+              </button>
+            </div>
+
+            {formData.amenities.map((amenity, index) => (
+              <div key={index} className="flex flex-wrap gap-3">
+                <input
+                  className="input-field flex-1"
+                  placeholder="Amenity (e.g. Swimming Pool)"
+                  value={amenity.name}
+                  onChange={(e) =>
+                    updateDetail("amenities", index, "name", e.target.value)
+                  }
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => removeDetail("amenities", index)}
+                  className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+
+            {formData.amenities.length === 0 && (
+              <p className="text-sm text-gray-500">No amenities added yet.</p>
+            )}
+          </div>
+
+          {/* Activities (optional, saved with the destination) */}
+          <DestinationActivitiesEditor
+            activities={formData.activities}
+            onChange={(activities) => setFormData((prev) => ({ ...prev, activities }))}
+          />
+
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={formData.is_featured} onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={formData.is_featured}
+              onChange={(e) =>
+                setFormData({ ...formData, is_featured: e.target.checked })
+              }
+            />
             Featured destination (shown on the homepage)
           </label>
           <div className="flex gap-3">
-            <button type="submit" className="btn-primary">{editingId ? 'Save Changes' : 'Save Destination'}</button>
+            <button
+              type="submit"
+              className="btn-primary disabled:cursor-wait disabled:opacity-60"
+              disabled={saving}
+              aria-busy={saving}
+            >
+              {saving
+                ? newPhotos.length
+                  ? `Saving… uploading ${newPhotos.length} photo${newPhotos.length === 1 ? "" : "s"}`
+                  : "Saving…"
+                : editingId
+                  ? "Save Changes"
+                  : "Save Destination"}
+            </button>
             {editingId && (
-              <button type="button" onClick={closeForm} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={saving}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
                 Cancel
               </button>
             )}
@@ -228,7 +717,10 @@ export default function ManageDestinations() {
       )}
 
       <div className="relative mb-5 max-w-sm">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <FiSearch
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          size={16}
+        />
         <input
           className="input-field pl-9"
           placeholder="Search destinations..."
@@ -237,56 +729,98 @@ export default function ManageDestinations() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
           <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Destination</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Category</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Status</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Featured</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Views</th>
-                <th className="text-right px-6 py-3 text-sm font-medium text-gray-700">Actions</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Destination
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Category
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Status
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Featured
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Views
+                </th>
+                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150">
+                <tr
+                  key={item.id}
+                  className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150"
+                >
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
                       <img
-                        src={getImageUrl(item.images?.[0])}
+                        src={getImageUrl(item.images?.find((img) => img.is_primary) || item.images?.[0])}
                         alt=""
                         className="w-10 h-10 rounded-lg object-cover shrink-0 bg-gray-100"
                       />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><FiMapPin size={10} />{item.municipality?.name}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                          <FiMapPin size={10} />
+                          {item.municipality?.name}
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary-50 text-secondary-700">{item.category?.name}</span>
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary-50 text-secondary-700">
+                      {item.category?.name}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    <span
+                      className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === "published" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+                    >
                       {item.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {item.is_featured ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '—'}
+                    {item.is_featured ? (
+                      <FiStar
+                        className="text-yellow-500 fill-yellow-500"
+                        size={15}
+                      />
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    <span className="flex items-center gap-1.5"><FiEye size={13} className="text-gray-400" />{item.view_count}</span>
+                    <span className="flex items-center gap-1.5">
+                      <FiEye size={13} className="text-gray-400" />
+                      {item.view_count}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-3 justify-end">
-                      <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
+                      <button
+                        onClick={() => startEdit(item)}
+                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="Edit"
+                      >
                         <FiEdit2 size={15} />
                       </button>
-                      <button onClick={() => handleDelete(item.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
                         <FiTrash2 size={15} />
                       </button>
                     </div>
@@ -298,5 +832,5 @@ export default function ManageDestinations() {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Role;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class RetailShopProductTest extends TestCase
@@ -21,6 +23,8 @@ class RetailShopProductTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Product image uploads go to a throwaway disk, never the app's real storage.
+        Storage::fake('public');
 
         $roleId = Role::create(['name' => 'business_owner', 'description' => 'Business Establishment Owner'])->id;
 
@@ -122,7 +126,7 @@ class RetailShopProductTest extends TestCase
         $this->assertSame(20, $this->shop->products()->count());
     }
 
-    public function test_editing_a_product_under_a_trusted_owner_stays_live(): void
+    public function test_editing_an_approved_product_keeps_it_live_and_holds_the_change_for_review(): void
     {
         $product = $this->makeProduct('Approved Product');
         $product->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $this->owner->id]);
@@ -131,9 +135,13 @@ class RetailShopProductTest extends TestCase
             ->putJson("/api/v1/business/retail-shop/products/{$product->id}", ['name' => 'Approved Product (Updated)'])
             ->assertOk();
 
+        // Option 5b: the approved product stays public unchanged; the edit waits for review.
         $product->refresh();
         $this->assertSame('approved', $product->status);
         $this->assertNotNull($product->approved_at);
+        $this->assertSame('Approved Product', $product->name);
+        $this->assertSame('Approved Product (Updated)', $product->pending_changes['values']['name']);
+        $this->assertSame('pending', $product->pending_changes['status']);
     }
 
     public function test_editing_a_product_under_an_untrusted_owner_resets_it_to_pending(): void
@@ -152,18 +160,19 @@ class RetailShopProductTest extends TestCase
         $this->assertNull($product->approved_at);
     }
 
-    public function test_new_products_are_auto_approved_when_the_shop_is_approved(): void
+    public function test_new_products_stay_pending_even_when_the_shop_is_approved(): void
     {
         $response = $this->actingAs($this->owner)->postJson('/api/v1/business/retail-shop/products', [
-            'name' => 'Instant Live Product',
+            'name' => 'Needs Review Product',
             'description' => 'A test product description.',
             'product_type' => 'Souvenir',
             'price' => 50,
         ]);
 
+        // Option 5b: every new product is reviewed before tourists see it.
         $response->assertCreated();
-        $this->assertSame('approved', $response->json('product.status'));
-        $this->assertNotNull($response->json('product.approved_at'));
+        $this->assertSame('pending', $response->json('product.status'));
+        $this->assertNull($response->json('product.approved_at'));
     }
 
     public function test_new_products_stay_pending_when_the_shop_is_not_yet_approved(): void
@@ -182,15 +191,27 @@ class RetailShopProductTest extends TestCase
         $this->assertNull($response->json('product.approved_at'));
     }
 
-    public function test_editing_an_approved_shop_resets_it_to_pending(): void
+    public function test_editing_a_published_shop_keeps_it_published_and_holds_the_changes_for_review(): void
     {
+        $original = $this->shop->description;
+        $proposed = str_repeat('Updated shop description. ', 5);
+
         $this->actingAs($this->owner)
-            ->putJson('/api/v1/business/retail-shop', ['description' => str_repeat('Updated shop description. ', 5)])
+            ->putJson('/api/v1/business/retail-shop', ['description' => $proposed])
             ->assertOk();
 
+        // The published shop is untouched and still public...
         $this->shop->refresh();
-        $this->assertSame('pending', $this->shop->status);
-        $this->assertNull($this->shop->approved_at);
+        $this->assertSame('approved', $this->shop->status);
+        $this->assertNotNull($this->shop->approved_at);
+        $this->assertSame($original, $this->shop->description);
+        $this->assertSame($original, $this->getJson("/api/v1/retail-shops/{$this->shop->id}")->assertOk()->json('shop.description') ?? $this->getJson("/api/v1/retail-shops/{$this->shop->id}")->json('description'));
+
+        // ...while the proposed text waits in a revision until an admin approves it.
+        $revision = $this->shop->revisions()->latest('id')->firstOrFail();
+        $this->assertSame('draft', $revision->status);
+        $this->assertSame(trim($proposed), $revision->proposed_data['description']); // request input is trimmed
+        $this->assertNull($revision->reviewed_at);
     }
 
     public function test_only_approved_products_are_visible_on_the_public_endpoint(): void
@@ -210,18 +231,25 @@ class RetailShopProductTest extends TestCase
     {
         $product = $this->makeProduct('Product With Image');
 
-        $file1 = \Illuminate\Http\UploadedFile::fake()->image('first.jpg');
+        $file1 = UploadedFile::fake()->image('first.jpg');
         $this->actingAs($this->owner)
             ->post("/api/v1/business/retail-shop/products/{$product->id}", ['_method' => 'PUT', 'image' => $file1])
             ->assertOk();
 
         $this->assertSame(1, $product->images()->count());
+        $first = $product->images()->first();
+        Storage::disk('public')->assertExists([$first->image_path, $first->thumbnail_path]);
 
-        $file2 = \Illuminate\Http\UploadedFile::fake()->image('second.jpg');
+        $file2 = UploadedFile::fake()->image('second.jpg');
         $this->actingAs($this->owner)
             ->post("/api/v1/business/retail-shop/products/{$product->id}", ['_method' => 'PUT', 'image' => $file2])
             ->assertOk();
 
         $this->assertSame(1, $product->images()->count());
+        // The replaced image's files are removed; only the new image and its thumbnail remain.
+        $second = $product->images()->first();
+        Storage::disk('public')->assertMissing([$first->image_path, $first->thumbnail_path]);
+        Storage::disk('public')->assertExists([$second->image_path, $second->thumbnail_path]);
+        $this->assertCount(2, Storage::disk('public')->allFiles("retail-products/{$product->id}"));
     }
 }

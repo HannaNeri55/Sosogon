@@ -18,6 +18,8 @@ import StatCard from '../../components/common/StatCard'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
+// Charts use the site's body font instead of Chart.js's default Helvetica.
+ChartJS.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font-body') || 'Inter, sans-serif'
 
 export default function ReportsAnalytics() {
   const [overview, setOverview] = useState(null)
@@ -65,8 +67,8 @@ export default function ReportsAnalytics() {
       {
         label: 'Page Views',
         data: visitorData.map((d) => d.total_views),
-        borderColor: '#0E6B4F',
-        backgroundColor: 'rgba(14, 107, 79, 0.1)',
+        borderColor: '#2E6B4E',
+        backgroundColor: 'rgba(46, 107, 78, 0.1)',
         tension: 0.3,
       },
     ],
@@ -78,7 +80,7 @@ export default function ReportsAnalytics() {
       {
         label: 'Views',
         data: popularData.map((d) => d.view_count),
-        backgroundColor: '#2B7FBF',
+        backgroundColor: '#0F7A94',
       },
     ],
   }
@@ -88,7 +90,7 @@ export default function ReportsAnalytics() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
-          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Reports and Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Reports and Analytics</h1>
         </div>
         <button
           type="button"

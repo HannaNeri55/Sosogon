@@ -117,7 +117,7 @@ class AccommodationRoomTest extends TestCase
         $this->assertSame('approved', $room->status);
     }
 
-    public function test_editing_a_room_under_a_trusted_owner_stays_live(): void
+    public function test_editing_an_approved_room_keeps_it_live_and_holds_the_change_for_review(): void
     {
         $room = AccommodationRoom::create([
             'accommodation_id' => $this->accommodation->id,
@@ -131,9 +131,13 @@ class AccommodationRoomTest extends TestCase
             ->putJson("/api/v1/business/accommodation/rooms/{$room->id}", ['room_number' => 'Deluxe Suite (Renovated)'])
             ->assertOk();
 
+        // Option 5b: the approved room stays public unchanged; the edit waits for review.
         $room->refresh();
         $this->assertSame('approved', $room->status);
         $this->assertNotNull($room->approved_at);
+        $this->assertSame('Deluxe Suite', $room->room_number);
+        $this->assertSame('pending', $room->pending_changes['status']);
+        $this->assertSame('Deluxe Suite (Renovated)', $room->pending_changes['values']['room_number']);
     }
 
     public function test_editing_a_room_under_an_untrusted_owner_resets_it_to_pending(): void
@@ -157,14 +161,16 @@ class AccommodationRoomTest extends TestCase
         $this->assertNull($room->approved_at);
     }
 
-    public function test_new_rooms_are_auto_approved_when_the_accommodation_is_approved(): void
+    public function test_new_rooms_stay_pending_even_when_the_accommodation_is_approved(): void
     {
         $response = $this->actingAs($this->owner)
-            ->postJson('/api/v1/business/accommodation/rooms', ['room_number' => 'Instant Live Room', 'category' => 'Standard']);
+            ->postJson('/api/v1/business/accommodation/rooms', ['room_number' => 'Needs Review Room', 'category' => 'Standard']);
 
+        // Option 5b: every new room is reviewed before tourists see it.
         $response->assertCreated();
-        $this->assertSame('approved', $response->json('room.status'));
-        $this->assertNotNull($response->json('room.approved_at'));
+        $this->assertSame('pending', $response->json('room.status'));
+        $this->assertNull($response->json('room.approved_at'));
+        $this->assertFalse(collect($this->getJson("/api/v1/accommodations/{$this->accommodation->id}")->json('rooms'))->pluck('room_number')->contains('Needs Review Room'));
     }
 
     public function test_new_rooms_stay_pending_when_the_accommodation_is_not_yet_approved(): void

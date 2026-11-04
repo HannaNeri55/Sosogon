@@ -4,6 +4,7 @@ import SelectionEditor from './SelectionEditor'
 import { PreferenceNote } from './ItineraryDayCard'
 import { getImageUrl, formatPeso, formatPesoRange } from '../../utils/helpers'
 import { roomOptions, picksFrom, stayRooms, stayNights, roomsSummary } from '../../utils/selections'
+import { stayCostIsEstimate } from '../../utils/estimates'
 
 // "Night after Day 1", "Nights after Days 1 and 2", "Nights after Days 1, 2 and 3"
 function nightsLabel(days) {
@@ -23,6 +24,8 @@ export default function StayCard({ stay, itinerary, pending = {}, editMode, onCh
   const nights = stayNights(stay)
   const rooms = stayRooms(stay, itinerary)
   const cost = formatPesoRange(stay.cost_min, stay.cost_max)
+  // No room prices to go by: the cost is the usual range for its price level.
+  const costEstimated = stayCostIsEstimate(stay, rooms)
   const changed = Boolean(pending.accommodation)
 
   return (
@@ -139,10 +142,11 @@ export default function StayCard({ stay, itinerary, pending = {}, editMode, onCh
               )}
               {cost && (
                 <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800 mt-3">
-                  <FiDollarSign size={13} className="text-primary-500" /> {cost}
+                  <FiDollarSign size={13} className="text-primary-500" /> {costEstimated && 'Est. '}{cost}
                   <span className="text-xs font-normal text-gray-500">
                     · {rooms.length ? `${roomsSummary(rooms)}, ` : ''}
                     {nights} night{nights > 1 ? 's' : ''}
+                    {costEstimated && ' · typical rate for its price level, no room prices listed'}
                   </span>
                 </p>
               )}

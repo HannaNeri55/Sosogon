@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasEstimates;
+use App\Models\Concerns\HasPendingChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MenuItem extends Model
 {
+    use HasEstimates;
+    use HasPendingChanges;
+
     protected $fillable = [
         'food_beverage_id',
         'name',

@@ -110,9 +110,6 @@ class AdminSubmissionController extends Controller
                 'longitude' => $submission->longitude,
                 'contact_number' => $submission->contact_number,
                 'operating_hours' => $submission->operating_hours,
-                'status' => 'approved',
-                'approved_at' => now(),
-                'approved_by' => $request->user()->id,
             ];
 
             $modelClass = $this->listingModel($submission->type);
@@ -124,13 +121,34 @@ class AdminSubmissionController extends Controller
                 default => abort(422, "Unsupported submission type: {$submission->type}"),
             };
 
-            $existingListing = $submission->listing_id ? $modelClass::find($submission->listing_id) : null;
+            $existingListing = $submission->listing_id
+                ? $modelClass::find($submission->listing_id)
+                : null;
 
             if ($existingListing) {
+                // Preserve the current publication status of existing listings.
                 $existingListing->update(array_merge($listingData, $extra));
+
                 $listing = $existingListing;
             } else {
-                $listing = $modelClass::create(array_merge($listingData, $extra));
+                // Business verification does not automatically publish a listing.
+                $listing = $modelClass::create(array_merge(
+                    $listingData,
+                    $extra,
+                    [
+                        'status' => 'pending',
+                        'approved_at' => null,
+                        'approved_by' => null,
+                    ]
+                ));
+
+                // forceFill allows this field to be saved before the
+                // listing models' fillable arrays are updated.
+                $listing->forceFill([
+                    'publication_review_status' => 'draft',
+                    'is_sample' => $submission->is_sample,
+                ])->save();
+
                 $submission->update(['listing_id' => $listing->id]);
             }
 
@@ -141,6 +159,7 @@ class AdminSubmissionController extends Controller
                     'retail_product' => 'retail_shop_images',
                     default => abort(422, "Unsupported submission type: {$submission->type}"),
                 };
+
                 $foreignKey = match ($submission->type) {
                     'accommodation' => 'accommodation_id',
                     'food_beverage' => 'food_beverage_id',
@@ -179,7 +198,9 @@ class AdminSubmissionController extends Controller
 
         $this->notifySubmissionStatus($submission);
 
-        return response()->json(['message' => 'Submission approved and listing created.']);
+        return response()->json([
+            'message' => 'Business verified. Listing is ready for owner completion and publication review.',
+        ]);
     }
 
     public function reject(Request $request, int $id): JsonResponse
@@ -223,9 +244,15 @@ class AdminSubmissionController extends Controller
             'warning_notes' => $request->input('notes'),
         ]);
 
-        $this->logAction($request, 'warned_submission', "Warned business owner about negative reviews: {$submission->business_name}", $submission);
+        $this->logAction(
+            $request,
+            'warned_submission',
+            "Warned business owner about negative reviews: {$submission->business_name}",
+            $submission
+        );
 
         $submission->loadMissing('user');
+
         if ($submission->user?->email) {
             try {
                 Mail::to($submission->user->email)->send(new ListingWarningMail($submission));
@@ -249,7 +276,12 @@ class AdminSubmissionController extends Controller
 
         $submission->update(['warned_at' => null, 'warning_notes' => null]);
 
-        $this->logAction($request, 'cleared_submission_warning', "Cleared negative-review warning: {$submission->business_name}", $submission);
+        $this->logAction(
+            $request,
+            'cleared_submission_warning',
+            "Cleared negative-review warning: {$submission->business_name}",
+            $submission
+        );
 
         return response()->json(['message' => 'Warning cleared.']);
     }
@@ -283,7 +315,12 @@ class AdminSubmissionController extends Controller
                 'reviewed_at' => now(),
             ]);
 
-            $this->logAction($request, 'removed_submission', "Removed business from the system: {$submission->business_name}", $submission);
+            $this->logAction(
+                $request,
+                'removed_submission',
+                "Removed business from the system: {$submission->business_name}",
+                $submission
+            );
 
             return $submission;
         });
@@ -294,16 +331,24 @@ class AdminSubmissionController extends Controller
     }
 
     /**
-     * Deletes a live listing with its reviews and stored files. Child rows (images, rooms, menu items,
-     * products) cascade in the database, but their files and the polymorphic ratings do not.
-     * $keepPath is the submission photo, which approve() reuses as the listing image.
+     * Deletes a listing with its reviews and stored files.
+     * Child rows cascade in the database, but stored files
+     * and polymorphic ratings must be cleaned up separately.
      */
-    private function deleteListing(Model $listing, ImageOptimizationService $images, ?string $keepPath): void
-    {
+    private function deleteListing(
+        Model $listing,
+        ImageOptimizationService $images,
+        ?string $keepPath
+    ): void {
         $deleteFiles = function (iterable $rows) use ($images, $keepPath) {
             foreach ($rows as $row) {
                 if ($row->image_path !== $keepPath) {
-                    $images->delete($row->image_path, $row->thumbnail_path === $keepPath ? null : $row->thumbnail_path);
+                    $images->delete(
+                        $row->image_path,
+                        $row->thumbnail_path === $keepPath
+                            ? null
+                            : $row->thumbnail_path
+                    );
                 }
             }
         };
@@ -325,8 +370,12 @@ class AdminSubmissionController extends Controller
         $listing->delete();
     }
 
-    private function logAction(Request $request, string $action, string $description, BusinessSubmission $submission): void
-    {
+    private function logAction(
+        Request $request,
+        string $action,
+        string $description,
+        BusinessSubmission $submission
+    ): void {
         ActivityLog::create([
             'user_id' => $request->user()->id,
             'action' => $action,
