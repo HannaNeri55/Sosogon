@@ -117,6 +117,11 @@ export function formatPeso(value) {
   return `₱${Math.round(Number(value)).toLocaleString('en-PH')}`
 }
 
+// A product's price with centavos, or null when none was given (never shown as free).
+export function formatProductPrice(price) {
+  return price == null ? null : `₱${Number(price).toFixed(2)}`
+}
+
 // "₱6,400 – ₱12,900", or a single amount when both ends match; null when there's no estimate.
 export function formatPesoRange(min, max) {
   if (min == null || max == null) return null

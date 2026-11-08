@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FiPlus, FiEdit2, FiTrash2, FiAlertTriangle, FiPackage } from 'react-icons/fi'
 import { getMyRetailProducts, deleteRetailShopProduct } from '../../../api/retailShopOwner'
-import { getImageUrl } from '../../../utils/helpers'
+import { formatProductPrice, getImageUrl } from '../../../utils/helpers'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import ProductFormModal from './ProductFormModal'
 import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
@@ -17,7 +17,7 @@ const REVIEW_FIELDS = [
   ['name', 'Name'],
   ['product_type', 'Type'],
   ['description', 'Description'],
-  ['price', 'Price', (v) => '₱' + Number(v).toFixed(2)],
+  ['price', 'Price', (v) => formatProductPrice(v) ?? '—'],
   ['website', 'Website'],
 ]
 
@@ -125,7 +125,7 @@ export default function ProductManagement() {
                   {item.product_type}
                 </span>
                 {item.description && <p className="text-sm text-gray-500 line-clamp-2 mb-2">{item.description}</p>}
-                <p className="text-sm font-semibold text-primary-700 mb-1">₱{Number(item.price).toFixed(2)}</p>
+                {item.price != null && <p className="text-sm font-semibold text-primary-700 mb-1">{formatProductPrice(item.price)}</p>}
                 <ItemReviewStatus item={item} fields={REVIEW_FIELDS} noun="product" />
 
                 <div className="mt-auto flex gap-4 pt-2">

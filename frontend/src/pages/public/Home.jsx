@@ -28,6 +28,7 @@ import SkeletonGrid from '../../components/common/SkeletonCard'
 import EmptyState from '../../components/common/EmptyState'
 import { StarDisplay } from '../../components/common/StarRating'
 import { getImageUrl } from '../../utils/helpers'
+import { accommodationTypeLabel } from '../../utils/accommodationOptions'
 
 const primaryImage = (item) => item?.images?.find((img) => img.is_primary) || item?.images?.[0]
 
@@ -311,7 +312,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {featuredAccommodations.map((item, i) => (
                   <Reveal key={item.id} delay={i * 100}>
-                    <ListingCard item={item} basePath="/accommodations" typeLabel={item.type} />
+                    <ListingCard item={item} basePath="/accommodations" typeLabel={accommodationTypeLabel(item)} />
                   </Reveal>
                 ))}
               </div>

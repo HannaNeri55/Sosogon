@@ -193,7 +193,8 @@ export default function OwnerRegistrations() {
         </button>
       </div>
 
-      {loading ? (
+      {/* After an approval the list refreshes in place; the spinner is only for an empty list. */}
+      {loading && items.length === 0 ? (
         <LoadingSpinner size="lg" />
       ) : loadError ? (
         <div role="alert" className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-5 text-sm flex flex-wrap items-center gap-3">

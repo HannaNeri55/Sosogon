@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RetailShopImage extends Model
 {
-    protected $fillable = ['retail_shop_id', 'image_path', 'thumbnail_path', 'is_primary', 'sort_order'];
+    protected $fillable = ['retail_shop_id', 'image_path', 'thumbnail_path', 'is_primary', 'sort_order', 'image_credit', 'image_source_url'];
 
     public function retailShop(): BelongsTo
     {

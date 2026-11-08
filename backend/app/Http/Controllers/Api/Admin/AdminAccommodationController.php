@@ -6,16 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Accommodation;
 use App\Models\AccommodationImage;
 use App\Services\ImageOptimizationService;
+use App\Support\RevisionBase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use App\Support\RevisionBase;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AdminAccommodationController extends Controller
 {
     public const MIN_GALLERY_IMAGES = 5;
+
     public const MAX_GALLERY_IMAGES = 100;
 
     public function index(Request $request): JsonResponse
@@ -73,6 +75,11 @@ class AdminAccommodationController extends Controller
             'contact_number' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'website' => 'nullable|string|max:500',
+            'offering_arrangement' => 'sometimes|nullable|in:units,entire_property,both',
+            'classifications' => 'sometimes|nullable|array|max:8',
+            'classifications.*' => ['string', Rule::in(Accommodation::CLASSIFICATIONS)],
+            'check_in_time' => 'sometimes|nullable|string|max:50',
+            'check_out_time' => 'sometimes|nullable|string|max:50',
             'operating_hours' => 'nullable|string|max:255',
             'amenities' => 'nullable|array',
             'amenities.*' => 'string|max:100',
@@ -172,6 +179,11 @@ class AdminAccommodationController extends Controller
             'contact_number' => 'sometimes|nullable|string|max:50',
             'email' => 'sometimes|nullable|email|max:255',
             'website' => 'sometimes|nullable|string|max:500',
+            'offering_arrangement' => 'sometimes|nullable|in:units,entire_property,both',
+            'classifications' => 'sometimes|nullable|array|max:8',
+            'classifications.*' => ['string', Rule::in(Accommodation::CLASSIFICATIONS)],
+            'check_in_time' => 'sometimes|nullable|string|max:50',
+            'check_out_time' => 'sometimes|nullable|string|max:50',
             'operating_hours' => 'sometimes|nullable|string|max:255',
             'amenities' => 'sometimes|nullable|array',
             'amenities.*' => 'string|max:100',
@@ -394,6 +406,10 @@ class AdminAccommodationController extends Controller
             'operating_hours',
             'price_range',
             'amenities',
+            'offering_arrangement',
+            'classifications',
+            'check_in_time',
+            'check_out_time',
             'address',
             'municipality_id',
         ];
@@ -413,6 +429,11 @@ class AdminAccommodationController extends Controller
             'price_range' => 'nullable|in:budget,moderate,luxury',
             'amenities' => 'nullable|array',
             'amenities.*' => 'string|max:100',
+            'offering_arrangement' => 'nullable|in:units,entire_property,both',
+            'classifications' => 'nullable|array',
+            'classifications.*' => ['string', Rule::in(Accommodation::CLASSIFICATIONS)],
+            'check_in_time' => 'nullable|string|max:50',
+            'check_out_time' => 'nullable|string|max:50',
             'address' => 'sometimes|required|string|max:500',
             'municipality_id' => 'sometimes|required|exists:municipalities,id',
         ])->validate();

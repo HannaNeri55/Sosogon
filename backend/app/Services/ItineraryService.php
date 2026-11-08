@@ -225,7 +225,7 @@ class ItineraryService
         // Older screens show one stay: the first one the tourist sleeps at.
         $main = collect($stays)->first(fn ($s) => $s['night_days'] !== [] && $s['accommodation']) ?? collect($stays)->first();
         if (! $this->needsStay($preferences)) {
-            $main = ['accommodation' => null, 'reason' => null, 'note' => "You said you don't need accommodation, so this plan books no stay and adds no room costs. Each day starts at its first stop."];
+            $main = ['accommodation' => null, 'reason' => null, 'note' => "You said you don't need accommodation, so this plan suggests no stay and adds no room costs. Each day starts at its first stop."];
         }
 
         // All-or-nothing so a failed item insert doesn't leave an empty itinerary behind.
@@ -412,7 +412,7 @@ class ItineraryService
         ]);
     }
 
-    /** Books $roomIds as the rooms at $accommodationId, replacing the rooms picked there before. */
+    /** Makes $roomIds the options picked at $accommodationId, replacing those picked there before. */
     public function setStayRooms(Itinerary $itinerary, int $accommodationId, array $roomIds): void
     {
         $itinerary->rooms()->detach(
@@ -500,7 +500,7 @@ class ItineraryService
     /** Whether a stay's check-in time is only the usual one (an estimate), not one it lists. */
     private function checkInEstimated(Accommodation $stay): bool
     {
-        return ! preg_match('/check[\s-]?in/i', (string) $stay->operating_hours) && $stay->estimate('check_in') !== null;
+        return blank($stay->check_in_time) && ! preg_match('/check[\s-]?in/i', (string) $stay->operating_hours) && $stay->estimate('check_in') !== null;
     }
 
     /**
@@ -554,10 +554,10 @@ class ItineraryService
         $line = fn ($place, string $kind) => "- {$place->name} ({$townNames[$place->municipality_id]}; {$kind}): ".$this->promptExcerpt($place->description, 140);
 
         $groups = [
-            'Places to stay' => ! $this->needsStay($preferences) ? collect() : Accommodation::approved()->whereIn('municipality_id', $towns)->with('roomTypes:id,accommodation_id,name,sort_order')->limit(8)->get(['id', 'name', 'municipality_id', 'type', 'price_range', 'description', 'dining_details'])
+            'Places to stay' => ! $this->needsStay($preferences) ? collect() : Accommodation::approved()->whereIn('municipality_id', $towns)->with(['rooms' => fn ($q) => $q->approved()->select('id', 'accommodation_id', 'name', 'sort_order')])->limit(8)->get(['id', 'name', 'municipality_id', 'type', 'price_range', 'description', 'dining_details'])
                 ->map(fn ($a) => $line($a, trim("{$a->type}, {$a->price_range}", ', '))
                     .($a->dining_details ? ' Dining: '.$this->promptExcerpt($a->dining_details, 120) : '')
-                    .($a->roomTypes->isNotEmpty() ? ' Room types: '.$a->roomTypes->pluck('name')->take(6)->implode(', ').'.' : '')),
+                    .($a->rooms->isNotEmpty() ? ' Options: '.$a->rooms->pluck('name')->filter()->unique()->take(6)->implode(', ').'.' : '')),
             'Food places' => FoodBeverage::approved()->whereIn('municipality_id', $towns)->limit(8)->get(['name', 'municipality_id', 'cuisine_type', 'price_range', 'description', 'meals_served', 'specialties'])
                 ->map(fn ($f) => $line($f, trim(($f->cuisine_type ?: 'food').", {$f->price_range}", ', '))
                     .($f->meals_served ? ' Serves: '.implode(', ', $f->meals_served).'.' : '')
@@ -700,7 +700,7 @@ class ItineraryService
         }
         $prompt .= "\n";
         $prompt .= "HOW THIS TRIP WORKS:\n";
-        $prompt .= "- You ONLY choose each day's destinations, their order and why. The planner itself handles arrival".($this->needsStay($preferences) ? ' and check-in on Day 1' : ' on Day 1').", schedules each destination's listed activities, ".($this->needsStay($preferences) ? 'picks one accommodation per town' : 'books no accommodation (the tourist has their own arrangements)').", every meal (breakfast, lunch, an afternoon merienda and dinner at verified restaurants, so never spend a destination on a meal), rest breaks and souvenir shopping, and sets all clock times.\n";
+        $prompt .= "- You ONLY choose each day's destinations, their order and why. The planner itself handles arrival".($this->needsStay($preferences) ? ' and check-in on Day 1' : ' on Day 1').", schedules each destination's listed activities, ".($this->needsStay($preferences) ? 'picks one accommodation per town' : 'suggests no accommodation (the tourist has their own arrangements)').", every meal (breakfast, lunch, an afternoon merienda and dinner at verified restaurants, so never spend a destination on a meal), rest breaks and souvenir shopping, and sets all clock times.\n";
         $prompt .= "- Travelling between towns takes most of a day, so a day never covers two towns.\n\n";
         $prompt .= "AVAILABLE VERIFIED DESTINATIONS (use ONLY these, reference by ID):\n";
         $prompt .= "{$destinationsList}\n\n";
@@ -1131,7 +1131,7 @@ class ItineraryService
     private function checkInMinutes(Accommodation $stay): ?int
     {
         $pattern = '/check[\s-]?in\b[^0-9]{0,10}(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\b/i';
-        if (! preg_match($pattern, (string) $stay->operating_hours, $m) && ! preg_match($pattern, 'check-in '.$stay->estimate('check_in'), $m)) {
+        if (! preg_match($pattern, 'check-in '.$stay->check_in_time, $m) && ! preg_match($pattern, (string) $stay->operating_hours, $m) && ! preg_match($pattern, 'check-in '.$stay->estimate('check_in'), $m)) {
             return null;
         }
 
@@ -1258,7 +1258,7 @@ class ItineraryService
      * One stay per selected town: the accommodation nearest the middle of the destinations the
      * tourist visits there (else of the town's eligible ones, else the town itself), preferring
      * their type and budget. Also the towns' food places and souvenir shops that meals and
-     * shopping are picked from. Nights and rooms are booked later by bookNights().
+     * shopping are picked from. Nights and rooms are planned later by bookNights().
      *
      * @return array{stays: array<int, array>, food: Collection, shops: Collection}
      */
@@ -1324,24 +1324,28 @@ class ItineraryService
         ];
     }
 
-    /** Whether the tourist wants the planner to book a stay (true unless they said they don't need one). */
+    /** Whether the tourist wants the planner to suggest a stay (true unless they said they don't need one). */
     private function needsStay(array $preferences): bool
     {
         return filter_var($preferences['accommodation_needed'] ?? true, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
-     * Rooms for the group at the tourist's chosen room: that room first, then more of the same
-     * room type (approved, priced, not marked occupied), cheapest first, until everyone has a
-     * bed. Returns the rooms and how many they sleep (less than $travelers when the type runs out).
+     * Options for the group at the tourist's chosen one: that option first, then others of the
+     * same room category until everyone has a bed. An option whose capacity isn't known doesn't
+     * limit the group: the property confirms it. Returns the options and how many they sleep
+     * (less than $travelers when the category runs out).
      *
      * @return array{0: Collection, 1: int}
      */
     public function roomsForGroup(AccommodationRoom $room, int $travelers): array
     {
-        $sameType = AccommodationRoom::approved()->where('accommodation_id', $room->accommodation_id)
-            ->where('category', $room->category)->where('occupancy_status', 'unoccupied')->where('price', '>', 0)
-            ->whereKeyNot($room->id)->orderBy('price')->orderBy('id')->get();
+        $sameType = $room->category && ! $room->isEntireProperty()
+            ? AccommodationRoom::approved()->where('accommodation_id', $room->accommodation_id)
+                ->where('category', $room->category)
+                ->when((float) $room->price > 0, fn ($q) => $q->where('price', '>', 0))
+                ->whereKeyNot($room->id)->reorder('price')->orderBy('id')->get()
+            : collect();
         $chosen = collect();
         $sleeps = 0;
         foreach ($sameType->prepend($room) as $candidate) {
@@ -1349,7 +1353,11 @@ class ItineraryService
                 break;
             }
             $chosen->push($candidate);
-            $sleeps += self::ROOM_CAPACITY[$candidate->category] ?? 2;
+            $capacity = $this->capacity($candidate);
+            if ($capacity === null) {
+                return [$chosen, $travelers];
+            }
+            $sleeps += $capacity * max(1, (int) $candidate->unit_count);
         }
 
         return [$chosen, $sleeps];
@@ -1414,7 +1422,7 @@ class ItineraryService
     }
 
     /**
-     * Books every night of the trip (after days 1 … num_days − 1, at least one) at the stay of
+     * Plans every night of the trip (after days 1 … num_days − 1, at least one) at the stay of
      * the town that day ends in, then each stay's rooms for the group and its cost for its
      * nights. A town where no night is spent keeps its stay as a suggestion, without rooms.
      *
@@ -2748,14 +2756,14 @@ class ItineraryService
     private function accommodationTypeMatcher(array $preferences): ?callable
     {
         $types = match ($preferences['accommodation_type'] ?? null) {
-            'resort' => ['Resort'],
+            'resort' => ['Resort', 'Beach Resort'],
             'hotel' => ['Hotel'],
             'homestay' => ['Homestay'],
-            'budget' => ['Inn', 'Homestay'],
+            'budget' => ['Inn', 'Homestay', 'Guesthouse'],
             default => [],
         };
 
-        return $types ? fn ($a) => in_array($a->type, $types, true) : null;
+        return $types ? fn ($a) => array_intersect($types, array_merge([$a->type], $a->classifications ?? [])) !== [] : null;
     }
 
     private function accommodationTypeLabel(array $preferences): string
@@ -3033,27 +3041,6 @@ class ItineraryService
     }
 
     /**
-     * The whole stay: cheapest to priciest approved room (or the price-level band) for one
-     * room per two travelers, every night of the trip (at least one).
-     *
-     * @return array{0: ?float, 1: ?float}
-     */
-    private function stayCost(?Accommodation $accommodation, int $nights, array $preferences): array
-    {
-        if (! $accommodation) {
-            return [null, null];
-        }
-
-        $rooms = (int) ceil($this->travelers($preferences) / 2);
-        $prices = $this->positivePrices($accommodation->loadMissing(['rooms' => fn ($q) => $q->approved()])->rooms);
-        [$min, $max] = $prices->isNotEmpty()
-            ? [$prices->min(), $prices->max()]
-            : $this->band('room_per_night', $accommodation->price_range);
-
-        return [$min * $rooms * $nights, $max * $rooms * $nights];
-    }
-
-    /**
      * $count options for the tourist's budget, from priced rows: the cheapest for "budget", the
      * priciest for "luxury", and those around the median price for "moderate".
      */
@@ -3081,12 +3068,23 @@ class ItineraryService
      */
     private function recommendRooms(Accommodation $stay, array $preferences): array
     {
-        $rooms = $stay->rooms()->approved()->where('occupancy_status', 'unoccupied')->where('price', '>', 0)->get();
-        if ($rooms->isEmpty()) {
-            return [collect(), 0];
+        $options = $stay->rooms()->approved()->get();
+        $units = $options->reject(fn ($r) => $r->isEntireProperty());
+        $travelers = $this->travelers($preferences);
+        $priced = $units->filter(fn ($r) => (float) $r->price > 0);
+
+        if ($priced->isEmpty()) {
+            // Nothing to compare by price: suggest only what is known to hold the group.
+            $fit = $units->filter(fn ($r) => $r->max_guests && $r->max_guests * max(1, (int) $r->unit_count) >= $travelers)->sortBy('max_guests')->first();
+            if ($fit) {
+                return [collect([$fit]), $fit->max_guests * max(1, (int) $fit->unit_count)];
+            }
+            $whole = $units->isEmpty() ? $options->first(fn ($r) => $r->isEntireProperty() && (! $r->max_guests || $r->max_guests >= $travelers)) : null;
+
+            return $whole ? [collect([$whole]), $whole->max_guests ?? $travelers] : [collect(), 0];
         }
 
-        $categories = $rooms->groupBy(fn ($r) => $r->category ?: 'Room')
+        $categories = $priced->groupBy(fn ($r) => $r->category ?: 'Room')
             ->sortBy(fn ($group) => $group->min(fn ($r) => (float) $r->price))
             ->values();
         $indexes = range(0, $categories->count() - 1);
@@ -3097,20 +3095,51 @@ class ItineraryService
             default => collect($indexes)->sortBy(fn ($i) => [abs($i - $middle), $i])->values()->all(),
         };
 
-        $travelers = $this->travelers($preferences);
+        $wanted = mb_strtolower((string) ($preferences['additional_preferences'] ?? ''));
+        // Options with an amenity the tourist named come first (e.g. "a room with a kitchen").
+        $matches = fn ($r) => $wanted === '' ? 0 : collect($r->room_features ?? [])->filter(fn ($f) => $f !== '' && str_contains($wanted, mb_strtolower((string) $f)))->count();
+        $ranked = collect($order)
+            ->flatMap(fn ($index) => $categories[$index]->sortBy(fn ($r) => (float) $r->price)->values())
+            ->sortByDesc($matches)
+            ->values();
+
         $chosen = collect();
         $sleeps = 0;
-        foreach ($order as $index) {
-            foreach ($categories[$index]->sortBy(fn ($r) => (float) $r->price) as $room) {
-                if ($sleeps >= $travelers) {
-                    break 2;
-                }
-                $chosen->push($room);
-                $sleeps += self::ROOM_CAPACITY[$room->category] ?? 2;
+        foreach ($ranked as $room) {
+            if ($sleeps >= $travelers) {
+                break;
             }
+            $chosen->push($room);
+            $sleeps += ($this->capacity($room) ?? 2) * max(1, (int) $room->unit_count);
         }
 
         return [$chosen, $sleeps];
+    }
+
+    /** Guests one unit of an option sleeps: as stated, else assumed from its category, else unknown. */
+    private function capacity(AccommodationRoom $room): ?int
+    {
+        return $room->max_guests ?: (self::ROOM_CAPACITY[$room->category] ?? null);
+    }
+
+    /**
+     * How many units of each picked option the group uses: a single unit each, or for a grouped
+     * option as many of its units as the remaining travelers need.
+     *
+     * @return array<int, int> option id => units
+     */
+    public function roomQuantities(Collection $rooms, int $travelers): array
+    {
+        $left = $travelers;
+        $quantities = [];
+        foreach ($rooms as $room) {
+            $sleeps = $this->capacity($room) ?? 2;
+            $units = max(1, min(max(1, (int) $room->unit_count), (int) ceil(max($left, 1) / $sleeps)));
+            $quantities[$room->id] = $units;
+            $left -= $units * $sleeps;
+        }
+
+        return $quantities;
     }
 
     /**
@@ -3216,8 +3245,9 @@ class ItineraryService
     }
 
     /**
-     * A stay: every booked room's nightly price for each of its $nights. No rooms booked costs
-     * nothing, unless the stay lists no room prices (then a band); no nights there costs nothing.
+     * A stay's known cost: each picked option's listed price for the units the group uses, for each
+     * of its $nights. Null when it can't be known (no option picked, or one without a price): the
+     * tourist contacts the property for rates, and it is never counted as zero or guessed.
      *
      * @return array{0: ?float, 1: ?float}
      */
@@ -3229,13 +3259,15 @@ class ItineraryService
         if ($nights === 0) {
             return [0, 0];
         }
-        if ($rooms->isNotEmpty()) {
-            $total = $rooms->sum(fn ($r) => (float) $r->price) * $nights;
-
-            return [$total, $total];
+        if ($rooms->isEmpty() || $rooms->contains(fn ($r) => (float) $r->price <= 0)) {
+            return [null, null];
         }
 
-        return $stay->rooms()->approved()->where('price', '>', 0)->exists() ? [0, 0] : $this->stayCost($stay, $nights, $preferences);
+        $quantities = $this->roomQuantities($rooms, $this->travelers($preferences));
+        $min = $rooms->sum(fn ($r) => (float) $r->price * $quantities[$r->id]) * $nights;
+        $max = $rooms->sum(fn ($r) => (float) ($r->price_max ?: $r->price) * $quantities[$r->id]) * $nights;
+
+        return [$min, $max];
     }
 
     private function positivePrices(Collection $rows): Collection

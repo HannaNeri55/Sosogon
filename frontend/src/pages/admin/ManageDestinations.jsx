@@ -25,6 +25,7 @@ import { activityDraft, draftDurationMinutes, releaseActivityPreviews } from "..
 const MAX_NEW_PHOTOS_PER_SAVE = 10;
 import toast from "react-hot-toast";
 import MapLocationPicker from "../../components/maps/MapLocationPicker";
+import useScrollToForm from "../../hooks/useScrollToForm";
 
 const EMPTY_FORM = {
   name: "",
@@ -76,8 +77,9 @@ export default function ManageDestinations() {
     );
   }, [items, search]);
 
+  const formRef = useScrollToForm(showForm ? editingId ?? "new" : null);
+
   const loadData = async () => {
-    setLoading(true);
     try {
       const data = await getAdminDestinations({ per_page: 100 });
       setItems(data.data || []);
@@ -96,8 +98,8 @@ export default function ManageDestinations() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMeta();
   }, []);
 
@@ -369,6 +371,7 @@ export default function ManageDestinations() {
 
       {showForm && (
         <form
+          ref={formRef}
           onSubmit={handleSubmit}
           className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5"
         >

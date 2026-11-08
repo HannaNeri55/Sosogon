@@ -6,6 +6,7 @@ import EmptyState from '../../components/common/EmptyState'
 import SkeletonGrid from '../../components/common/SkeletonCard'
 import EventCalendar from '../../components/calendar/EventCalendar'
 import EventCard from '../../components/events/EventCard'
+import AnnouncementBoard from '../../components/events/AnnouncementBoard'
 import HeroSlideshow from '../../components/common/HeroSlideshow'
 import { eventCoversDate, formatDateKey } from '../../utils/helpers'
 import useUrlFilters from '../../hooks/useUrlFilters'
@@ -157,24 +158,7 @@ export default function Events() {
             News and advisories from the tourism office will appear here.
           </EmptyState>
         ) : (
-          <div className="max-w-3xl space-y-4">
-            {announcements.map((announcement) => (
-              <article key={announcement.id} className="card p-6 sm:p-7">
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  {announcement.is_pinned && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-accent-100 text-accent-700 px-2.5 py-1 rounded-full">
-                      Pinned
-                    </span>
-                  )}
-                  <time className="text-xs font-medium uppercase tracking-wider text-gray-500" dateTime={announcement.created_at}>
-                    {new Date(announcement.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </time>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-heading font-bold text-gray-900 mb-2">{announcement.title}</h3>
-                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{announcement.content}</p>
-              </article>
-            ))}
-          </div>
+          <AnnouncementBoard announcements={announcements} />
         )}
       </div>
     </div>

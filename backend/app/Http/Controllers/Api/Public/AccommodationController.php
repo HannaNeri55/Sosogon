@@ -32,18 +32,19 @@ class AccommodationController extends Controller
             $query->where('barangay_id', $request->barangay_id);
         }
 
-        // The trip planner's stay picker: each stay's approved rooms and estimates in the same
+        // The trip planner's stay picker: each stay's approved options and estimates in the same
         // request (without counting a page view the way show() does).
         if ($request->boolean('with_rooms')) {
             $query->with([
-                'rooms' => fn ($rooms) => $rooms->approved()->with('images')->orderBy('price')->orderBy('id'),
+                'rooms' => fn ($rooms) => $rooms->approved()->with('images'),
                 'estimates',
                 'roomTypes',
             ]);
         }
 
         if ($request->filled('type')) {
-            $query->where('type', $request->type);
+            // Its main type or one of its classifications; the value is quoted as stored in the JSON list.
+            $query->where(fn ($q) => $q->where('type', $request->type)->orWhere('classifications', 'like', '%"'.addcslashes($request->type, '%_"\\').'"%'));
         }
 
         if ($request->filled('price_range')) {
@@ -86,7 +87,7 @@ class AccommodationController extends Controller
                     ->with('images'),
                 // Usual check-in/out and an estimated nightly rate when not stated (shown as approximate).
                 'estimates',
-                // Room types it offers, for information (the bookable rooms are 'rooms').
+                // Legacy display-only room types; the stay's options are 'rooms'.
                 'roomTypes',
             ])
             ->findOrFail($id);

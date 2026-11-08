@@ -10,6 +10,10 @@ const FIELD_LABELS = {
   operating_hours: 'Operating Hours',
   price_range: 'Price Range',
   amenities: 'Amenities',
+  offering_arrangement: 'What the property offers',
+  classifications: 'Classifications',
+  check_in_time: 'Check-in time',
+  check_out_time: 'Check-out time',
   address: 'Address',
   municipality_id: 'Municipality',
 }

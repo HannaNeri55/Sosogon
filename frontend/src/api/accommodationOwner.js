@@ -110,17 +110,3 @@ export const deleteRoomImage = async (roomId, imageId) => {
 
   return response.data
 }
-
-export const toggleRoomOccupancy = async (
-  id,
-  occupancyStatus
-) => {
-  const response = await api.patch(
-    `/business/accommodation/rooms/${id}/occupancy`,
-    {
-      occupancy_status: occupancyStatus,
-    }
-  )
-
-  return response.data
-}

@@ -262,6 +262,24 @@ export const approveAccommodationRoom = async (
   return response.data
 }
 
+/** A direct correction of an accommodation option by the Tourism Office. */
+export const updateAccommodationRoom = async (id, formData) => {
+  formData.append('_method', 'PUT')
+  const response = await api.post(`/admin/accommodation-rooms/${id}`, formData, { headers: { 'Content-Type': undefined } })
+  return response.data
+}
+
+/** Amenity names owners typed themselves, with how many listings use each. */
+export const getCustomAmenities = async () => {
+  const response = await api.get('/admin/amenities/custom')
+  return response.data
+}
+
+export const promoteAmenity = async (name, scope) => {
+  const response = await api.post('/admin/amenity-suggestions', { name, scope })
+  return response.data
+}
+
 export const rejectAccommodationRoom = async (id, notes) => {
   const response = await api.put(
     `/admin/accommodation-rooms/${id}/reject`,

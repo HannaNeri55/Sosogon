@@ -1,20 +1,21 @@
 // frontend/src/components/rooms/RoomDetailsModal.jsx
 import { useEffect, useState } from "react";
 import { FiCheck, FiX } from "react-icons/fi";
-import { getImageUrl } from "../../utils/helpers";
 import BackButton from "../layout/BackButton";
-import RoomStatusBadge from "./RoomStatusBadge";
+import { optionFacts, optionFeatures, optionImage, optionName, optionPrice, unitTypeLabel } from "../../utils/accommodationOptions";
 
 /**
- * Full details of one accommodation room (photos, type, status, price,
- * description, features), opened from its card. Back, the X, Escape or a
- * click outside the panel return to the room list.
+ * Full details of one accommodation option (photos, type, facts, rates, description, its own
+ * amenities), opened from its card. Back, the X, Escape or a click outside the panel return to
+ * the list.
  */
 export default function RoomDetailsModal({ room, onClose }) {
   const [active, setActive] = useState(0);
   const images = room.images?.length ? room.images : [null];
-  const features = Array.isArray(room.room_features) ? room.room_features : [];
-  const hasPrice = room.price !== null && room.price !== undefined && room.price !== "";
+  const name = optionName(room);
+  const features = optionFeatures(room);
+  const facts = optionFacts(room);
+  const price = optionPrice(room);
 
   useEffect(() => {
     const onKey = (event) => event.key === "Escape" && onClose();
@@ -33,19 +34,19 @@ export default function RoomDetailsModal({ room, onClose }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`${room.room_number} details`}
+      aria-label={`${name} details`}
     >
       <div
         className="bg-white w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-white/95 backdrop-blur border-b border-gray-100 px-4 sm:px-6 py-3">
-          <BackButton onClick={onClose} label="Back to Rooms" />
+          <BackButton onClick={onClose} label="Back to options" />
           <button
             type="button"
             onClick={onClose}
             className="p-2 rounded-full text-gray-500 hover:bg-gray-100"
-            aria-label="Close room details"
+            aria-label="Close details"
           >
             <FiX size={20} />
           </button>
@@ -53,13 +54,12 @@ export default function RoomDetailsModal({ room, onClose }) {
 
         <div className="p-4 sm:p-6 space-y-6">
           <div>
-            <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-100">
+            <div className="aspect-video rounded-xl overflow-hidden bg-gray-100">
               <img
-                src={getImageUrl(images[active])}
-                alt={`${room.room_number} photo ${active + 1}`}
+                src={optionImage(images[active])}
+                alt={`${name} photo ${active + 1}`}
                 className="w-full h-full object-cover"
               />
-              <RoomStatusBadge status={room.occupancy_status} className="absolute top-3 right-3" />
             </div>
             {images.length > 1 && (
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -73,7 +73,7 @@ export default function RoomDetailsModal({ room, onClose }) {
                     }`}
                     aria-label={`Show photo ${index + 1}`}
                   >
-                    <img src={getImageUrl(image)} alt="" className="w-full h-full object-cover" />
+                    <img src={optionImage(image)} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -81,29 +81,29 @@ export default function RoomDetailsModal({ room, onClose }) {
           </div>
 
           <div>
-            <h3 className="text-2xl font-heading font-semibold text-gray-900">{room.room_number}</h3>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              {room.category && (
-                <span className="px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 text-xs font-medium capitalize">
-                  {room.category}
-                </span>
-              )}
-              <RoomStatusBadge status={room.occupancy_status} />
-              {hasPrice && (
-                <span className="font-semibold text-gray-900">₱{Number(room.price).toLocaleString()}</span>
-              )}
-            </div>
+            <h3 className="text-2xl font-heading font-semibold text-gray-900">{name}</h3>
+            <span className="mt-2 inline-block px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 text-xs font-medium">
+              {room.category || unitTypeLabel(room.unit_type)}
+            </span>
+            {facts.length > 0 && <p className="mt-2 text-sm text-gray-600">{facts.join(" · ")}</p>}
+          </div>
+
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+            {price.amount && <p className="font-semibold text-gray-900">{price.amount}</p>}
+            <p className="text-sm text-gray-600">{price.note}</p>
+            {room.breakfast_included && <p className="mt-1 text-sm text-gray-600">Breakfast included, as listed.</p>}
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold text-gray-800 mb-2">About this room</h4>
+            <h4 className="text-sm font-semibold text-gray-800 mb-2">About</h4>
             <p className="text-gray-600 leading-relaxed whitespace-pre-line">
-              {room.description || "No room description provided yet."}
+              {room.description || "No description provided yet."}
             </p>
+            {room.notes && <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{room.notes}</p>}
           </div>
 
           <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-semibold text-gray-800 mb-3">Room Features &amp; Amenities</h4>
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">Amenities in this {unitTypeLabel(room.unit_type).toLowerCase()}</h4>
             {features.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {features.map((feature, index) => (
@@ -117,13 +117,10 @@ export default function RoomDetailsModal({ room, onClose }) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No room features listed yet.</p>
+              <p className="text-sm text-gray-500">None listed yet. Ask the property.</p>
             )}
+            <p className="mt-3 text-xs text-gray-500">Facilities shared by the whole property are listed on its page.</p>
           </div>
-
-          <p className="text-xs text-gray-500 rounded-lg bg-gray-50 border border-gray-100 p-3">
-            Room occupancy is updated manually by the property owner. Contact the property to confirm availability.
-          </p>
         </div>
       </div>
     </div>

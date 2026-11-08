@@ -162,8 +162,9 @@ class ItineraryStayChoiceTest extends TestCase
         $this->assertSame($this->ids['inn'], $north->accommodation_id, 'The tourist picked the inn over the closer hotel.');
         $this->assertStringStartsWith('The stay you chose in Northtown', $north->reason);
         $this->assertSame([1, 2], $north->night_days);
-        // The inn lists no rooms: its cost is the usual band for its price level, as before.
-        $this->assertGreaterThan(0, (float) $north->cost_max);
+        // The inn lists no rooms: its cost is unknown (contact the property), not a guess or zero.
+        $this->assertNull($north->cost_max);
+        $this->assertNull($north->cost_min);
         $this->assertTrue($itinerary->rooms->isEmpty());
         // Southtown is only the last day: its stay is still suggested, with no nights booked.
         $this->assertSame($this->ids['resort'], $this->stayIn($itinerary, $this->south)->accommodation_id);
@@ -211,13 +212,98 @@ class ItineraryStayChoiceTest extends TestCase
         // A stay outside the selected towns.
         $this->send(['municipality_ids' => [$this->north], 'num_days' => 2, 'accommodation_id' => $this->ids['resort']])
             ->assertUnprocessable()->assertJsonValidationErrors('accommodation_id');
-        // Another stay's room, an occupied room, an unpriced room, a room without a stay.
+        // Another stay's room, a room without a stay.
         $this->send(['accommodation_id' => $this->ids['hotel'], 'room_id' => $this->ids['resortRoom']])->assertUnprocessable()->assertJsonValidationErrors('room_id');
-        $this->send(['accommodation_id' => $this->ids['hotel'], 'room_id' => $this->ids['room301']])->assertUnprocessable()->assertJsonValidationErrors('room_id');
-        $this->send(['accommodation_id' => $this->ids['hotel'], 'room_id' => $this->ids['room103']])->assertUnprocessable()->assertJsonValidationErrors('room_id');
         $this->send(['room_id' => $this->ids['room101']])->assertUnprocessable()->assertJsonValidationErrors('room_id');
         $this->send(['accommodation_needed' => 'maybe'])->assertUnprocessable()->assertJsonValidationErrors('accommodation_needed');
         $this->assertSame(0, Itinerary::count());
+    }
+
+    public function test_manual_occupancy_never_affects_recommendations_or_picks(): void
+    {
+        AccommodationRoom::where('accommodation_id', $this->ids['hotel'])->update(['occupancy_status' => 'occupied']);
+
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2]);
+        $this->assertNotEmpty($itinerary->rooms, 'Old occupancy marks are ignored.');
+
+        $picked = $this->generate(['accommodation_id' => $this->ids['hotel'], 'room_id' => $this->ids['room301']]);
+        $this->assertContains($this->ids['room301'], $picked->rooms->pluck('id')->all());
+    }
+
+    public function test_an_option_with_no_price_can_be_picked_and_its_cost_is_unknown_not_zero(): void
+    {
+        $itinerary = $this->generate(['accommodation_id' => $this->ids['hotel'], 'room_id' => $this->ids['room103'], 'travelers' => 1]);
+        $north = $this->stayIn($itinerary, $this->north);
+
+        $this->assertSame([$this->ids['room103']], $itinerary->rooms->pluck('id')->all());
+        $this->assertNull($north->cost_max);
+        $this->assertEquals($itinerary->items->sum(fn ($i) => (float) $i->cost_max) + (float) $this->stayIn($itinerary, $this->south)->cost_max, (float) $itinerary->estimated_cost_max, 'Unknown costs add nothing to the known total.');
+    }
+
+    public function test_a_priced_stay_is_costed_from_its_prices(): void
+    {
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'budget' => 'budget', 'accommodation_id' => $this->ids['hotel']]);
+        $north = $this->stayIn($itinerary, $this->north);
+
+        $this->assertSame([$this->ids['room101']], $itinerary->rooms->pluck('id')->all());
+        $this->assertEquals(1500, (float) $north->cost_min);
+        $this->assertEquals(1500, (float) $north->cost_max);
+    }
+
+    public function test_a_grouped_room_type_covers_the_group_with_one_record(): void
+    {
+        $grouped = Accommodation::create($this->listing('Grouped Hotel', $this->north, 12.6701, 123.8801) + ['type' => 'Hotel', 'price_range' => 'moderate', 'status' => 'approved'])->id;
+        $room = AccommodationRoom::create(['accommodation_id' => $grouped, 'name' => 'Superior Room', 'category' => 'Standard', 'unit_count' => 10, 'max_guests' => 2, 'price' => 1000, 'status' => 'approved']);
+
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'travelers' => 5, 'accommodation_id' => $grouped, 'room_id' => $room->id]);
+        $stay = $this->stayIn($itinerary, $this->north);
+
+        $this->assertSame([$room->id], $itinerary->rooms->pluck('id')->all(), 'One record stands for all ten rooms.');
+        $this->assertEquals(3000, (float) $stay->cost_max, 'Three rooms sleep five, for one night.');
+    }
+
+    public function test_an_entire_property_only_stay_is_suggested_when_the_group_fits(): void
+    {
+        $whole = Accommodation::create($this->listing('Whole Resort', $this->north, 12.6701, 123.8801) + ['type' => 'Resort', 'offering_arrangement' => 'entire_property', 'price_range' => 'moderate', 'status' => 'approved'])->id;
+        $option = AccommodationRoom::create(['accommodation_id' => $whole, 'name' => 'Entire property', 'unit_type' => 'entire_property', 'max_guests' => 20, 'status' => 'approved']);
+
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'accommodation_id' => $whole]);
+
+        $this->assertSame([$option->id], $itinerary->rooms->pluck('id')->all());
+        $this->assertNull($this->stayIn($itinerary, $this->north)->cost_max);
+    }
+
+    public function test_the_type_preference_also_matches_classifications(): void
+    {
+        Accommodation::whereKey($this->ids['inn'])->update(['type' => 'Accommodation', 'classifications' => json_encode(['Homestay'])]);
+
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'accommodation_type' => 'homestay']);
+
+        $this->assertSame($this->ids['inn'], $this->stayIn($itinerary, $this->north)->accommodation_id);
+    }
+
+    public function test_an_amenity_the_tourist_named_steers_the_option(): void
+    {
+        $hotel = AccommodationRoom::find($this->ids['room201']);
+        $hotel->update(['room_features' => ['Kitchen']]);
+
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'budget' => 'budget', 'accommodation_id' => $this->ids['hotel'], 'additional_preferences' => 'We would like a kitchen please']);
+
+        $this->assertSame($this->ids['room201'], $itinerary->rooms->first()->id);
+    }
+
+    public function test_a_saved_trips_rooms_survive_and_editing_recalculates_unknown_costs(): void
+    {
+        $itinerary = $this->generate(['municipality_ids' => [$this->north], 'num_days' => 2, 'budget' => 'budget', 'accommodation_id' => $this->ids['hotel']]);
+        $roomIds = $itinerary->rooms->pluck('id')->all();
+        $stay = $this->stayIn($itinerary, $this->north);
+
+        $this->actingAs($this->tourist)->getJson("/api/v1/itineraries/{$itinerary->id}")->assertOk()->assertJsonPath('rooms.0.id', $roomIds[0]);
+        // An old saved stay with a generic-band cost stays as saved until the trip is edited.
+        $stay->update(['accommodation_id' => $this->ids['inn'], 'cost_min' => 800, 'cost_max' => 1500]);
+        $this->assertEquals(1500, (float) $stay->fresh()->cost_max);
+        $this->actingAs($this->tourist)->putJson("/api/v1/itineraries/{$itinerary->id}", ['stays' => [['id' => $stay->id, 'accommodation_id' => $this->ids['inn']]]])->assertOk();
+        $this->assertNull($stay->fresh()->cost_max);
     }
 
     public function test_no_accommodation_means_no_stay_no_rooms_and_no_room_costs(): void

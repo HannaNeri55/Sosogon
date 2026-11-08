@@ -7,8 +7,9 @@ import ListingLayout from '../../components/listing/ListingLayout'
 import FilterChips from '../../components/listing/FilterChips'
 import useUrlFilters from '../../hooks/useUrlFilters'
 import useListingScroll from '../../hooks/useListingScroll'
+import { accommodationTypeLabel } from '../../utils/accommodationOptions'
 
-const TYPES = ['Hotel', 'Resort', 'Inn', 'Homestay']
+const TYPES = ['Hotel', 'Resort', 'Beach Resort', 'Inn', 'Guesthouse', 'Homestay', 'Villa', 'Cottage']
 const PRICE_RANGES = [
   { value: 'budget', label: 'Budget' },
   { value: 'moderate', label: 'Moderate' },
@@ -89,7 +90,7 @@ export default function Accommodations() {
         noun={{ one: 'accommodation', many: 'accommodations' }}
         pagination={pagination}
         onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
-        renderItem={(item) => <ListingCard key={item.id} item={item} basePath="/accommodations" typeLabel={item.type} />}
+        renderItem={(item) => <ListingCard key={item.id} item={item} basePath="/accommodations" typeLabel={accommodationTypeLabel(item)} />}
       />
     </div>
   )

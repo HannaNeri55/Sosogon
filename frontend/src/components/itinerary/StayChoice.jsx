@@ -1,12 +1,17 @@
 import { useState } from 'react'
 import { FiHome, FiSlash, FiCheck, FiCheckCircle, FiSearch, FiInfo, FiUsers, FiStar, FiClock } from 'react-icons/fi'
 import { ACCOMMODATION_TYPES } from '../../utils/constants'
-import { roomTypes } from '../../utils/roomTypes'
+import { stayOptions } from '../../utils/roomTypes'
+import { roomLabel } from '../../utils/selections'
+import { accommodationTypeLabel, CONTACT_FOR_RATES, optionFeatures, optionPrice, unitTypeLabel } from '../../utils/accommodationOptions'
 import { getImageUrl, IMAGE_FALLBACK_SVG, formatPeso } from '../../utils/helpers'
-import { estimateOf, approxRange } from '../../utils/estimates'
+import { estimateOf } from '../../utils/estimates'
 
 // "Check-in from 1:00 PM (as listed)" or "Check-in usually around 2:00 PM (typical, not confirmed)".
 function checkTimes(stay) {
+  if (stay.check_in_time || stay.check_out_time) {
+    return `Check-in ${stay.check_in_time || 'not stated'}, check-out ${stay.check_out_time || 'not stated'} (as listed)`
+  }
   const listed = /check[\s-]?in|check[\s-]?out/i.test(stay.operating_hours || '') ? stay.operating_hours : null
   if (listed) return listed
   const inAt = estimateOf(stay, 'check_in')
@@ -15,11 +20,9 @@ function checkTimes(stay) {
   return `Check-in usually around ${inAt || '—'}, check-out around ${outAt || '—'} (typical times, not confirmed by the property)`
 }
 
-function priceLine(stay, travelers) {
-  const types = roomTypes(stay, travelers).filter((t) => t.from)
-  if (types.length) return `From ${formatPeso(Math.min(...types.map((t) => t.from)))} / night`
-  const estimate = estimateOf(stay, 'nightly_rate')
-  return estimate ? approxRange(estimate, ' / night') : null
+function priceLine(stay) {
+  const prices = (stay.rooms || []).map((r) => Number(r.price)).filter((p) => p > 0)
+  return prices.length ? `From ${formatPeso(Math.min(...prices))} / night (indicative)` : 'Contact for rates'
 }
 
 const optionCard = (selected) =>
@@ -37,11 +40,10 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
   const selected = stays.find((s) => s.id === formData.accommodation_id) || null
   const q = query.trim().toLowerCase()
   const shown = q ? stays.filter((s) => `${s.name} ${s.type || ''} ${s.municipality?.name || ''}`.toLowerCase().includes(q)) : stays
-  const types = roomTypes(selected, travelers)
+  const options = stayOptions(selected, travelers)
   const pickedRoom = selected?.rooms?.find((r) => r.id === formData.room_id)
 
   const chooseStay = (id) => set({ accommodation_id: formData.accommodation_id === id ? null : id, room_id: null })
-  const chooseType = (type) => set({ room_id: pickedRoom && (pickedRoom.category || 'Room') === type.category ? null : type.bookable[0]?.id ?? null })
 
   return (
     <div className="space-y-4">
@@ -52,7 +54,7 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
           </span>
           <span>
             <span className={`block text-sm font-semibold ${needed === true ? 'text-primary-700' : 'text-gray-900'}`}>Yes, I need accommodation</span>
-            <span className="block text-xs text-gray-500 mt-0.5">Choose a stay and room, or let us pick one near your destinations.</span>
+            <span className="block text-xs text-gray-500 mt-0.5">Choose a stay, or let us suggest one near your destinations.</span>
           </span>
           {needed === true && <FiCheckCircle size={15} className="absolute top-3 right-3 text-primary-500" aria-hidden="true" />}
         </button>
@@ -77,7 +79,7 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
       {needed === false && (
         <p className="flex gap-2 rounded-xl bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
           <FiInfo size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          We won't book a stay or add any room costs. Each day starts at its first stop, with meals planned around it.
+          We won't suggest a stay or add any room costs. Each day starts at its first stop, with meals planned around it.
         </p>
       )}
 
@@ -147,7 +149,7 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
                   {shown.map((stay) => {
                     const isSelected = stay.id === formData.accommodation_id
                     const image = stay.images?.find((img) => img.is_primary) || stay.images?.[0]
-                    const price = priceLine(stay, travelers)
+                    const price = priceLine(stay)
                     return (
                       <li key={stay.id}>
                         <button
@@ -166,7 +168,7 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
                           <span className="min-w-0 flex-1">
                             <span className={`block truncate text-sm font-semibold ${isSelected ? 'text-primary-700' : 'text-gray-900'}`}>{stay.name}</span>
                             <span className="block truncate text-xs text-gray-500">
-                              {[stay.type, stay.municipality?.name, stay.price_range && `${stay.price_range} price`].filter(Boolean).join(' · ')}
+                              {[accommodationTypeLabel(stay), stay.municipality?.name, stay.price_range && `${stay.price_range} price`].filter(Boolean).join(' · ')}
                             </span>
                             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-600">
                               {price && <span className="font-medium">{price}</span>}
@@ -194,47 +196,47 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
 
           {selected && (
             <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-sm font-semibold text-gray-900">Rooms at {selected.name}</p>
+              <p className="text-sm font-semibold text-gray-900">Options at {selected.name}</p>
               <p className="flex gap-1.5 text-xs text-gray-500 mt-1">
                 <FiClock size={12} className="mt-0.5 shrink-0" aria-hidden="true" /> {checkTimes(selected)}
               </p>
 
-              {types.length === 0 ? (
+              {options.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">
-                  {selected.name} hasn't listed its rooms on SOSOGON yet, so the stay is costed from its price level
-                  {estimateOf(selected, 'nightly_rate') ? ` (${approxRange(estimateOf(selected, 'nightly_rate'), ' / night')})` : ''}. Ask the property about rooms when you book.
+                  {selected.name} hasn't listed its options on SOSOGON yet. {CONTACT_FOR_RATES}
                 </p>
               ) : (
-                <div className="mt-3 grid grid-cols-1 gap-2" role="radiogroup" aria-label={`Room types at ${selected.name}`}>
-                  {types.map((type) => {
-                    const isSelected = pickedRoom && (pickedRoom.category || 'Room') === type.category
-                    const disabled = !type.fits
+                <div className="mt-3 grid grid-cols-1 gap-2" role="radiogroup" aria-label={`Options at ${selected.name}`}>
+                  {options.map(({ option, sleeps, holds, fits, needed, perNight }) => {
+                    const isSelected = pickedRoom?.id === option.id
+                    const price = optionPrice(option)
+                    const features = optionFeatures(option)
                     return (
                       <button
-                        key={type.category}
+                        key={option.id}
                         type="button"
                         role="radio"
-                        aria-checked={Boolean(isSelected)}
-                        disabled={disabled}
-                        onClick={() => chooseType(type)}
+                        aria-checked={isSelected}
+                        disabled={!fits}
+                        onClick={() => set({ room_id: isSelected ? null : option.id })}
                         className={`${optionCard(isSelected)} disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white disabled:hover:border-gray-200`}
                       >
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <span className={`text-sm font-semibold ${isSelected ? 'text-primary-700' : 'text-gray-900'}`}>{type.category}</span>
-                            {type.from && <span className="text-sm font-semibold text-gray-900">{formatPeso(type.from)} <span className="text-xs font-normal text-gray-500">/ night</span></span>}
+                            <span className={`text-sm font-semibold ${isSelected ? 'text-primary-700' : 'text-gray-900'}`}>{roomLabel(option)}</span>
+                            {price.amount && <span className="text-sm font-semibold text-gray-900">{price.amount} <span className="text-xs font-normal text-gray-500">/ night</span></span>}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                            <span className="inline-flex items-center gap-1"><FiUsers size={11} aria-hidden="true" /> Sleeps {type.sleeps}</span>
-                            <span>{type.bookable.length} of {type.rooms.length} listed room{type.rooms.length > 1 ? 's' : ''} offered</span>
+                            <span>{unitTypeLabel(option.unit_type)}</span>
+                            {sleeps && <span className="inline-flex items-center gap-1"><FiUsers size={11} aria-hidden="true" /> Sleeps {sleeps}</span>}
                           </span>
-                          {type.features.length > 0 && <span className="mt-1 block text-xs text-gray-500">{type.features.slice(0, 5).join(' · ')}</span>}
-                          <span className={`mt-1.5 block text-xs ${type.fits ? 'text-secondary-700' : 'text-red-600'}`}>
-                            {type.bookable.length === 0
-                              ? 'Not offered for booking right now.'
-                              : type.fits
-                                ? `For ${travelers} traveler${travelers > 1 ? 's' : ''}: ${type.needed} room${type.needed > 1 ? 's' : ''}, ${formatPeso(type.perNight)} a night.`
-                                : `Sleeps up to ${type.bookable.length * type.sleeps} of your ${travelers} travelers.`}
+                          {features.length > 0 && <span className="mt-1 block text-xs text-gray-500">{features.slice(0, 5).join(' · ')}</span>}
+                          <span className={`mt-1.5 block text-xs ${fits ? 'text-secondary-700' : 'text-red-600'}`}>
+                            {!fits
+                              ? `Sleeps up to ${holds} of your ${travelers} travelers.`
+                              : perNight
+                                ? `For ${travelers} traveler${travelers > 1 ? 's' : ''}: ${needed} unit${needed > 1 ? 's' : ''}, ${formatPeso(perNight)} a night (indicative).`
+                                : price.note}
                           </span>
                         </span>
                         {isSelected && <FiCheckCircle size={15} className="absolute top-3 right-3 text-primary-500" aria-hidden="true" />}
@@ -246,8 +248,8 @@ export default function StayChoice({ formData, set, travelers, stays, loading, f
               {roomProblem && <p role="alert" className="mt-2 text-sm text-red-600">{roomProblem}</p>}
               <p className="mt-3 flex gap-1.5 text-xs text-gray-500">
                 <FiInfo size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
-                SOSOGON shows the rooms this property lists; it can't confirm they're free on your dates. Contact the property to book.
-                {types.length > 0 && !pickedRoom && ' Without a room type, we recommend rooms that fit your group and budget.'}
+                SOSOGON shows what this property lists. It takes no bookings and doesn't track availability: contact the property directly.
+                {options.length > 0 && !pickedRoom && ' Without a choice here, we suggest what fits your group and budget.'}
               </p>
             </div>
           )}

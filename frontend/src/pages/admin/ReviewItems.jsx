@@ -3,13 +3,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { FiCheck, FiX, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import {
-  getAdminAccommodationRooms, approveAccommodationRoom, rejectAccommodationRoom,
+  getAdminAccommodationRooms, approveAccommodationRoom, rejectAccommodationRoom, updateAccommodationRoom,
   getAdminMenuItems, approveMenuItem, rejectMenuItem,
   getAdminRetailProducts, approveRetailProduct, rejectRetailProduct,
   approveItemChanges, rejectItemChanges,
 } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getImageUrl, formatShortDate } from '../../utils/helpers'
+import RoomFormModal from '../business/accommodation/RoomFormModal'
+import { unitTypeLabel } from '../../utils/accommodationOptions'
 
 /**
  * Review queue for rooms, menu items and retail products (Option 5b):
@@ -22,13 +24,13 @@ import { getImageUrl, formatShortDate } from '../../utils/helpers'
 
 const KINDS = {
   rooms: {
-    label: 'Rooms', endpoint: 'accommodation-rooms', fetch: getAdminAccommodationRooms, approve: approveAccommodationRoom, reject: rejectAccommodationRoom,
+    label: 'Accommodation options', endpoint: 'accommodation-rooms', fetch: getAdminAccommodationRooms, approve: approveAccommodationRoom, reject: rejectAccommodationRoom,
     parent: (row) => row.accommodation,
     owner: (row) => row.accommodation?.user,
     municipality: (row) => row.accommodation?.municipality,
-    title: (row) => [row.room_number, row.category].filter(Boolean).join(' · '),
+    title: (row) => [row.name || row.room_number, row.category || (row.unit_type && unitTypeLabel(row.unit_type))].filter(Boolean).join(' · '),
     images: (row) => row.images || [],
-    fields: [['room_number', 'Room'], ['category', 'Category'], ['price', 'Price'], ['description', 'Description'], ['room_features', 'Features']],
+    fields: [['name', 'Name'], ['unit_type', 'Type'], ['category', 'Category'], ['unit_count', 'How many'], ['max_guests', 'Maximum guests'], ['bedrooms', 'Bedrooms'], ['bed_configuration', 'Beds'], ['size_sqm', 'Size (sqm)'], ['pricing_mode', 'Rates'], ['price', 'Price'], ['price_max', 'Up to'], ['price_note', 'What it covers'], ['description', 'Description'], ['notes', 'Notes'], ['room_features', 'Amenities in this unit']],
   },
   menu: {
     label: 'Menu items', endpoint: 'menu-items', fetch: getAdminMenuItems, approve: approveMenuItem, reject: rejectMenuItem,
@@ -101,6 +103,7 @@ export default function ReviewItems() {
   const [loadError, setLoadError] = useState('')
   const [actingKey, setActingKey] = useState(null)
   const [rejecting, setRejecting] = useState(null) // { key, notes, error }
+  const [editingOption, setEditingOption] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -210,7 +213,8 @@ export default function ReviewItems() {
         <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3 mb-4">Showing the first {PER_PAGE} {truncated.join(', ').toLowerCase()}. Review these, then refresh to load more.</p>
       )}
 
-      {loading ? (
+      {/* After an approval the list refreshes in place; the spinner is only for an empty list. */}
+      {loading && rows.length === 0 ? (
         <LoadingSpinner size="lg" />
       ) : loadError ? (
         <div role="alert" className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-5 text-sm flex flex-wrap items-center gap-3">
@@ -314,6 +318,11 @@ export default function ReviewItems() {
 
                 {(isChange || row.status === 'pending') && !isRejecting && (
                   <div className="flex flex-wrap gap-2">
+                    {kind === 'rooms' && (
+                      <button type="button" onClick={() => setEditingOption(row)} className="inline-flex items-center gap-2 min-h-10 px-4 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50">
+                        Correct details
+                      </button>
+                    )}
                     <button type="button" onClick={() => approve(entry)} disabled={Boolean(actingKey)}
                       className="inline-flex items-center gap-2 min-h-10 px-4 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50">
                       <FiCheck aria-hidden="true" /> {busy ? 'Working…' : isChange ? 'Approve changes' : 'Approve'}
@@ -349,6 +358,15 @@ export default function ReviewItems() {
             )
           })}
         </ul>
+      )}
+      {editingOption && (
+        <RoomFormModal
+          room={editingOption}
+          showPhotos={false}
+          save={(payload) => updateAccommodationRoom(editingOption.id, payload)}
+          onClose={() => setEditingOption(null)}
+          onSaved={() => { setEditingOption(null); load() }}
+        />
       )}
     </div>
   )

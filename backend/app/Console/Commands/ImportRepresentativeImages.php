@@ -93,6 +93,11 @@ class ImportRepresentativeImages extends Command
             $stats[$stored['kind']]++;
             if (! $dry) {
                 DB::table('accommodation_room_types')->where('id', $type->id)->update(Arr::only($stored, ['image_path', 'thumbnail_path', 'image_credit', 'image_source_url']) + ['updated_at' => now()]);
+                // The option copied from this room type is what tourists see.
+                $optionId = DB::table('accommodation_rooms')->where('legacy_room_type_id', $type->id)->value('id');
+                if ($optionId && ! DB::table('accommodation_room_images')->where('room_id', $optionId)->exists()) {
+                    DB::table('accommodation_room_images')->insert(['room_id' => $optionId, 'is_primary' => true, 'sort_order' => 0, 'created_at' => now(), 'updated_at' => now()] + Arr::only($stored, ['image_path', 'thumbnail_path', 'image_credit', 'image_source_url']));
+                }
             }
             $this->line("Room type {$key}: {$stored['kind']} ".($stored['image_path'] ?? ''));
         }

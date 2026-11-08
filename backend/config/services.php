@@ -41,8 +41,9 @@ return [
         'daily_limit' => (int) env('ITINERARY_DAILY_LIMIT', 10),
         // Generations allowed per guest (by IP address) per day, before logging in.
         'guest_daily_limit' => (int) env('ITINERARY_GUEST_DAILY_LIMIT', 2),
-        // Peso ranges used for the cost estimate when a listing has no real prices
-        // (no approved rooms / menu items / products), keyed by its price_range level.
+        // Peso ranges used for the cost estimate when a listing has no real prices (no approved
+        // menu items / products), keyed by its price_range level. The planner never uses
+        // room_per_night (a stay with no price is an unknown cost); ListingEstimateSeeder reads it.
         'price_bands' => [
             'meal_per_person' => ['budget' => [100, 250], 'moderate' => [250, 500], 'luxury' => [500, 1200]],
             'room_per_night' => ['budget' => [800, 1500], 'moderate' => [1500, 3500], 'luxury' => [3500, 8000]],

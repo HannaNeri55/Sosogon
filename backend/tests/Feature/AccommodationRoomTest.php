@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\Business\Accommodation\AccommodationRoomController;
 use App\Models\Accommodation;
 use App\Models\AccommodationRoom;
 use App\Models\Role;
@@ -57,18 +58,18 @@ class AccommodationRoomTest extends TestCase
 
     public function test_owner_can_add_rooms_up_to_the_limit(): void
     {
-        for ($i = 1; $i <= 10; $i++) {
+        for ($i = 1; $i <= 30; $i++) {
             $response = $this->actingAs($this->owner)
                 ->postJson('/api/v1/business/accommodation/rooms', ['room_number' => "Room {$i}", 'category' => 'Standard']);
             $response->assertCreated();
         }
 
-        $this->assertSame(10, $this->accommodation->rooms()->count());
+        $this->assertSame(30, $this->accommodation->rooms()->count());
     }
 
-    public function test_eleventh_room_is_rejected_with_the_capacity_message(): void
+    public function test_option_past_the_limit_is_rejected_with_the_capacity_message(): void
     {
-        for ($i = 1; $i <= 10; $i++) {
+        for ($i = 1; $i <= 30; $i++) {
             AccommodationRoom::create(['accommodation_id' => $this->accommodation->id, 'room_number' => "Room {$i}"]);
         }
 
@@ -76,14 +77,14 @@ class AccommodationRoomTest extends TestCase
             ->postJson('/api/v1/business/accommodation/rooms', ['room_number' => 'One Too Many', 'category' => 'Standard']);
 
         $response->assertStatus(422)
-            ->assertJson(['message' => 'Maximum capacity reached: You have registered the limit of 10 rooms. Delete an existing room to add a new one.']);
+            ->assertJson(['message' => AccommodationRoomController::CAPACITY_MESSAGE]);
 
-        $this->assertSame(10, $this->accommodation->rooms()->count());
+        $this->assertSame(30, $this->accommodation->rooms()->count());
     }
 
     public function test_deleting_a_room_frees_a_slot(): void
     {
-        for ($i = 1; $i <= 10; $i++) {
+        for ($i = 1; $i <= 30; $i++) {
             AccommodationRoom::create(['accommodation_id' => $this->accommodation->id, 'room_number' => "Room {$i}"]);
         }
         $toDelete = $this->accommodation->rooms()->first();
@@ -96,10 +97,10 @@ class AccommodationRoomTest extends TestCase
             ->postJson('/api/v1/business/accommodation/rooms', ['room_number' => 'New Room', 'category' => 'Standard']);
 
         $response->assertCreated();
-        $this->assertSame(10, $this->accommodation->rooms()->count());
+        $this->assertSame(30, $this->accommodation->rooms()->count());
     }
 
-    public function test_toggling_occupancy_does_not_affect_approval_status(): void
+    public function test_occupancy_can_no_longer_be_set_or_seen(): void
     {
         $room = AccommodationRoom::create([
             'accommodation_id' => $this->accommodation->id,
@@ -110,11 +111,10 @@ class AccommodationRoomTest extends TestCase
 
         $this->actingAs($this->owner)
             ->patchJson("/api/v1/business/accommodation/rooms/{$room->id}/occupancy", ['occupancy_status' => 'occupied'])
-            ->assertOk();
+            ->assertNotFound();
 
-        $room->refresh();
-        $this->assertSame('occupied', $room->occupancy_status);
-        $this->assertSame('approved', $room->status);
+        $this->assertSame('unoccupied', $room->fresh()->occupancy_status);
+        $this->getJson("/api/v1/accommodations/{$this->accommodation->id}")->assertOk()->assertJsonMissingPath('rooms.0.occupancy_status');
     }
 
     public function test_editing_an_approved_room_keeps_it_live_and_holds_the_change_for_review(): void

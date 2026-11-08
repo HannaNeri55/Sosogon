@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { FiMapPin, FiPhone, FiClock, FiDollarSign, FiKey } from "react-icons/fi";
-import { approxRange, estimateOf } from "../../utils/estimates";
+import { useParams, useSearchParams } from "react-router-dom";
+import { FiMapPin, FiPhone, FiClock, FiDollarSign, FiKey, FiMail, FiHome } from "react-icons/fi";
+import { estimateOf } from "../../utils/estimates";
+import { accommodationTypeLabel, isEntireProperty, optionFacts, optionName, optionPrice } from "../../utils/accommodationOptions";
 import { getAccommodation } from "../../api/accommodations";
 import LocationMap from "../../components/maps/LocationMap";
 import NearbyPlaces from "../../components/common/NearbyPlaces";
@@ -14,16 +15,36 @@ import DetailSection from "../../components/detail/DetailSection";
 import FactsCard from "../../components/detail/FactsCard";
 import AmenityGrid from "../../components/detail/AmenityGrid";
 import DiningInfo from "../../components/detail/DiningInfo";
-import RoomTypeList from "../../components/detail/RoomTypeList";
 import RoomCard from "../../components/rooms/RoomCard";
 import RoomDetailsModal from "../../components/rooms/RoomDetailsModal";
+
+function EntirePropertyDetails({ option, onOpen }) {
+  const price = optionPrice(option);
+  const facts = optionFacts(option);
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="flex items-center gap-2 font-semibold text-gray-900">
+        <FiHome size={16} className="text-primary-600" aria-hidden="true" /> {optionName(option)}
+      </p>
+      {option.description && <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{option.description}</p>}
+      {facts.length > 0 && <p className="mt-2 text-sm text-gray-600">{facts.join(" · ")}</p>}
+      {price.amount && <p className="mt-2 font-semibold text-gray-900">{price.amount}</p>}
+      <p className="text-sm text-gray-600">{price.note}</p>
+      <button type="button" onClick={() => onOpen(option)} className="mt-3 text-sm font-medium text-primary-600 hover:text-primary-700">
+        View details
+      </button>
+    </div>
+  );
+}
 
 export default function AccommodationDetail() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRoom, setSelectedRoom] = useState(null);
-  const closeRoom = useCallback(() => setSelectedRoom(null), []);
+  // The open option lives in the link, so a tourist can share it or go back to the page.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openOption = useCallback((option) => setSearchParams({ option: option.id }), [setSearchParams]);
+  const closeOption = useCallback(() => setSearchParams({}, { replace: true }), [setSearchParams]);
 
   const load = () =>
     getAccommodation(id)
@@ -41,12 +62,22 @@ export default function AccommodationDetail() {
     return <div className="p-6 sm:p-8 text-center">Accommodation not found</div>;
   }
 
+  const options = item.rooms || [];
+  const units = options.filter((option) => !isEntireProperty(option));
+  const wholeOption = options.find(isEntireProperty);
+  const offersWhole = Boolean(wholeOption) || ["entire_property", "both"].includes(item.offering_arrangement);
+  const selectedOption = options.find((option) => String(option.id) === searchParams.get("option"));
+  const classifications = item.classifications?.length ? item.classifications : item.type && item.type !== "Accommodation" ? [item.type] : [];
+  const checkIn = item.check_in_time || estimateOf(item, "check_in");
+  const checkOut = item.check_out_time || estimateOf(item, "check_out");
+  const checkTimesStated = Boolean(item.check_in_time || item.check_out_time);
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <DetailHero
         backTo="/accommodations"
         backLabel="Back to Accommodations"
-        badge={item.type}
+        badge={accommodationTypeLabel({ ...item, classifications }) || "Accommodation"}
         title={item.name}
         subtitle={item.address}
         rating={item.average_rating}
@@ -62,24 +93,20 @@ export default function AccommodationDetail() {
             facts={[
               { icon: FiMapPin, label: "Address", value: item.address },
               { icon: FiPhone, label: "Contact", value: item.contact_number || "Not available" },
+              ...(item.email ? [{ icon: FiMail, label: "Email", value: item.email }] : []),
               { icon: FiClock, label: "Operating Hours", value: item.operating_hours || "Not specified" },
               {
                 icon: FiDollarSign,
                 label: "Price Range",
-                value: item.price_range && (
-                  <span>
-                    <span className="capitalize">{item.price_range}</span>
-                    {/* Real room prices take precedence: the estimate only shows when no room has one. */}
-                    {estimateOf(item, "nightly_rate") && !item.rooms?.some((room) => Number(room.price) > 0) &&
-                      ` · ${approxRange(estimateOf(item, "nightly_rate"), " / night")}`}
-                  </span>
-                ),
+                value: item.price_range && <span className="capitalize">{item.price_range}</span>,
               },
-              ...(estimateOf(item, "check_in")
+              ...(checkIn || checkOut
                 ? [{
                     icon: FiKey,
                     label: "Check-in / Check-out",
-                    value: `Usually ${estimateOf(item, "check_in")} / ${estimateOf(item, "check_out")} (confirm with the property)`,
+                    value: checkTimesStated
+                      ? `${checkIn || "Not stated"} / ${checkOut || "Not stated"}`
+                      : `Usually ${checkIn} / ${checkOut} (confirm with the property)`,
                   }]
                 : []),
             ]}
@@ -93,48 +120,43 @@ export default function AccommodationDetail() {
           <p className="text-gray-700 leading-relaxed whitespace-pre-line">{item.description}</p>
         </DetailSection>
 
-        <DetailSection
-          title={item.rooms?.length > 0 || !item.room_types?.length ? "Rooms" : "Room Types"}
-          subtitle={item.rooms?.length > 0 ? "Select a room to see its photos, features and details." : undefined}
-        >
-          {item.rooms?.length > 0 ? (
-            <>
-              {/* Compact cards; a click opens that room's full details. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {item.rooms.map((room) => (
-                  <RoomCard key={room.id} room={room} onOpen={setSelectedRoom} />
-                ))}
-              </div>
-              <p className="mt-5 text-xs text-gray-500">
-                Room occupancy is updated manually by the property owner and is for information only. Contact the
-                property directly to confirm availability and arrange a stay.
-              </p>
+        {item.amenities?.length > 0 && (
+          <DetailSection title="Property amenities" subtitle="Facilities shared by the whole property.">
+            <AmenityGrid items={item.amenities} />
+          </DetailSection>
+        )}
 
-              {selectedRoom && <RoomDetailsModal key={selectedRoom.id} room={selectedRoom} onClose={closeRoom} />}
-            </>
-          ) : item.room_types?.length > 0 ? (
-            <>
-              <RoomTypeList types={item.room_types} />
-              <p className="mt-5 text-xs text-gray-500">
-                The room types this property offers. Rates shown are as published and may change; availability isn't
-                confirmed. Contact the property directly to book.
-              </p>
-            </>
-          ) : (
-            <AmenityGrid
-              emptyTitle="Room information coming soon"
-              emptyText="This accommodation has not published its room information yet. Please contact the property directly for room types, rates, and availability."
-            />
-          )}
-        </DetailSection>
+        {units.length > 0 && (
+          <DetailSection title="Accommodation options" subtitle="Select one to see its photos, amenities and details.">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+              {units.map((option) => (
+                <RoomCard key={option.id} room={option} onOpen={openOption} />
+              ))}
+            </div>
+          </DetailSection>
+        )}
 
-        <DetailSection title="Amenities & Facilities">
-          <AmenityGrid
-            items={item.amenities || []}
-            emptyTitle="Amenities information coming soon"
-            emptyText="This property has not provided its amenities yet. Please contact the accommodation for details."
-          />
-        </DetailSection>
+        {offersWhole && (
+          <DetailSection title="Entire property" subtitle="This property can be rented as a whole for exclusive use.">
+            {wholeOption ? (
+              <EntirePropertyDetails option={wholeOption} onOpen={openOption} />
+            ) : (
+              <p className="text-sm text-gray-600">Contact the property about renting the whole place, including its capacity and rates.</p>
+            )}
+          </DetailSection>
+        )}
+
+        {units.length === 0 && !offersWhole && (
+          <DetailSection title="Accommodation options">
+            <p className="text-sm text-gray-600">Contact the property for room details and rates.</p>
+          </DetailSection>
+        )}
+
+        <p className="-mt-2 text-xs text-gray-500">
+          For information only. SOSOGON takes no bookings and doesn't track availability. Contact the property directly to arrange your stay.
+        </p>
+
+        {selectedOption && <RoomDetailsModal key={selectedOption.id} room={selectedOption} onClose={closeOption} />}
 
         {item.dining_details && (
           <DetailSection title="Dining">

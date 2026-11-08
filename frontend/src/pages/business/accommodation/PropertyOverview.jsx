@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiHome, FiGrid, FiCheckCircle, FiEye, FiExternalLink } from 'react-icons/fi'
+import { FiHome, FiGrid, FiCheckCircle, FiExternalLink } from 'react-icons/fi'
 import { getMyAccommodation } from '../../../api/accommodationOwner'
-import { getImageUrl } from '../../../utils/helpers'
+import { optionImage, optionName } from '../../../utils/accommodationOptions'
 import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
@@ -11,11 +11,6 @@ const STATUS_COPY = {
   pending: { label: 'Pending Review', style: 'bg-yellow-100 text-yellow-700', note: 'The Bulan Tourism Office is reviewing your latest submission.' },
   rejected: { label: 'Rejected', style: 'bg-red-100 text-red-700', note: 'Your last update was rejected. Edit your property details and resubmit.' },
   archived: { label: 'Archived', style: 'bg-gray-100 text-gray-700', note: 'This property is archived and not visible to tourists.' },
-}
-
-const OCCUPANCY_BADGE = {
-  occupied: 'bg-red-100 text-red-800',
-  unoccupied: 'bg-green-100 text-green-800',
 }
 
 export default function PropertyOverview() {
@@ -30,8 +25,6 @@ export default function PropertyOverview() {
   if (!accommodation) return null
 
   const rooms = accommodation.rooms || []
-  const occupied = rooms.filter((r) => r.occupancy_status === 'occupied').length
-  const unoccupied = rooms.filter((r) => r.occupancy_status === 'unoccupied').length
   const pendingRooms = rooms.filter((r) => r.status === 'pending').length
   const status = STATUS_COPY[accommodation.status] || STATUS_COPY.pending
   const approvedRooms = rooms.filter((r) => r.status === 'approved')
@@ -56,18 +49,17 @@ export default function PropertyOverview() {
         <span className={`text-sm font-medium px-3 py-1.5 rounded-full shrink-0 ${status.style}`}>{status.label}</span>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={FiGrid} label="Total Rooms" value={rooms.length} accent="primary" />
-        <StatCard icon={FiCheckCircle} label="Unoccupied" value={unoccupied} accent="green" />
-        <StatCard icon={FiEye} label="Occupied" value={occupied} accent="red" />
-        <StatCard icon={FiGrid} label="Pending Room Approval" value={pendingRooms} accent="yellow" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <StatCard icon={FiGrid} label="Accommodation Options" value={rooms.length} accent="primary" />
+        <StatCard icon={FiCheckCircle} label="Visible to Tourists" value={approvedRooms.length} accent="green" />
+        <StatCard icon={FiGrid} label="Awaiting Approval" value={pendingRooms} accent="yellow" />
       </div>
 
       <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4">
           <div>
             <h2 className="text-xl font-heading font-semibold text-gray-900">What Tourists Currently See</h2>
-            <p className="text-sm text-gray-500 mt-1">Only approved rooms are visible on the public Sorsogon platform.</p>
+            <p className="text-sm text-gray-500 mt-1">Only approved options are visible on the public Sorsogon platform.</p>
           </div>
           {accommodation.status === 'approved' && (
             <Link
@@ -82,19 +74,14 @@ export default function PropertyOverview() {
         </div>
 
         {approvedRooms.length === 0 ? (
-          <p className="text-gray-500 text-sm py-6 text-center">No approved rooms are visible to tourists yet.</p>
+          <p className="text-gray-500 text-sm py-6 text-center">No approved options are visible to tourists yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {approvedRooms.map((room) => (
               <div key={room.id} className="border border-gray-100 rounded-lg overflow-hidden">
-                <img src={getImageUrl(room.images?.[0])} alt={room.room_number} className="w-full h-28 object-cover bg-gray-100" />
+                <img src={optionImage(room.images?.[0])} alt={optionName(room)} className="w-full h-28 object-cover bg-gray-100" />
                 <div className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">{room.room_number}</p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 capitalize ${OCCUPANCY_BADGE[room.occupancy_status]}`}>
-                      {room.occupancy_status}
-                    </span>
-                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{optionName(room)}</p>
                 </div>
               </div>
             ))}

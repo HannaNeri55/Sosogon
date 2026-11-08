@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Concerns\ReviewsItemChanges;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Business\UpdateAccommodationRoomRequest;
 use App\Models\AccommodationRoom;
 use App\Models\AccommodationRoomImage;
 use Illuminate\Http\JsonResponse;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 class AdminAccommodationRoomController extends Controller
 {
     use ReviewsItemChanges;
+
+    private const FIELDS = ['name', 'room_number', 'unit_type', 'unit_count', 'category', 'price', 'price_max', 'price_note', 'pricing_mode', 'description', 'notes', 'max_guests', 'bedrooms', 'bed_configuration', 'size_sqm', 'breakfast_included', 'room_features'];
 
     public function index(Request $request): JsonResponse
     {
@@ -60,6 +63,22 @@ class AdminAccommodationRoomController extends Controller
         ]);
 
         return response()->json(['message' => 'Room rejected.']);
+    }
+
+    /** A direct correction by the Tourism Office: applies at once and keeps the approval status. */
+    public function update(UpdateAccommodationRoomRequest $request, int $id): JsonResponse
+    {
+        $room = AccommodationRoom::findOrFail($id);
+        $values = array_intersect_key($request->validated(), array_flip(self::FIELDS));
+        if (isset($values['name'])) {
+            unset($values['room_number']);
+        }
+        if (array_intersect_key($values, array_flip(['price', 'pricing_mode'])) && ! isset($values['pricing_mode'])) {
+            $values['pricing_mode'] = ((float) ($values['price'] ?? $room->price)) > 0 ? 'indicative' : 'contact';
+        }
+        $room->update($values);
+
+        return response()->json(['message' => 'Option updated.', 'room' => $room->fresh('images')]);
     }
 
     public function approveChanges(Request $request, int $id): JsonResponse

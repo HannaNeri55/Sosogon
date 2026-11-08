@@ -4,6 +4,7 @@ import { getAdminEvents, createEvent, updateEvent, deleteEvent, getMunicipalitie
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getImageUrl } from '../../utils/helpers'
 import toast from 'react-hot-toast'
+import useScrollToForm from '../../hooks/useScrollToForm'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
@@ -57,8 +58,9 @@ export default function ManageEvents() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
+  const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+
   const loadData = async () => {
-    setLoading(true)
     try {
       const data = await getAdminEvents({ per_page: 100 })
       setItems(data.data || [])
@@ -68,7 +70,6 @@ export default function ManageEvents() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
     getMunicipalities().then(setMunicipalities)
   }, [])
@@ -158,7 +159,8 @@ export default function ManageEvents() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+        <form
+          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing event' : 'New event'}</p>
           <input className="input-field" placeholder="Event title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
           <textarea className="input-field" rows={4} placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />

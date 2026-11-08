@@ -1,3 +1,6 @@
+import { CONTACT_FOR_RATES, optionName } from './accommodationOptions'
+import { roomQuantities } from './roomTypes'
+
 // The budget is built from picked rooms (at the stay), dishes (at food stops) and souvenirs
 // (at souvenir shops). These normalize the API's rows into picker options
 // ({ id, name, price, image, subtitle }) and picks ({ id, quantity }).
@@ -31,11 +34,13 @@ export function souvenirOptions(stop) {
   }))
 }
 
-// "2 × Deluxe, 1 × Standard"
-export function roomsSummary(rooms) {
+// "2 × Deluxe, 1 × Villa 1": grouped options count the units the group uses.
+export function roomsSummary(rooms, travelers = 1) {
+  const quantities = roomQuantities(rooms, travelers)
   const counts = {}
   rooms.forEach((room) => {
-    counts[room.category || 'Room'] = (counts[room.category || 'Room'] || 0) + 1
+    const label = room.category || optionName(room)
+    counts[label] = (counts[label] || 0) + (quantities.get(room.id) || 1)
   })
   return Object.entries(counts)
     .map(([category, count]) => `${count} × ${category}`)
@@ -43,23 +48,25 @@ export function roomsSummary(rooms) {
 }
 
 export function roomLabel(room) {
-  // Owners often type the number as "Room 101" already; don't show "Room Room 101".
-  const number = room.room_number && (/^room\b/i.test(room.room_number) ? room.room_number : `Room ${room.room_number}`)
-  return [room.category, number].filter(Boolean).join(' · ')
+  const name = optionName(room)
+  // A bare number reads better as "Room 101"; a name is shown as it was entered.
+  const label = /^\d+$/.test(name) ? `Room ${name}` : name
+  return room.category && !label.toLowerCase().includes(room.category.toLowerCase()) ? `${room.category} · ${label}` : label
 }
 
-// The itinerary's booked rooms that are at this stay's accommodation.
+// The itinerary's picked options that are at this stay's accommodation.
 export function stayRooms(stay, itinerary) {
   const accommodationId = stay.accommodation?.id ?? stay.accommodation_id
   return (itinerary.rooms || []).filter((room) => room.accommodation_id === accommodationId)
 }
 
-// The stay's rooms to pick from, plus any already booked there that are no longer listed.
+// The stay's options to pick from, plus any already picked there that are no longer listed.
 export function roomOptions(stay, itinerary) {
   return mergeById(stay.accommodation?.rooms, stayRooms(stay, itinerary)).map((r) => ({
     id: r.id,
     name: roomLabel(r),
     price: Number(r.price) || 0,
+    priceLabel: Number(r.price) > 0 ? null : CONTACT_FOR_RATES,
     image: firstImage(r),
     subtitle: r.description,
   }))

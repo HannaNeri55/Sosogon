@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
             CopyActivityImageByNameSeeder::class,
             EventSeeder::class,
             BulanBarangayFiestaSeeder::class,
+            AnnouncementSeeder::class,
             EventCoverSeeder::class,
         ]);
     }

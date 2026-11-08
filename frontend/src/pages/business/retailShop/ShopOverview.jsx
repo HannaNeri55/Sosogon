@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiShoppingBag, FiPackage, FiCheckCircle, FiClock, FiExternalLink } from 'react-icons/fi'
 import { getMyRetailShop } from '../../../api/retailShopOwner'
-import { getImageUrl } from '../../../utils/helpers'
+import { formatProductPrice, getImageUrl } from '../../../utils/helpers'
 import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
@@ -84,7 +84,7 @@ export default function ShopOverview() {
                 <div className="p-4 flex flex-col flex-1">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <p className="font-medium text-gray-900 break-words min-w-0">{item.name}</p>
-                    <span className="text-sm font-semibold text-primary-700 shrink-0">₱{Number(item.price).toFixed(2)}</span>
+                    {item.price != null && <span className="text-sm font-semibold text-primary-700 shrink-0">{formatProductPrice(item.price)}</span>}
                   </div>
                   {item.product_type && (
                     <span className="self-start text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded mb-2">{item.product_type}</span>

@@ -6,7 +6,9 @@ import { getMunicipalities } from '../../api/admin'
 import { getDestinations } from '../../api/destinations'
 import { getAccommodations } from '../../api/accommodations'
 import StayChoice from './StayChoice'
-import { roomTypes } from '../../utils/roomTypes'
+import { stayOptions } from '../../utils/roomTypes'
+import { roomLabel } from '../../utils/selections'
+import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import { getImageUrl, IMAGE_FALLBACK_SVG, formatPeso } from '../../utils/helpers'
 import {
   FiMapPin,
@@ -238,7 +240,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
     travelers: 1,
     food_preference: 'no_preference',
     accommodation_type: 'no_preference',
-    // Whether the planner books a stay (null until the tourist answers), and the stay and room
+    // Whether the planner suggests a stay (null until the tourist answers), and the stay and room
     // they picked themselves (optional; the planner picks when left empty).
     accommodation_needed: null,
     // How the tourist plans to get around; sent with the request for later transportation guidance.
@@ -265,10 +267,10 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const townStays = stayLists.filter(Array.isArray).flat()
   const chosenStay = formData.accommodation_needed ? townStays.find((s) => s.id === formData.accommodation_id) || null : null
   const chosenRoom = chosenStay?.rooms?.find((r) => r.id === formData.room_id) || null
-  const chosenType = chosenRoom ? roomTypes(chosenStay, travelerTotal).find((t) => t.category === (chosenRoom.category || 'Room')) : null
+  const chosenOption = chosenRoom ? stayOptions(chosenStay, travelerTotal).find((o) => o.option.id === chosenRoom.id) : null
   const roomProblem =
-    chosenType && !chosenType.fits
-      ? `${chosenStay.name}'s ${chosenType.category} rooms sleep up to ${chosenType.bookable.length * chosenType.sleeps} of your ${travelerTotal} travelers. Choose another room type.`
+    chosenOption && !chosenOption.fits
+      ? `${chosenStay.name}'s ${roomLabel(chosenRoom)} sleeps up to ${chosenOption.holds} of your ${travelerTotal} travelers. Choose another option.`
       : null
   const departureBeforeArrival =
     numDays === 1 && formData.arrival_time && formData.departure_time && formData.departure_time <= formData.arrival_time
@@ -997,12 +999,12 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                     <span>
                       {chosenStay.name}
                       <span className="text-gray-500"> · {chosenStay.municipality?.name}</span>
-                      {chosenType && !roomProblem && (
+                      {chosenOption && !roomProblem && (
                         <span className="block text-gray-600">
-                          {chosenType.needed} {chosenType.category} room{chosenType.needed > 1 ? 's' : ''} · {formatPeso(chosenType.perNight)} a night
+                          {roomLabel(chosenRoom)} · {chosenOption.perNight ? `${formatPeso(chosenOption.perNight)} a night (indicative)` : CONTACT_FOR_RATES}
                         </span>
                       )}
-                      {!chosenType && <span className="block text-gray-500">Rooms recommended for your group</span>}
+                      {!chosenOption && <span className="block text-gray-500">Options suggested for your group</span>}
                     </span>
                   ) : (
                     `Needed — we'll pick a stay near your destinations (${labelOf(ACCOMMODATION_TYPES, formData.accommodation_type)})`

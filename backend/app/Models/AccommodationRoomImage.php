@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccommodationRoomImage extends Model
 {
-    protected $fillable = ['room_id', 'image_path', 'thumbnail_path', 'is_primary', 'sort_order'];
+    protected $fillable = ['room_id', 'image_path', 'thumbnail_path', 'image_credit', 'image_source_url', 'is_primary', 'sort_order'];
 
     protected function casts(): array
     {

@@ -4,6 +4,7 @@ import { getAdminAnnouncements, createAnnouncement, updateAnnouncement, deleteAn
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { truncate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
+import useScrollToForm from '../../hooks/useScrollToForm'
 
 const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published' }
 
@@ -21,8 +22,9 @@ export default function ManageAnnouncements() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
+  const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+
   const loadData = async () => {
-    setLoading(true)
     try {
       const data = await getAdminAnnouncements({ per_page: 100 })
       setItems(data.data || [])
@@ -32,7 +34,6 @@ export default function ManageAnnouncements() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [])
 
@@ -98,7 +99,8 @@ export default function ManageAnnouncements() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+        <form
+          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing announcement' : 'New announcement'}</p>
           <input className="input-field" placeholder="Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
           <textarea className="input-field" rows={4} placeholder="Content" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} required />

@@ -12,7 +12,8 @@ import DetailHero from '../../components/common/DetailHero'
 import DetailLayout from '../../components/detail/DetailLayout'
 import DetailSection from '../../components/detail/DetailSection'
 import FactsCard from '../../components/detail/FactsCard'
-import { getImageUrl } from '../../utils/helpers'
+import ProductDetailModal from '../../components/shops/ProductDetailModal'
+import { formatProductPrice, getImageUrl } from '../../utils/helpers'
 
 // Cover photo first, then the owner's order.
 const sortImages = (images = []) =>
@@ -28,6 +29,7 @@ export default function RetailShopDetail() {
 
   const [shop, setShop] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [openProduct, setOpenProduct] = useState(null)
   const [error, setError] = useState(false)
 
   const load = async () => {
@@ -108,7 +110,13 @@ export default function RetailShopDetail() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {shop.products.map((product) => (
-                  <div key={product.id} className="flex gap-4 rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => setOpenProduct(product)}
+                    className="group flex gap-4 rounded-xl border border-gray-100 bg-gray-50/60 p-3 text-left hover:border-primary-200 hover:bg-white hover:shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    aria-label={`View details of ${product.name}`}
+                  >
                     <img
                       src={getImageUrl(sortImages(product.images)[0])}
                       alt={product.name}
@@ -117,10 +125,12 @@ export default function RetailShopDetail() {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="font-semibold text-gray-900 wrap-break-word min-w-0">{product.name}</p>
-                        <span className="text-sm font-semibold text-primary-700 shrink-0">
-                          ₱{Number(product.price).toFixed(2)}
-                        </span>
+                        <p className="font-semibold text-gray-900 wrap-break-word min-w-0 group-hover:text-primary-700">{product.name}</p>
+                        {product.price != null && (
+                          <span className="text-sm font-semibold text-primary-700 shrink-0">
+                            {formatProductPrice(product.price)}
+                          </span>
+                        )}
                       </div>
                       {product.product_type && (
                         <span className="mt-1 inline-block text-xs font-medium text-secondary-700 bg-secondary-50 px-2 py-0.5 rounded-full">
@@ -130,10 +140,19 @@ export default function RetailShopDetail() {
                       {product.description && (
                         <p className="mt-1 text-sm text-gray-500 line-clamp-2">{product.description}</p>
                       )}
+                      <span className="mt-1.5 inline-block text-xs font-semibold text-primary-700">View details</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
+              {openProduct && (
+                <ProductDetailModal
+                  product={openProduct}
+                  shopName={shop.name}
+                  image={sortImages(openProduct.images)[0]}
+                  onClose={() => setOpenProduct(null)}
+                />
+              )}
             </DetailSection>
           </>
         ) : (

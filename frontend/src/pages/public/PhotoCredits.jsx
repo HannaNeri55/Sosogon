@@ -24,7 +24,7 @@ export default function PhotoCredits() {
         <p className="text-gray-600 leading-relaxed">
           Some photos on this site come from other photographers and sources, including Wikimedia Commons, and are used
           under their licences. They are credited here rather than under each image. Photos marked <span className="font-medium text-gray-800">representative</span>{' '}
-          illustrate the activity or room type in general and were not taken at that listing. Photos not listed here were
+          illustrate the activity, room type or shop's goods in general and were not taken at that listing. Photos not listed here were
           provided by the Tourism Office or the business.
         </p>
       </div>
@@ -43,7 +43,7 @@ export default function PhotoCredits() {
             >
               <h2 className="text-lg font-heading font-semibold text-gray-900 mb-3">
                 <Link
-                  to={`/${listing.type === 'destination' ? 'destinations' : 'accommodations'}/${listing.id}`}
+                  to={`/${{ destination: 'destinations', accommodation: 'accommodations', shop: 'shops' }[listing.type]}/${listing.id}`}
                   className="hover:text-primary-600"
                 >
                   {listing.name}

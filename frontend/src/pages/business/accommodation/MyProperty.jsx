@@ -21,31 +21,12 @@ import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import AccountProfileCard from '../../../components/business/AccountProfileCard'
 import LocationCard from '../../../components/business/LocationCard'
 import toast from 'react-hot-toast'
+import AmenityPicker from '../../../components/common/AmenityPicker'
+import { CLASSIFICATIONS, OFFERING_ARRANGEMENTS } from '../../../utils/accommodationOptions'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
 const MAX_FILE_SIZE = 5 * 1024 * 1024
-
-const AMENITY_OPTIONS = [
-  'Free Wi-Fi',
-  'Parking',
-  'Swimming Pool',
-  'Air Conditioning',
-  'Restaurant',
-  'Breakfast',
-  'Room Service',
-  'Family Rooms',
-  'Pet Friendly',
-  'Garden',
-  'Beach Access',
-  '24-Hour Front Desk',
-  'Hot Shower',
-  'Television',
-  'Kitchen',
-  'Laundry Service',
-  'Airport Shuttle',
-  'Accessibility Facilities',
-]
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -77,6 +58,10 @@ const EMPTY_FORM = {
   operating_hours: '',
   price_range: '',
   amenities: [],
+  offering_arrangement: '',
+  classifications: [],
+  check_in_time: '',
+  check_out_time: '',
 }
 
 function getErrorMessage(err, fallback) {
@@ -116,6 +101,12 @@ function getEditableData(property) {
     )
       ? proposed.amenities ?? property.amenities
       : [],
+    offering_arrangement: value('offering_arrangement'),
+    classifications: Array.isArray(proposed.classifications ?? property?.classifications)
+      ? proposed.classifications ?? property.classifications
+      : [],
+    check_in_time: value('check_in_time'),
+    check_out_time: value('check_out_time'),
   }
 }
 
@@ -298,17 +289,6 @@ export default function MyProperty() {
     }
   }
 
-  const handleAmenityChange = (amenity) => {
-    if (isSubmitted) return
-
-    setForm((current) => ({
-      ...current,
-      amenities: current.amenities.includes(amenity)
-        ? current.amenities.filter((item) => item !== amenity)
-        : [...current.amenities, amenity],
-    }))
-  }
-
   const handleSaveAndSubmit = async (submit = true) => {
     if (busy || isSubmitted) return
 
@@ -379,6 +359,15 @@ export default function MyProperty() {
       form.amenities.forEach((amenity) => {
         payload.append('amenities[]', amenity)
       })
+    }
+
+    payload.append('offering_arrangement', form.offering_arrangement)
+    payload.append('check_in_time', form.check_in_time.trim())
+    payload.append('check_out_time', form.check_out_time.trim())
+    if (form.classifications.length === 0) {
+      payload.append('classifications', '')
+    } else {
+      form.classifications.forEach((name) => payload.append('classifications[]', name))
     }
 
     newImages.forEach((file) => {
@@ -846,35 +835,73 @@ export default function MyProperty() {
                 </div>
               </div>
 
+              {/* WHAT THE PROPERTY OFFERS */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">What do you offer?</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="What do you offer?">
+                  {OFFERING_ARRANGEMENTS.map((option) => (
+                    <label key={option.value} className={`rounded-lg border px-3 py-2.5 cursor-pointer ${form.offering_arrangement === option.value ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input
+                        type="radio"
+                        name="offering_arrangement"
+                        className="sr-only"
+                        checked={form.offering_arrangement === option.value}
+                        onChange={() => updateField('offering_arrangement', option.value)}
+                      />
+                      <span className="block text-sm font-medium text-gray-800">{option.label}</span>
+                      <span className="block text-xs text-gray-500">{option.hint}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  You describe each room, villa or cottage under Accommodation Options. A property rented only as a whole needs none.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">What kind of property is it?</h3>
+                <div className="flex flex-wrap gap-2">
+                  {CLASSIFICATIONS.map((name) => {
+                    const selected = form.classifications.includes(name)
+                    return (
+                      <label key={name} className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${selected ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={selected}
+                          onChange={() => updateField('classifications', selected ? form.classifications.filter((c) => c !== name) : [...form.classifications, name])}
+                        />
+                        {name}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="check_in_time" className="block text-sm font-medium text-gray-700 mb-2">Check-in time (optional)</label>
+                  <input id="check_in_time" className="input-field" placeholder="e.g. 2:00 PM" maxLength={50} value={form.check_in_time} onChange={(event) => updateField('check_in_time', event.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="check_out_time" className="block text-sm font-medium text-gray-700 mb-2">Check-out time (optional)</label>
+                  <input id="check_out_time" className="input-field" placeholder="e.g. 12:00 PM" maxLength={50} value={form.check_out_time} onChange={(event) => updateField('check_out_time', event.target.value)} />
+                </div>
+              </div>
+
               {/* AMENITIES */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">
                   Property Amenities
                 </h3>
 
-                <p className="text-xs text-gray-500 mb-3">
-                  Select all amenities available at your property.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {AMENITY_OPTIONS.map((amenity) => (
-                    <label
-                      key={amenity}
-                      className="flex items-center gap-3 border border-gray-200 rounded-lg px-3 py-3 cursor-pointer hover:bg-gray-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.amenities.includes(amenity)}
-                        onChange={() => handleAmenityChange(amenity)}
-                        className="w-4 h-4 accent-green-700"
-                      />
-
-                      <span className="text-sm text-gray-700">
-                        {amenity}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <AmenityPicker
+                  scope="property"
+                  value={form.amenities}
+                  onChange={(amenities) => updateField('amenities', amenities)}
+                  disabled={isSubmitted}
+                  hint="Facilities shared by the whole property. Each room or villa lists its own under Accommodation Options."
+                />
               </div>
             </fieldset>
 

@@ -8,6 +8,7 @@ use App\Models\Itinerary;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ItineraryService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -135,8 +136,9 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertSame([2], $matnog->night_days);
         $this->assertStringContainsString('Your base in Matnog', $matnog->reason);
 
-        // Each stay is priced for its own night; the trip total adds them up.
-        $this->assertGreaterThan(0, (float) $bulan->cost_max);
+        // Neither stay lists a price: both are unknown, never guessed; the total adds only known costs.
+        $this->assertNull($bulan->cost_max);
+        $this->assertNull($matnog->cost_max);
         $this->assertEquals((float) $bulan->cost_max + (float) $matnog->cost_max, (float) $itinerary->accommodation_cost_max);
         $this->assertSame($this->ids['inn'], $itinerary->accommodation_id);
         $this->assertEqualsCanonicalizing([$this->towns['bulan'], $this->towns['matnog']], $itinerary->municipalities->pluck('id')->all());
@@ -275,7 +277,7 @@ class ItineraryMultiTownTest extends TestCase
     private function minutes(string $range): array
     {
         return array_map(function ($part) {
-            $t = \Carbon\Carbon::createFromFormat('g:i A', trim($part));
+            $t = Carbon::createFromFormat('g:i A', trim($part));
 
             return $t->hour * 60 + $t->minute;
         }, explode('–', $range));

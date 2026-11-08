@@ -21,7 +21,8 @@ import { TRAVEL_PACES, BUDGETS, INTERESTS } from '../../utils/constants'
 import { formatTripCost, formatPeso, formatPesoRange } from '../../utils/helpers'
 import { slotError, overlapProblem, firstFreeSlot } from '../../utils/timeSlots'
 import { dishOptions, souvenirOptions, roomOptions, picksTotal, itineraryStays, stayNights, stayRooms, roomsSummary } from '../../utils/selections'
-import { costNoteIsEstimate, stayCostIsEstimate } from '../../utils/estimates'
+import { costNoteIsEstimate, stayCostIsEstimate, stayCostUnknown } from '../../utils/estimates'
+import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import StayCard from '../../components/itinerary/StayCard'
 import { transportGuide } from '../../utils/transportGuidance'
 
@@ -52,8 +53,9 @@ function budgetBreakdown(itinerary) {
   const stopsOf = (type) => (itinerary.items || []).filter((i) => i.item_type === type)
   const sumOf = (type, field = 'cost_max') => stopsOf(type).reduce((sum, i) => sum + (Number(i[field]) || 0), 0)
   const row = (label, detail, type) => ({ label, detail, min: sumOf(type, 'cost_min'), value: sumOf(type) })
-  const booked = itineraryStays(itinerary).filter((stay) => stayNights(stay) > 0)
-  const nights = booked.reduce((sum, stay) => sum + stayNights(stay), 0)
+  const planned = itineraryStays(itinerary).filter((stay) => stayNights(stay) > 0)
+  const nights = planned.reduce((sum, stay) => sum + stayNights(stay), 0)
+  const unknown = planned.filter(stayCostUnknown)
   const rooms = itinerary.rooms || []
   // Shops with souvenirs picked, and shops costed from typical souvenir spending instead.
   const shops = stopsOf('retail_shop')
@@ -65,14 +67,17 @@ function budgetBreakdown(itinerary) {
       : 'Recommended souvenirs per shop, typical spending (estimate) where none are picked'
   return [
     {
-      label: booked.length > 1 ? 'Stays' : 'Stay',
+      label: planned.length > 1 ? 'Stays' : 'Stay',
       detail: rooms.length
-        ? `${booked.length > 1 ? `${booked.length} stays · ` : ''}${roomsSummary(rooms)} · ${nights} night${nights > 1 ? 's' : ''}`
+        ? `${planned.length > 1 ? `${planned.length} stays · ` : ''}${roomsSummary(rooms, Number(itinerary.travelers) || 1)} · ${nights} night${nights > 1 ? 's' : ''}`
         : itineraryStays(itinerary).length === 0
-          ? 'Not needed — no stay booked'
-          : 'Rooms not set',
+          ? 'Not needed — no stay suggested'
+          : unknown.length > 0
+            ? CONTACT_FOR_RATES
+            : 'No nights planned',
       min: Number(itinerary.accommodation_cost_min) || 0,
       value: Number(itinerary.accommodation_cost_max) || 0,
+      unknown: unknown.length > 0,
     },
     row('Entrance fees', 'All destinations, for the whole group', 'destination'),
     row('Meals', 'Recommended dishes for every meal, for the whole group', 'food_beverage'),
@@ -99,6 +104,7 @@ function BudgetCard({ itinerary }) {
   if (itinerary.estimated_cost_max == null) return null
   const rows = budgetBreakdown(itinerary)
   const estimated = includesEstimates(itinerary)
+  const unknownStays = itineraryStays(itinerary).filter(stayCostUnknown)
   const budget = BUDGETS.find((b) => b.value === itinerary.budget)
   const travelers = Number(itinerary.travelers) || 1
 
@@ -121,18 +127,24 @@ function BudgetCard({ itinerary }) {
               <p className="text-sm font-medium text-gray-800">{row.label}</p>
               <p className="text-xs text-gray-500 truncate">{row.detail}</p>
             </dt>
-            <dd className="text-sm font-semibold text-gray-800 shrink-0">{formatPesoRange(row.min, row.value)}</dd>
+            <dd className="text-sm font-semibold text-gray-800 shrink-0">{row.unknown && !row.value ? 'Not listed' : formatPesoRange(row.min, row.value)}</dd>
           </div>
         ))}
         <div className="flex items-center justify-between gap-4 pt-3">
           <dt className="text-sm font-semibold text-gray-900">
-            {estimated ? 'Est. total' : 'Total'} <span className="font-normal text-gray-500">for {travelers} traveler{travelers > 1 ? 's' : ''}{estimated && ', includes estimated prices'}</span>
+            {unknownStays.length > 0 ? 'Known costs' : estimated ? 'Est. total' : 'Total'} <span className="font-normal text-gray-500">for {travelers} traveler{travelers > 1 ? 's' : ''}{estimated && ', includes estimated prices'}</span>
           </dt>
           <dd className="text-lg font-heading font-bold text-primary-600">
             {formatPesoRange(itinerary.estimated_cost_min, itinerary.estimated_cost_max)}
           </dd>
         </div>
       </dl>
+      {unknownStays.length > 0 && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Not included, rates not listed: {unknownStays.map((stay) => stay.accommodation.name).join(', ')}. {CONTACT_FOR_RATES}
+        </p>
+      )}
+      <p className="mt-2 text-xs text-gray-500">Transport fares are not included. Listed room rates are indicative; SOSOGON takes no bookings, so confirm rates and availability with each property.</p>
     </div>
   )
 }
@@ -479,7 +491,7 @@ export default function ItineraryView() {
                 ? 'One stay per town, in the middle of the places you visit there. Each night is spent in the town where that day ends.'
                 : stays.length === 1
                   ? "You're free to stay somewhere else — this one just keeps every day's travel short."
-                  : 'No stay is booked in this plan.'}
+                  : 'No stay is suggested in this plan.'}
             </p>
             {stays.length === 0 ? (
               <p className="text-sm text-gray-500">{itinerary.accommodation_note || 'No accommodation is set for this trip yet.'}</p>

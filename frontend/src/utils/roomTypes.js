@@ -1,39 +1,71 @@
 import { ROOM_CAPACITY } from './constants'
+import { isEntireProperty } from './accommodationOptions'
 
-const sleepsIn = (category) => ROOM_CAPACITY[category] ?? 2
+/** Guests one unit sleeps: as the property stated, else assumed from its category, else unknown. */
+export const unitSleeps = (option) => Number(option?.max_guests) || ROOM_CAPACITY[option?.category] || null
+
+const unitsOf = (option) => Math.max(Number(option?.unit_count) || 1, 1)
 
 /**
- * A stay's rooms by room type: how many can be booked (approved, priced, not marked occupied),
- * what one sleeps, the cheapest price, how many rooms the group needs and what that costs a night.
+ * How many units of each picked option a group uses (the backend's ItineraryService::roomQuantities;
+ * keep them in step): one of a single unit, or as many of a grouped option as those left need.
+ *
+ * @returns {Map<number, number>} option id => units
  */
-export function roomTypes(stay, travelers) {
-  const groups = {}
-  for (const room of stay?.rooms || []) {
-    const key = room.category || 'Room'
-    groups[key] ??= { category: key, rooms: [], bookable: [] }
-    groups[key].rooms.push(room)
-    if (room.occupancy_status === 'unoccupied' && Number(room.price) > 0) groups[key].bookable.push(room)
+export function roomQuantities(options, travelers) {
+  let left = travelers
+  const quantities = new Map()
+  for (const option of options) {
+    const sleeps = unitSleeps(option) ?? 2
+    const units = Math.max(1, Math.min(unitsOf(option), Math.ceil(Math.max(left, 1) / sleeps)))
+    quantities.set(option.id, units)
+    left -= units * sleeps
   }
-  return Object.values(groups).map((group) => {
-    const sleeps = sleepsIn(group.category)
-    const bookable = [...group.bookable].sort((a, b) => Number(a.price) - Number(b.price) || a.id - b.id)
-    const needed = Math.ceil(travelers / sleeps)
+  return quantities
+}
+
+/**
+ * A stay's options for a group. Rooms of one category can share a group (the backend's
+ * ItineraryService::roomsForGroup; keep them in step): the option first, then the others of its
+ * category. An option whose capacity isn't known never blocks a choice: the property confirms it.
+ */
+export function stayOptions(stay, travelers) {
+  const options = stay?.rooms || []
+  return options.map((option) => {
+    const priced = Number(option.price) > 0
+    const peers = option.category && !isEntireProperty(option)
+      ? options
+          .filter((o) => o.id !== option.id && o.category === option.category && (!priced || Number(o.price) > 0))
+          .sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0) || a.id - b.id)
+      : []
+
+    const chosen = []
+    let holds = 0
+    let known = true
+    for (const candidate of [option, ...peers]) {
+      if (holds >= travelers) break
+      chosen.push(candidate)
+      const sleeps = unitSleeps(candidate)
+      if (sleeps === null) {
+        known = false
+        break
+      }
+      holds += sleeps * unitsOf(candidate)
+    }
+
+    const quantities = roomQuantities(chosen, travelers)
+    const perNight = chosen.every((o) => Number(o.price) > 0)
+      ? chosen.reduce((sum, o) => sum + Number(o.price) * quantities.get(o.id), 0)
+      : null
+
     return {
-      ...group,
-      bookable,
-      sleeps,
-      needed,
-      fits: bookable.length * sleeps >= travelers,
-      perNight: bookable.slice(0, needed).reduce((sum, r) => sum + Number(r.price), 0),
-      from: bookable[0] ? Number(bookable[0].price) : null,
-      features: (() => {
-        try {
-          const raw = group.rooms.find((r) => r.room_features)?.room_features
-          return Array.isArray(raw) ? raw : JSON.parse(raw || '[]')
-        } catch {
-          return []
-        }
-      })(),
+      option,
+      sleeps: unitSleeps(option),
+      holds,
+      capacityKnown: known,
+      fits: !known || holds >= travelers,
+      needed: [...quantities.values()].reduce((sum, n) => sum + n, 0),
+      perNight,
     }
   })
 }

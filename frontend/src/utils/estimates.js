@@ -25,7 +25,12 @@ export function costNoteIsEstimate(note) {
   return /^Est\.|incl\. est\. prices/i.test(note || '')
 }
 
-/** A stay costed from its price level rather than room prices: no rooms booked there, yet a cost. */
+/** A stay saved earlier with a typical cost for its price level: no option picked, yet a cost. Editing the trip clears it. */
 export function stayCostIsEstimate(stay, rooms) {
   return (rooms?.length ?? 0) === 0 && Number(stay?.cost_max) > 0
+}
+
+/** A stay with nights whose rates aren't known: the tourist contacts the property. Never counted as zero. */
+export function stayCostUnknown(stay) {
+  return Boolean(stay?.accommodation) && (stay.night_days?.length ?? 0) > 0 && !(Number(stay.cost_max) > 0)
 }

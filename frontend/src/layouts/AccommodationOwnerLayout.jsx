@@ -4,7 +4,7 @@ import OwnerPortalLayout from './OwnerPortalLayout'
 const navLinks = [
   { to: '/business/accommodation', icon: FiGrid, label: 'Dashboard', short: 'Overview', end: true },
   { to: '/business/accommodation/property', icon: FiHome, label: 'My Property', short: 'Property' },
-  { to: '/business/accommodation/rooms', icon: FiList, label: 'Room Management', short: 'Rooms' },
+  { to: '/business/accommodation/rooms', icon: FiList, label: 'Accommodation Options', short: 'Options' },
   { to: '/business/accommodation/reviews', icon: FiStar, label: 'Guest Reviews', short: 'Reviews' },
 ]
 

@@ -31,10 +31,12 @@ import {
   rejectRetailShopPublication,
   approveRetailShopRevision,
   requestRetailShopRevisionChanges,
+  updateAdminAccommodation,
 } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import SampleBadge from '../../components/common/SampleBadge'
 import RevisionComparison from '../../components/admin/RevisionComparison'
+import { accommodationTypeLabel, CLASSIFICATIONS } from '../../utils/accommodationOptions'
 import {
   getImageUrl,
   IMAGE_FALLBACK_SVG,
@@ -363,11 +365,74 @@ function GalleryViewer({ images }) {
   )
 }
 
+// The categories a stay is listed under. Each is its own filter; a stay can have several,
+// and the badge on its card joins them ("Hotel & Resort"). While the owner has a revision
+// waiting, the categories are read-only so this doesn't overwrite what they proposed.
+function CategoryEditor({ listing, locked, onSaved }) {
+  const saved = listing.classifications || []
+  const [selected, setSelected] = useState(saved)
+  const [saving, setSaving] = useState(false)
+  const changed = selected.length !== saved.length || selected.some((name) => !saved.includes(name))
+
+  const toggle = (name) => setSelected((current) => (current.includes(name) ? current.filter((c) => c !== name) : [...current, name]))
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const response = await updateAdminAccommodation(listing.id, { classifications: CLASSIFICATIONS.filter((name) => selected.includes(name)) })
+      onSaved(response.accommodation)
+      toast.success('Categories saved.')
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not save the categories.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-semibold text-gray-900">Categories</h3>
+        <p className="text-sm text-gray-500">
+          Badge shows: <span className="font-medium text-gray-800">{accommodationTypeLabel({ ...listing, classifications: selected }) || '—'}</span>
+        </p>
+      </div>
+      <p className="text-sm text-gray-500">
+        Tick every category that applies. The stay appears under each of these filters and stays one listing.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {CLASSIFICATIONS.map((name) => {
+          const on = selected.includes(name)
+          return (
+            <label
+              key={name}
+              className={`rounded-full border px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-primary-300 ${locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${on ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <input type="checkbox" className="sr-only" checked={on} disabled={locked || saving} onChange={() => toggle(name)} />
+              {name}
+            </label>
+          )
+        })}
+      </div>
+      {locked ? (
+        <p className="text-sm text-amber-700">The owner has a revision waiting. Review it first, then adjust the categories.</p>
+      ) : (
+        <div className="flex justify-end">
+          <button type="button" onClick={save} disabled={!changed || saving} className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Categories'}
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ReviewModal({
   listing,
   type,
   onClose,
   onDecision,
+  onCategoriesSaved,
   busy,
 }) {
   const [decision, setDecision] = useState(null)
@@ -500,6 +565,10 @@ function ReviewModal({
               </p>
             )}
           </section>
+
+          {type === 'accommodation' && (
+            <CategoryEditor listing={listing} locked={isRevision} onSaved={onCategoriesSaved} />
+          )}
 
           <section className="space-y-4">
             <h3 className="font-semibold text-gray-900">
@@ -883,6 +952,7 @@ export default function ReviewListings() {
             key={type.key}
             type="button"
             onClick={() => {
+              if (type.key !== businessType) setItems([])
               setBusinessType(type.key)
               setStatusFilter('submitted')
               setSelectedListing(null)
@@ -924,7 +994,8 @@ export default function ReviewListings() {
         })}
       </div>
 
-      {loading ? (
+      {/* A new business type starts empty and shows the spinner; refreshes after a decision keep the list. */}
+      {loading && items.length === 0 ? (
         <LoadingSpinner size="lg" />
       ) : filteredItems.length === 0 ? (
         <div className="rounded-xl border bg-white p-12 text-center">
@@ -1057,6 +1128,11 @@ export default function ReviewListings() {
           type={selectedListing.type}
           onClose={() => setSelectedListing(null)}
           onDecision={handleDecision}
+          onCategoriesSaved={(updated) => {
+            const merged = { ...selectedListing.data, type: updated.type, classifications: updated.classifications }
+            setSelectedListing({ ...selectedListing, data: merged })
+            setItems((list) => list.map((row) => (row.id === merged.id ? { ...row, type: merged.type, classifications: merged.classifications } : row)))
+          }}
           busy={busy}
         />
       )}

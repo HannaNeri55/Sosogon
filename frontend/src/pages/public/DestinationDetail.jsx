@@ -19,6 +19,7 @@ import AmenityGrid from "../../components/detail/AmenityGrid";
 import PriceList from "../../components/detail/PriceList";
 import { formatPeso, getImageUrl, IMAGE_FALLBACK_SVG } from "../../utils/helpers";
 import { approxHours, approxRange, estimateOf } from "../../utils/estimates";
+import { accommodationTypeLabel } from "../../utils/accommodationOptions";
 
 /** Single entrance fee for the facts card (used when no itemised fees exist). */
 function entranceFeeLabel(fee) {
@@ -158,7 +159,7 @@ export default function DestinationDetail() {
                     <div className="flex items-center justify-between gap-2 mb-2">
                       {a.type && (
                         <span className="text-xs font-medium text-secondary-700 bg-secondary-50 px-2 py-0.5 rounded-full capitalize">
-                          {a.type}
+                          {accommodationTypeLabel(a)}
                         </span>
                       )}
                       {Number(a.average_rating) > 0 && <StarDisplay rating={a.average_rating} size={14} />}

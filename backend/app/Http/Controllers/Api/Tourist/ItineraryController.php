@@ -41,10 +41,10 @@ class ItineraryController extends Controller
             'stays.municipality:id,name',
             'stays.accommodation.images',
             'stays.accommodation.municipality:id,name',
-            'stays.accommodation.rooms' => fn ($q) => $q->approved()->where('occupancy_status', 'unoccupied')->with('images')->reorder('price'),
+            'stays.accommodation.rooms' => fn ($q) => $q->approved()->with('images')->reorder('price'),
             'accommodation.images',
             'accommodation.municipality',
-            'accommodation.rooms' => fn ($q) => $q->approved()->where('occupancy_status', 'unoccupied')->with('images')->reorder('price'),
+            'accommodation.rooms' => fn ($q) => $q->approved()->with('images')->reorder('price'),
             'rooms.images',
             'items.destination.images',
             'items.destination.category',
@@ -228,8 +228,8 @@ class ItineraryController extends Controller
     /**
      * The tourist's stay choice: with no accommodation needed, any picked stay or room is
      * dropped. A picked stay must be an approved listing (with a map location) in one of the
-     * selected towns; a picked room must be an approved, priced room of that stay that isn't
-     * marked occupied, and its room type must sleep the whole group.
+     * selected towns; a picked option must be an approved option of that stay, with or without
+     * a price, and its room category must sleep the whole group when its capacity is known.
      */
     private function validateStayChoice(array &$validated): void
     {
@@ -262,9 +262,6 @@ class ItineraryController extends Controller
         if (! $room || (int) $room->accommodation_id !== (int) $stay->id) {
             throw ValidationException::withMessages(['room_id' => "This room doesn't belong to {$stay->name}."]);
         }
-        if ($room->occupancy_status !== 'unoccupied' || (float) $room->price <= 0) {
-            throw ValidationException::withMessages(['room_id' => 'This room isn\'t offered for booking right now. Please choose another.']);
-        }
         $travelers = max(1, (int) ($validated['travelers'] ?? 1));
         [, $sleeps] = $this->itineraryService->roomsForGroup($room, $travelers);
         if ($sleeps < $travelers) {
@@ -295,7 +292,7 @@ class ItineraryController extends Controller
             'arrival_time' => 'nullable|date_format:H:i',
             // When the tourist leaves on the last day ("17:00"); optional, the last day runs through dinner without it.
             'departure_time' => 'nullable|date_format:H:i',
-            // Whether the planner books a stay (default yes), and the stay and room picked before generating.
+            // Whether the planner suggests a stay (default yes), and the stay and option picked before generating.
             'accommodation_needed' => 'sometimes|boolean',
             'accommodation_id' => 'nullable|integer',
             'room_id' => 'nullable|integer',

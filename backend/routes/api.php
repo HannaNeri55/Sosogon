@@ -1,34 +1,40 @@
 <?php
 
+use App\Http\Controllers\Api\AccountStatusController;
 use App\Http\Controllers\Api\Admin\AdminAccommodationController;
 use App\Http\Controllers\Api\Admin\AdminAccommodationRoomController;
+use App\Http\Controllers\Api\Admin\AdminAccountEnforcementController;
+use App\Http\Controllers\Api\Admin\AdminAmenityController;
 use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
-use App\Http\Controllers\Api\Admin\AdminReviewController;
 use App\Http\Controllers\Api\Admin\AdminDestinationController;
 use App\Http\Controllers\Api\Admin\AdminEventController;
 use App\Http\Controllers\Api\Admin\AdminFoodBeverageController;
 use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
+use App\Http\Controllers\Api\Admin\AdminListingLocationController;
 use App\Http\Controllers\Api\Admin\AdminMenuItemController;
 use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
 use App\Http\Controllers\Api\Admin\AdminRetailProductController;
 use App\Http\Controllers\Api\Admin\AdminRetailShopController;
+use App\Http\Controllers\Api\Admin\AdminReviewController;
 use App\Http\Controllers\Api\Admin\AdminSubmissionController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminViolationController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Business\Accommodation\AccommodationOwnerController;
 use App\Http\Controllers\Api\Business\Accommodation\AccommodationRoomController;
 use App\Http\Controllers\Api\Business\BusinessDashboardController;
 use App\Http\Controllers\Api\Business\BusinessProfileController;
 use App\Http\Controllers\Api\Business\BusinessSubmissionController;
-use App\Http\Controllers\Api\Business\OwnerApplicationController;
-use App\Http\Controllers\Api\Business\RatingReplyController;
 use App\Http\Controllers\Api\Business\FoodBeverage\FoodBeverageOwnerController;
 use App\Http\Controllers\Api\Business\FoodBeverage\MenuItemController;
+use App\Http\Controllers\Api\Business\OwnerApplicationController;
+use App\Http\Controllers\Api\Business\RatingReplyController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopOwnerController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopProductController;
 use App\Http\Controllers\Api\Public\AccommodationController;
 use App\Http\Controllers\Api\Public\ActivityController;
+use App\Http\Controllers\Api\Public\AmenitySuggestionController;
 use App\Http\Controllers\Api\Public\AnnouncementController;
 use App\Http\Controllers\Api\Public\DestinationController;
 use App\Http\Controllers\Api\Public\EventController;
@@ -41,10 +47,6 @@ use App\Http\Controllers\Api\Public\RetailShopController;
 use App\Http\Controllers\Api\Public\SearchController;
 use App\Http\Controllers\Api\Tourist\ItineraryController;
 use App\Http\Controllers\Api\Tourist\RatingController;
-use App\Http\Controllers\Api\AccountStatusController;
-use App\Http\Controllers\Api\Admin\AdminAccountEnforcementController;
-use App\Http\Controllers\Api\Admin\AdminViolationController;
-use App\Http\Controllers\Api\Admin\AdminListingLocationController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -71,6 +73,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/retail-shops', [RetailShopController::class, 'index']);
     Route::get('/retail-shops/{id}', [RetailShopController::class, 'show'])->name('retail-shops.show');
     Route::get('/activities/{id}', [ActivityController::class, 'show']);
+    Route::get('/amenity-suggestions', [AmenitySuggestionController::class, 'index']);
     Route::get('/photo-credits', [PhotoCreditController::class, 'index']);
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/calendar', [EventController::class, 'calendar']);
@@ -132,74 +135,73 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
 
         // Everything else requires an approved (active) Business Owner account.
         Route::middleware('owner.approved')->group(function () {
-        Route::get('/dashboard', [BusinessDashboardController::class, 'index']);
-        Route::get('/submissions', [BusinessSubmissionController::class, 'index']);
-        Route::post('/submissions', [BusinessSubmissionController::class, 'store']);
-        Route::get('/submissions/{id}', [BusinessSubmissionController::class, 'show']);
-        Route::put('/submissions/{id}', [BusinessSubmissionController::class, 'update']);
-        Route::delete('/submissions/{id}', [BusinessSubmissionController::class, 'destroy']);
-        Route::get('/submissions/{id}/permit', [BusinessSubmissionController::class, 'downloadPermit']);
-        Route::get('/profile', [BusinessProfileController::class, 'show']);
-        Route::put('/profile', [BusinessProfileController::class, 'update']);
+            Route::get('/dashboard', [BusinessDashboardController::class, 'index']);
+            Route::get('/submissions', [BusinessSubmissionController::class, 'index']);
+            Route::post('/submissions', [BusinessSubmissionController::class, 'store']);
+            Route::get('/submissions/{id}', [BusinessSubmissionController::class, 'show']);
+            Route::put('/submissions/{id}', [BusinessSubmissionController::class, 'update']);
+            Route::delete('/submissions/{id}', [BusinessSubmissionController::class, 'destroy']);
+            Route::get('/submissions/{id}/permit', [BusinessSubmissionController::class, 'downloadPermit']);
+            Route::get('/profile', [BusinessProfileController::class, 'show']);
+            Route::put('/profile', [BusinessProfileController::class, 'update']);
 
-        // Owner responses to reviews on their own listings (ownership checked in the controller)
-        Route::get('/reviews', [RatingReplyController::class, 'index']);
-        Route::post('/reviews/{rating}/reply', [RatingReplyController::class, 'store'])->whereNumber('rating');
-        Route::put('/reviews/{rating}/reply', [RatingReplyController::class, 'update'])->whereNumber('rating');
+            // Owner responses to reviews on their own listings (ownership checked in the controller)
+            Route::get('/reviews', [RatingReplyController::class, 'index']);
+            Route::post('/reviews/{rating}/reply', [RatingReplyController::class, 'store'])->whereNumber('rating');
+            Route::put('/reviews/{rating}/reply', [RatingReplyController::class, 'update'])->whereNumber('rating');
 
-        Route::prefix('accommodation')->middleware('business.type:accommodation')->group(function () {
-            Route::get('/', [AccommodationOwnerController::class, 'show']);
-            Route::put('/', [AccommodationOwnerController::class, 'update']);
-            Route::put('/location', [AccommodationOwnerController::class, 'updateLocation']);
-            Route::delete('/images/{image}', [AccommodationOwnerController::class, 'destroyImage']);
+            Route::prefix('accommodation')->middleware('business.type:accommodation')->group(function () {
+                Route::get('/', [AccommodationOwnerController::class, 'show']);
+                Route::put('/', [AccommodationOwnerController::class, 'update']);
+                Route::put('/location', [AccommodationOwnerController::class, 'updateLocation']);
+                Route::delete('/images/{image}', [AccommodationOwnerController::class, 'destroyImage']);
 
-            // Accommodation gallery management
-            Route::patch('/images/{image}/cover', [AccommodationOwnerController::class, 'setCover']);
-            Route::put('/images/reorder', [AccommodationOwnerController::class, 'reorderImages']);
+                // Accommodation gallery management
+                Route::patch('/images/{image}/cover', [AccommodationOwnerController::class, 'setCover']);
+                Route::put('/images/reorder', [AccommodationOwnerController::class, 'reorderImages']);
 
-            // Owner submits completed listing for admin publication review
-            Route::post('/submit-for-review', [AccommodationOwnerController::class, 'submitForReview']);
+                // Owner submits completed listing for admin publication review
+                Route::post('/submit-for-review', [AccommodationOwnerController::class, 'submitForReview']);
 
-            Route::get('/rooms', [AccommodationRoomController::class, 'index']);
-            Route::post('/rooms', [AccommodationRoomController::class, 'store']);
-            Route::put('/rooms/{room}', [AccommodationRoomController::class, 'update']);
-            Route::delete('/rooms/{room}', [AccommodationRoomController::class, 'destroy']);
-            Route::delete('/rooms/{room}/images/{image}', [AccommodationRoomController::class, 'destroyImage']);
-            Route::patch('/rooms/{room}/occupancy', [AccommodationRoomController::class, 'toggleOccupancy']);
-        });
+                Route::get('/rooms', [AccommodationRoomController::class, 'index']);
+                Route::post('/rooms', [AccommodationRoomController::class, 'store']);
+                Route::put('/rooms/{room}', [AccommodationRoomController::class, 'update']);
+                Route::delete('/rooms/{room}', [AccommodationRoomController::class, 'destroy']);
+                Route::delete('/rooms/{room}/images/{image}', [AccommodationRoomController::class, 'destroyImage']);
+            });
 
-        Route::prefix('food-beverage')->middleware('business.type:food_beverage')->group(function () {
-            Route::get('/', [FoodBeverageOwnerController::class, 'show']);
-            Route::put('/', [FoodBeverageOwnerController::class, 'update']);
-            Route::put('/location', [FoodBeverageOwnerController::class, 'updateLocation']);
-            Route::delete('/images/{image}', [FoodBeverageOwnerController::class, 'destroyImage']);
+            Route::prefix('food-beverage')->middleware('business.type:food_beverage')->group(function () {
+                Route::get('/', [FoodBeverageOwnerController::class, 'show']);
+                Route::put('/', [FoodBeverageOwnerController::class, 'update']);
+                Route::put('/location', [FoodBeverageOwnerController::class, 'updateLocation']);
+                Route::delete('/images/{image}', [FoodBeverageOwnerController::class, 'destroyImage']);
 
-            // Food & Beverage gallery management
-            Route::patch('/images/{image}/cover', [FoodBeverageOwnerController::class, 'setCover']);
-            Route::put('/images/reorder', [FoodBeverageOwnerController::class, 'reorderImages']);
+                // Food & Beverage gallery management
+                Route::patch('/images/{image}/cover', [FoodBeverageOwnerController::class, 'setCover']);
+                Route::put('/images/reorder', [FoodBeverageOwnerController::class, 'reorderImages']);
 
-            // Owner submits completed listing for admin publication review
-            Route::post('/submit-for-review', [FoodBeverageOwnerController::class, 'submitForReview']);
+                // Owner submits completed listing for admin publication review
+                Route::post('/submit-for-review', [FoodBeverageOwnerController::class, 'submitForReview']);
 
-            Route::get('/menu-items', [MenuItemController::class, 'index']);
-            Route::post('/menu-items', [MenuItemController::class, 'store']);
-            Route::put('/menu-items/{item}', [MenuItemController::class, 'update']);
-            Route::delete('/menu-items/{item}', [MenuItemController::class, 'destroy']);
-        });
+                Route::get('/menu-items', [MenuItemController::class, 'index']);
+                Route::post('/menu-items', [MenuItemController::class, 'store']);
+                Route::put('/menu-items/{item}', [MenuItemController::class, 'update']);
+                Route::delete('/menu-items/{item}', [MenuItemController::class, 'destroy']);
+            });
 
-        Route::prefix('retail-shop')->middleware('business.type:retail_product')->group(function () {
-            Route::get('/', [RetailShopOwnerController::class, 'show']);
-            Route::put('/', [RetailShopOwnerController::class, 'update']);
-            Route::put('/location', [RetailShopOwnerController::class, 'updateLocation']);
-            Route::delete('/images/{image}', [RetailShopOwnerController::class, 'destroyImage']);
-            Route::patch('/images/{image}/cover', [RetailShopOwnerController::class, 'setCover']);
-            Route::put('/images/reorder', [RetailShopOwnerController::class, 'reorderImages']);
-            Route::post('/submit-for-review', [RetailShopOwnerController::class, 'submitForReview']);
-            Route::get('/products', [RetailShopProductController::class, 'index']);
-            Route::post('/products', [RetailShopProductController::class, 'store']);
-            Route::put('/products/{product}', [RetailShopProductController::class, 'update']);
-            Route::delete('/products/{product}', [RetailShopProductController::class, 'destroy']);
-        });
+            Route::prefix('retail-shop')->middleware('business.type:retail_product')->group(function () {
+                Route::get('/', [RetailShopOwnerController::class, 'show']);
+                Route::put('/', [RetailShopOwnerController::class, 'update']);
+                Route::put('/location', [RetailShopOwnerController::class, 'updateLocation']);
+                Route::delete('/images/{image}', [RetailShopOwnerController::class, 'destroyImage']);
+                Route::patch('/images/{image}/cover', [RetailShopOwnerController::class, 'setCover']);
+                Route::put('/images/reorder', [RetailShopOwnerController::class, 'reorderImages']);
+                Route::post('/submit-for-review', [RetailShopOwnerController::class, 'submitForReview']);
+                Route::get('/products', [RetailShopProductController::class, 'index']);
+                Route::post('/products', [RetailShopProductController::class, 'store']);
+                Route::put('/products/{product}', [RetailShopProductController::class, 'update']);
+                Route::delete('/products/{product}', [RetailShopProductController::class, 'destroy']);
+            });
         }); // owner.approved
     });
 
@@ -246,7 +248,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
 
         // Accommodation room approvals
         Route::get('/accommodation-rooms', [AdminAccommodationRoomController::class, 'index']);
+        Route::put('/accommodation-rooms/{id}', [AdminAccommodationRoomController::class, 'update'])->whereNumber('id');
         Route::put('/accommodation-rooms/{id}/approve', [AdminAccommodationRoomController::class, 'approve']);
+
+        // Amenities owners typed themselves, and promoting one to a shared suggestion
+        Route::get('/amenities/custom', [AdminAmenityController::class, 'custom']);
+        Route::post('/amenity-suggestions', [AdminAmenityController::class, 'promote']);
         Route::put('/accommodation-rooms/{id}/reject', [AdminAccommodationRoomController::class, 'reject']);
 
         // Menu item approvals

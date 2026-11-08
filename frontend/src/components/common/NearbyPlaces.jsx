@@ -1,5 +1,6 @@
 // frontend/src/components/common/NearbyPlaces.jsx
 import NearbySection from "./NearbySection";
+import { accommodationTypeLabel } from "../../utils/accommodationOptions";
 
 /**
  * The four "nearby" sections of a detail page, fed by the API's nearby_* lists
@@ -30,7 +31,7 @@ export default function NearbyPlaces({ data, name, kind }) {
         items={data?.nearby_accommodations}
         basePath="/accommodations"
         intro={`Places to stay within ${radiusKm} km of ${name}.`}
-        typeLabel={(item) => item.type}
+        typeLabel={accommodationTypeLabel}
       />
 
       <NearbySection

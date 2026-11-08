@@ -21,6 +21,7 @@ class AccommodationOwnerController extends Controller
     use AppliesMinorEdits, PlansPhotoArrangement;
 
     private const MIN_GALLERY_IMAGES = 5;
+
     private const MAX_GALLERY_IMAGES = 100;
 
     public function show(Request $request): JsonResponse
@@ -481,6 +482,10 @@ class AccommodationOwnerController extends Controller
             'operating_hours',
             'price_range',
             'amenities',
+            'offering_arrangement',
+            'classifications',
+            'check_in_time',
+            'check_out_time',
         ];
     }
 
