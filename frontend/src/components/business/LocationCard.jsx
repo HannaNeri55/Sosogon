@@ -1,22 +1,52 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FiMapPin, FiEdit2 } from 'react-icons/fi'
 import { getMunicipalities } from '../../api/admin'
 import toast from 'react-hot-toast'
 
-export default function LocationCard({ address, municipality, municipalityId, onSave }) {
+export default function LocationCard({ address, municipality, municipalityId, onSave, readOnly = false }) {
   const [editing, setEditing] = useState(false)
   const [municipalities, setMunicipalities] = useState([])
   const [form, setForm] = useState({ address, municipality_id: municipalityId })
   const [saving, setSaving] = useState(false)
+  const [displayMunicipality, setDisplayMunicipality] = useState(municipality?.name)
+
+  useEffect(() => {
+    let active = true
+
+    if (String(municipality?.id ?? '') === String(municipalityId ?? '')) {
+      setDisplayMunicipality(municipality?.name)
+      return () => { active = false }
+    }
+
+    setDisplayMunicipality(null)
+
+    if (municipalityId) {
+      getMunicipalities()
+        .then((items) => {
+          if (!active) return
+          const match = items.find(
+            (item) => String(item.id) === String(municipalityId)
+          )
+          setDisplayMunicipality(match?.name ?? null)
+        })
+        .catch(() => {
+          if (active) setDisplayMunicipality(null)
+        })
+    }
+
+    return () => { active = false }
+  }, [municipality?.id, municipality?.name, municipalityId])
 
   const startEditing = () => {
     setForm({ address, municipality_id: municipalityId })
+    if (readOnly) return
     if (municipalities.length === 0) getMunicipalities().then(setMunicipalities)
     setEditing(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (readOnly) return
     setSaving(true)
     try {
       await onSave(form)
@@ -32,10 +62,10 @@ export default function LocationCard({ address, municipality, municipalityId, on
   }
 
   return (
-    <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
+    <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-heading font-semibold text-gray-900">Location</h2>
-        {!editing && (
+        {!editing && !readOnly && (
           <button
             type="button"
             onClick={startEditing}
@@ -51,7 +81,7 @@ export default function LocationCard({ address, municipality, municipalityId, on
           <FiMapPin className="text-gray-400 shrink-0 mt-0.5" size={16} />
           <div>
             <p className="text-gray-900 font-medium">{address}</p>
-            <p className="text-gray-500 mt-0.5">{municipality?.name}, Sorsogon Province</p>
+            <p className="text-gray-500 mt-0.5">{displayMunicipality ?? "Municipality unavailable"}, Sorsogon Province</p>
           </div>
         </div>
       ) : (

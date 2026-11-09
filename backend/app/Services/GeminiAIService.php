@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\ItineraryAI;
 use App\Exceptions\AIServiceUnavailableException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -9,7 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class GeminiAIService
+class GeminiAIService implements ItineraryAI
 {
     private string $apiKey;
 

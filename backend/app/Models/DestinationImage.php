@@ -12,6 +12,8 @@ class DestinationImage extends Model
         'image_path',
         'thumbnail_path',
         'alt_text',
+        'credit',
+        'source_url',
         'sort_order',
         'is_primary',
     ];

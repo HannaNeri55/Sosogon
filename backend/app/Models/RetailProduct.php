@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPendingChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class RetailProduct extends Model
 {
+    use HasPendingChanges;
+
     protected $fillable = [
         'user_id',
         'retail_shop_id',
@@ -65,9 +68,13 @@ class RetailProduct extends Model
         return $this->morphMany(Rating::class, 'rateable');
     }
 
+    // Publicly listable: approved, and not under a sample shop unless samples are shown (config/listings.php).
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', 'approved')
+            ->when(! config('listings.show_samples'), fn ($q) => $q->where(fn ($q) => $q
+                ->whereNull('retail_shop_id')
+                ->orWhereHas('shop', fn ($shop) => $shop->where('is_sample', false))));
     }
 
     public function scopePending($query)

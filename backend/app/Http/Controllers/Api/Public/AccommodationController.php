@@ -2,21 +2,27 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\Accommodation;
-use App\Models\FoodBeverage;
-use App\Models\RetailShop;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 class AccommodationController extends Controller
 {
+    use FindsNearbyPlaces;
+
     public function index(Request $request): JsonResponse
     {
         $query = Accommodation::approved()
-            ->with(['municipality', 'barangay', 'images']);
+            ->with([
+                'municipality',
+                'barangay',
+                'images' => fn ($query) => $query
+                    ->orderByDesc('is_primary')
+                    ->orderBy('sort_order')
+                    ->orderBy('id'),
+            ]);
 
         if ($request->filled('municipality_id')) {
             $query->where('municipality_id', $request->municipality_id);
@@ -26,8 +32,19 @@ class AccommodationController extends Controller
             $query->where('barangay_id', $request->barangay_id);
         }
 
+        // The trip planner's stay picker: each stay's approved options and estimates in the same
+        // request (without counting a page view the way show() does).
+        if ($request->boolean('with_rooms')) {
+            $query->with([
+                'rooms' => fn ($rooms) => $rooms->approved()->with('images'),
+                'estimates',
+                'roomTypes',
+            ]);
+        }
+
         if ($request->filled('type')) {
-            $query->where('type', $request->type);
+            // Its main type or one of its classifications; the value is quoted as stored in the JSON list.
+            $query->where(fn ($q) => $q->where('type', $request->type)->orWhere('classifications', 'like', '%"'.addcslashes($request->type, '%_"\\').'"%'));
         }
 
         if ($request->filled('price_range')) {
@@ -44,7 +61,9 @@ class AccommodationController extends Controller
 
         $perPage = min($request->input('per_page', 12), 50);
 
-        return response()->json($query->orderBy('name')->paginate($perPage));
+        return response()->json(
+            $query->orderBy('name')->paginate($perPage)
+        );
     }
 
     public function show(int $id): JsonResponse
@@ -53,42 +72,28 @@ class AccommodationController extends Controller
             ->with([
                 'municipality',
                 'barangay',
-                'images',
-                'ratings.user',
-                'rooms' => fn ($query) => $query->approved()->with('images'),
+                'images' => fn ($query) => $query
+                    ->orderByDesc('is_primary')
+                    ->orderBy('sort_order')
+                    ->orderBy('id'),
+                // Newest first, so a Tourist's fresh review leads the carousel ahead of seeded demo reviews.
+                'ratings' => fn ($query) => $query
+                    ->visible()
+                    ->with(['user:id,name', 'reply'])
+                    ->latest()
+                    ->orderByDesc('id'),
+                'rooms' => fn ($query) => $query
+                    ->approved()
+                    ->with('images'),
+                // Usual check-in/out and an estimated nightly rate when not stated (shown as approximate).
+                'estimates',
+                // Legacy display-only room types; the stay's options are 'rooms'.
+                'roomTypes',
             ])
             ->findOrFail($id);
 
         $accommodation->increment('view_count');
 
-        return response()->json($accommodation->toArray() + [
-            'nearby_food_beverages' => $this->nearest(FoodBeverage::approved(), $accommodation),
-            'nearby_retail_shops' => $this->nearest(RetailShop::approved(), $accommodation),
-        ]);
-    }
-
-    /** The closest listings to the accommodation from any town, each with its `distance_km`. */
-    private function nearest(Builder $query, Accommodation $from, int $limit = 6): Collection
-    {
-        if ($from->latitude === null || $from->longitude === null) {
-            return collect();
-        }
-
-        return $query->whereNotNull('latitude')->whereNotNull('longitude')
-            ->with(['images', 'municipality'])
-            ->get()
-            ->each(fn ($place) => $place->setAttribute('distance_km', round($this->km($from, $place), 1)))
-            ->sortBy('distance_km')
-            ->take($limit)
-            ->values();
-    }
-
-    private function km($a, $b): float
-    {
-        $dLat = deg2rad((float) $b->latitude - (float) $a->latitude);
-        $dLng = deg2rad((float) $b->longitude - (float) $a->longitude);
-        $h = sin($dLat / 2) ** 2 + cos(deg2rad((float) $a->latitude)) * cos(deg2rad((float) $b->latitude)) * sin($dLng / 2) ** 2;
-
-        return 6371 * 2 * atan2(sqrt($h), sqrt(1 - $h));
+        return response()->json($accommodation->toArray() + $this->nearbyPlaces($accommodation, 6));
     }
 }

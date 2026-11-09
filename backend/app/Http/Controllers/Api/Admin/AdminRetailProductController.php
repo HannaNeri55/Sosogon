@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\ReviewsItemChanges;
 use App\Http\Controllers\Controller;
 use App\Models\RetailProduct;
 use App\Models\RetailProductImage;
@@ -11,19 +12,56 @@ use Illuminate\Http\Request;
 
 class AdminRetailProductController extends Controller
 {
+    use ReviewsItemChanges;
+
     public function index(Request $request): JsonResponse
     {
-        $query = RetailProduct::with(['municipality', 'barangay', 'images', 'user:id,name', 'shop:id,name,user_id', 'shop.user:id,name']);
+        $query = RetailProduct::with(['municipality', 'barangay', 'images', 'user:id,name', 'shop:id,name,user_id,status', 'shop.user:id,name']);
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
         if ($request->filled('q')) {
             $query->where('name', 'like', "%{$request->q}%");
         }
+        // Approved products with proposed changes awaiting review.
+        if ($request->input('changes') === 'pending') {
+            $query->where('pending_changes->status', 'pending');
+        }
 
         $perPage = min((int) $request->input('per_page', 100), 200);
 
-        return response()->json($query->orderByDesc('created_at')->paginate($perPage));
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        $this->withPendingChanges($page->getCollection());
+
+        return response()->json($page);
+    }
+
+    public function approveChanges(Request $request, int $id): JsonResponse
+    {
+        return $this->approveItemChanges($request, RetailProduct::class, $id, function (RetailProduct $product, array $pending) {
+            $new = $pending['new_images'][0] ?? null;
+            if (! $new) {
+                return [];
+            }
+
+            // One image per product: the approved new image replaces the old one.
+            $old = $product->images->map(fn ($image) => [$image->image_path, $image->thumbnail_path])->all();
+            $product->images()->delete();
+            RetailProductImage::create([
+                'retail_product_id' => $product->id,
+                'image_path' => $new['image_path'],
+                'thumbnail_path' => $new['thumbnail_path'],
+                'is_primary' => true,
+                'sort_order' => 0,
+            ]);
+
+            return $old;
+        });
+    }
+
+    public function rejectChanges(Request $request, int $id): JsonResponse
+    {
+        return $this->rejectItemChanges($request, RetailProduct::class, $id);
     }
 
     public function approve(Request $request, int $id): JsonResponse

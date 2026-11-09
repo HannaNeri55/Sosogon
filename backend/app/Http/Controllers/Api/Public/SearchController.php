@@ -35,7 +35,7 @@ class SearchController extends Controller
             $results['accommodations'] = Accommodation::approved()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
                 ->with('images')
-                ->select('id', 'name', 'type', 'municipality_id', 'price_range', 'average_rating')
+                ->select('id', 'name', 'type', 'classifications', 'municipality_id', 'price_range', 'average_rating')
                 ->limit(10)->get();
         }
 

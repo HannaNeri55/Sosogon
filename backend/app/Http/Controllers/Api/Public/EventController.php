@@ -13,16 +13,17 @@ class EventController extends Controller
     {
         $query = Event::published()->with('municipality');
 
-        if ($request->input('upcoming', false)) {
-            $query->upcoming();
+        if ($request->boolean('upcoming')) {
+            // Soonest first: ongoing events, then the next ones by date. Past events are excluded.
+            $query->upcoming()->orderBy('start_date')->orderBy('id');
+        } else {
+            if ($request->boolean('featured_first')) {
+                $query->orderByDesc('is_featured');
+            }
+            $query->orderBy('start_date', 'desc');
         }
 
-        if ($request->boolean('featured_first')) {
-            $query->orderByDesc('is_featured');
-        }
-
-        $events = $query->orderBy('start_date', 'desc')
-            ->paginate($request->input('per_page', 10));
+        $events = $query->paginate($request->input('per_page', 10));
 
         return response()->json($events);
     }

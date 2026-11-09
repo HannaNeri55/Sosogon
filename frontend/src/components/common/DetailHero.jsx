@@ -1,83 +1,68 @@
-import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiMapPin, FiNavigation, FiGlobe } from 'react-icons/fi'
-import { StarDisplay } from './StarRating'
-import { IMAGE_FALLBACK_SVG, normalizeUrl } from '../../utils/helpers'
+import { FiMapPin } from "react-icons/fi";
+import { StarDisplay } from "./StarRating";
+import PhotoGallery from "./PhotoGallery";
+import { SampleNotice } from "./SampleBadge";
+import BackButton from "../layout/BackButton";
 
+/**
+ * Top of every listing detail page: back button, type badge, title, address,
+ * rating and the photo gallery. Directions and website live in the page's
+ * FactsCard ("Plan your visit").
+ */
 export default function DetailHero({
   backTo,
   backLabel,
   badge,
-  badgeClassName = 'bg-primary-500',
   title,
   subtitle,
   rating,
   reviewCount,
   imageUrl,
   imageAlt,
-  latitude,
-  longitude,
-  website,
+  images,
+  hideGallery = false,
+  sample = false,
 }) {
-  const directionsUrl = latitude && longitude
-    ? `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
-    : null
-  const websiteUrl = normalizeUrl(website)
+  const hasRating = rating != null && Number(rating) > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
-      <Link
-        to={backTo}
-        className="inline-flex items-center gap-1.5 text-gray-500 hover:text-primary-600 text-sm font-medium mb-6 transition-colors"
-      >
-        <FiArrowLeft size={14} /> {backLabel}
-      </Link>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
+      <BackButton to={backTo} label={backLabel} className="mb-4" />
 
-      <div className="mb-5">
+      <div className="mb-6">
         {badge && (
-          <span className={`inline-block text-white text-sm px-3 py-1 rounded-full mb-3 ${badgeClassName}`}>
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider text-secondary-700 bg-secondary-50 border border-secondary-100 px-3 py-1 rounded-full mb-3">
             {badge}
           </span>
         )}
-        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900 leading-tight">{title}</h1>
-        {subtitle && (
-          <p className="text-gray-500 flex items-center gap-1.5 mt-2">
-            <FiMapPin size={15} className="shrink-0" /> {subtitle}
-          </p>
-        )}
-        {rating != null && (
-          <div className="flex items-center gap-2 mt-3">
-            <StarDisplay rating={rating} size={16} />
-            <span className="text-sm text-gray-500">
-              {Number(rating || 0).toFixed(1)} ({reviewCount ?? 0} {reviewCount === 1 ? 'review' : 'reviews'})
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl overflow-hidden h-72 sm:h-96 lg:h-112 bg-gray-100 mb-6">
-        <img
-          src={imageUrl}
-          alt={imageAlt}
-          className="w-full h-full object-cover"
-          fetchPriority="high"
-          onError={(e) => { e.target.onerror = null; e.target.src = IMAGE_FALLBACK_SVG }}
-        />
-      </div>
-
-      {(directionsUrl || websiteUrl) && (
-        <div className="flex flex-wrap gap-3 mb-10">
-          {directionsUrl && (
-            <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="btn-primary">
-              <FiNavigation size={16} /> Get Directions
-            </a>
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-900 leading-tight">
+          {title}
+        </h1>
+        {sample && <SampleNotice />}
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-gray-600">
+          {subtitle && (
+            <p className="flex items-center gap-1.5">
+              <FiMapPin size={15} className="shrink-0 text-primary-600" aria-hidden="true" /> {subtitle}
+            </p>
           )}
-          {websiteUrl && (
-            <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary">
-              <FiGlobe size={16} /> Visit Website
+          {rating != null && (
+            <a href="#reviews" className="flex items-center gap-2 hover:text-primary-700">
+              <StarDisplay rating={rating} size={16} />
+              <span className="text-sm">
+                {hasRating ? <span className="font-semibold text-gray-900">{Number(rating).toFixed(1)}</span> : "No ratings yet"}{" "}
+                ({reviewCount ?? 0} {reviewCount === 1 ? "review" : "reviews"})
+              </span>
             </a>
           )}
         </div>
+      </div>
+
+      {!hideGallery && (
+        <PhotoGallery
+          images={images?.length ? images : imageUrl ? [imageUrl] : []}
+          title={imageAlt || title}
+        />
       )}
     </div>
-  )
+  );
 }

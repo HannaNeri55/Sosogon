@@ -28,6 +28,7 @@ class Itinerary extends Model
         'end_date',
         'food_preference',
         'accommodation_type',
+        'transport_preference',
         'additional_preferences',
         'ai_response_raw',
         'total_distance_km',
@@ -36,12 +37,13 @@ class Itinerary extends Model
     ];
 
     // Hash of the secret a guest uses to claim this itinerary after logging in.
-    protected $hidden = ['claim_token'];
+    protected $hidden = ['claim_token', 'share_token'];
 
     protected function casts(): array
     {
         return [
             'interests' => 'array',
+            'saved_at' => 'datetime',
             'start_date' => 'date',
             'end_date' => 'date',
             'total_distance_km' => 'decimal:2',

@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'business.type' => EnsureBusinessType::class,
+            'owner.approved' => \App\Http\Middleware\EnsureOwnerApproved::class,
+            'account.active' => \App\Http\Middleware\EnsureAccountActive::class,
             'track.visitor' => TrackVisitorMiddleware::class,
         ]);
 

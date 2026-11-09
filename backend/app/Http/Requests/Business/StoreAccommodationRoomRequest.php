@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Business;
 
+use App\Http\Requests\Business\Concerns\ValidatesAccommodationOption;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreAccommodationRoomRequest extends FormRequest
 {
+    use ValidatesAccommodationOption;
+
     public function authorize(): bool
     {
         return true;
@@ -14,12 +17,8 @@ class StoreAccommodationRoomRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'room_number' => 'required|string|max:255',
-            'category' => 'required|string|in:Standard,Deluxe,Suite,Family Room',
-            'price' => 'nullable|numeric|min:0|max:999999.99',
-            'description' => 'nullable|string|max:2000',
-            'images' => 'nullable|array|max:5',
-            'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
-        ];
+            'name' => 'required_without:room_number|nullable|string|max:255',
+            'room_number' => 'required_without:name|nullable|string|max:255',
+        ] + $this->optionRules();
     }
 }

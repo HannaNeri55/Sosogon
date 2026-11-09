@@ -40,6 +40,21 @@ api.interceptors.response.use(
       sessionStorage.removeItem('user')
       window.location.href = hadSession ? expiredLoginPathFor(role) : loginPathFor(role)
     }
+
+    // The account was suspended or deactivated: only the Account Health page is available.
+    if (error.response?.status === 403 && error.response.data?.code === 'account_restricted') {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('user') || 'null')
+        if (stored) {
+          sessionStorage.setItem('user', JSON.stringify({ ...stored, account_state: error.response.data.account_state }))
+        }
+      } catch {
+        // Unreadable stored user: the page reloads it from the API anyway.
+      }
+      if (!window.location.pathname.startsWith('/account/status')) {
+        window.location.href = '/account/status'
+      }
+    }
     return Promise.reject(error)
   }
 )

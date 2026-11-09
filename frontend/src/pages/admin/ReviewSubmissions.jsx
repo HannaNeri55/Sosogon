@@ -10,6 +10,7 @@ import {
   removeSubmission,
 } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import SampleBadge from '../../components/common/SampleBadge'
 import SubmissionReviewModal from '../../components/admin/SubmissionReviewModal'
 import { STATUS_COLORS } from '../../utils/constants'
 import { daysUntil, formatShortDate } from '../../utils/helpers'
@@ -153,7 +154,7 @@ export default function ReviewSubmissions() {
     <div>
       <div className="mb-6">
         <p className="text-primary-600 font-medium mb-2">Admin</p>
-        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Review Business Submissions</h1>
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Review Business Submissions</h1>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
@@ -194,6 +195,7 @@ export default function ReviewSubmissions() {
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-700'}`}>
                         {item.status}
                       </span>
+                      {item.is_sample && <SampleBadge />}
                     </div>
                     <p className="text-sm text-gray-500 capitalize mb-3">{item.type.replace('_', ' ')} &middot; Submitted by {item.user?.name}</p>
                     <p className="text-gray-600 mb-3 line-clamp-2">{item.description}</p>

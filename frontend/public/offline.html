@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline Itineraries · SOSOGON</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2937; background: #f9fafb; }
+  header { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  header img { height: 36px; }
+  header strong { color: #0a546a; letter-spacing: 1px; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 6px; color: #0c3946; }
+  p { line-height: 1.5; }
+  .lead { color: #4b5563; margin: 0 0 20px; font-size: 15px; }
+  .banner { background: #fffbeb; border-left: 4px solid #f59e0b; color: #78350f; padding: 10px 12px; border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .meta { font-size: 13px; color: #6b7280; margin: 0 0 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, a.btn { min-height: 44px; padding: 10px 16px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid #abdce6; background: #fff; color: #0b6680; text-decoration: none; display: inline-flex; align-items: center; }
+  button.primary { background: #0b6680; color: #fff; border-color: #0b6680; }
+  button.danger { color: #b91c1c; border-color: #fecaca; }
+  iframe { width: 100%; height: calc(100vh - 150px); min-height: 400px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; margin-top: 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <img src="/images/Logo.png" alt="" onerror="this.remove()">
+  <strong>SOSOGON</strong>
+</header>
+<main>
+  <section id="list-view">
+    <h1>Your offline itineraries</h1>
+    <p class="lead">Copies you saved on this device. They open without internet.</p>
+    <p class="banner" id="no-connection" hidden>You're offline. Saved copies still open, but Google Maps directions and share links need a connection.</p>
+    <div id="list"></div>
+    <p id="empty" class="lead" hidden>No itineraries are saved on this device. When you have signal, open an itinerary and press Save Itinerary.</p>
+    <a class="btn" href="/">Go to SOSOGON</a>
+  </section>
+
+  <section id="reader" hidden>
+    <div class="row">
+      <button type="button" id="back">Back to the list</button>
+    </div>
+    <iframe id="frame" title="Saved itinerary" sandbox=""></iframe>
+  </section>
+</main>
+<script>
+  // Reads the copies kept by src/utils/offlineItineraries.js (keep the names in step).
+  const DB_NAME = 'sosogon-offline'
+  const STORE = 'itineraries'
+
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1)
+      request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'id' })
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  function run(mode, action) {
+    return openDb().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, mode)
+      const request = action(tx.objectStore(STORE))
+      tx.oncomplete = () => { db.close(); resolve(request.result) }
+      tx.onerror = () => { db.close(); reject(tx.error) }
+    }))
+  }
+
+  const listView = document.getElementById('list-view')
+  const reader = document.getElementById('reader')
+  const frame = document.getElementById('frame')
+  const list = document.getElementById('list')
+  const empty = document.getElementById('empty')
+  const noConnection = document.getElementById('no-connection')
+
+  function button(label, className, onClick) {
+    const element = document.createElement('button')
+    element.type = 'button'
+    element.textContent = label
+    element.className = className
+    element.addEventListener('click', onClick)
+    return element
+  }
+
+  function open(copy) {
+    frame.srcdoc = copy.html
+    listView.hidden = true
+    reader.hidden = false
+    window.scrollTo(0, 0)
+  }
+
+  function render() {
+    noConnection.hidden = navigator.onLine
+    run('readonly', (store) => store.getAll()).then((copies) => {
+      list.replaceChildren()
+      empty.hidden = copies.length > 0
+      copies.sort((a, b) => b.keptAt.localeCompare(a.keptAt)).forEach((copy) => {
+        const card = document.createElement('article')
+        card.className = 'card'
+        const title = document.createElement('h2')
+        title.textContent = copy.title
+        const meta = document.createElement('p')
+        meta.className = 'meta'
+        meta.textContent = [copy.dates, copy.numDays + (copy.numDays > 1 ? ' days' : ' day'), 'Saved ' + new Date(copy.keptAt).toLocaleDateString()].filter(Boolean).join(' · ')
+        const row = document.createElement('div')
+        row.className = 'row'
+        row.append(
+          button('Open', 'primary', () => open(copy)),
+          button('Remove', 'danger', () => {
+            if (confirm('Remove this copy from this device?')) run('readwrite', (store) => store.delete(copy.id)).then(render)
+          })
+        )
+        card.append(title, meta, row)
+        list.append(card)
+      })
+    }).catch(() => {
+      empty.hidden = false
+      empty.textContent = 'Saved copies could not be read in this browser.'
+    })
+  }
+
+  document.getElementById('back').addEventListener('click', () => {
+    reader.hidden = true
+    listView.hidden = false
+    frame.removeAttribute('srcdoc')
+  })
+  window.addEventListener('online', render)
+  window.addEventListener('offline', render)
+  render()
+</script>
+</body>
+</html>

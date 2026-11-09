@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasEstimates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,10 +10,13 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class RetailShop extends Model
 {
+    use HasEstimates;
+
     protected $fillable = [
         'user_id',
         'name',
         'description',
+        'product_categories',
         'municipality_id',
         'barangay_id',
         'address',
@@ -21,6 +25,7 @@ class RetailShop extends Model
         'contact_number',
         'operating_hours',
         'status',
+        'publication_review_status',
         'admin_notes',
         'view_count',
         'approved_at',
@@ -29,7 +34,13 @@ class RetailShop extends Model
 
     protected function casts(): array
     {
-        return ['approved_at' => 'datetime', 'latitude' => 'decimal:7', 'longitude' => 'decimal:7'];
+        return [
+            'product_categories' => 'array',
+            'approved_at' => 'datetime',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+            'is_sample' => 'boolean',
+        ];
     }
 
     public function user(): BelongsTo
@@ -57,14 +68,21 @@ class RetailShop extends Model
         return $this->hasMany(RetailProduct::class)->orderBy('created_at');
     }
 
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(RetailShopRevision::class);
+    }
+
     public function ratings(): MorphMany
     {
         return $this->morphMany(Rating::class, 'rateable');
     }
 
+    // Publicly listable: approved, and not sample data unless samples are shown (config/listings.php).
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', 'approved')
+            ->when(! config('listings.show_samples'), fn ($q) => $q->where('is_sample', false));
     }
 
     public function scopePending($query)

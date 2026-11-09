@@ -1,6 +1,6 @@
 // frontend/src/pages/public/Login.jsx
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -10,6 +10,7 @@ import SessionExpiredNotice from '../../components/common/SessionExpiredNotice'
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '' })
@@ -19,9 +20,17 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login(formData)
-      navigate(postAuthPath(user))
-    } catch {
-      toast.error('Invalid email or password. Please try again.')
+      // Tourists sent here from a page (e.g. "Write a Review") go back to it.
+      const from = location.state?.from
+      const restricted = ['suspended', 'deactivated'].includes(user.account_state)
+      navigate(!restricted && user.role === 'tourist' && from?.startsWith('/') ? from : postAuthPath(user))
+    } catch (error) {
+      // 403 = signed in correctly but refused (closed account, registration under review): show why.
+      toast.error(
+        error.response?.status === 403 && error.response.data?.message
+          ? error.response.data.message
+          : 'Invalid email or password. Please try again.'
+      )
     } finally {
       setLoading(false)
     }

@@ -2,12 +2,18 @@
 
 namespace App\Providers;
 
+use Anthropic\Client as AnthropicClient;
+use Anthropic\RequestOptions;
+use App\Contracts\ItineraryAI;
 use App\Models\User;
+use App\Services\ClaudeAIService;
 use App\Services\GeminiAIService;
 use App\Services\GoogleMapsService;
 use App\Services\ItineraryService;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
 use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoTransportFactory;
@@ -20,9 +26,39 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(GeminiAIService::class, fn () => new GeminiAIService);
         $this->app->singleton(GoogleMapsService::class, fn () => new GoogleMapsService);
 
+        // The AI behind itinerary generation, chosen by services.itinerary.ai_provider.
+        $this->app->singleton(ItineraryAI::class, function ($app) {
+            $provider = config('services.itinerary.ai_provider', 'gemini');
+
+            return match ($provider) {
+                'gemini' => $app->make(GeminiAIService::class),
+                'claude' => $app->make(ClaudeAIService::class),
+                default => throw new InvalidArgumentException("Unknown AI_PROVIDER \"{$provider}\". Supported: gemini, claude."),
+            };
+        });
+
+        // Built only when AI_PROVIDER=claude asks for it. Guzzle enforces the timeout (the SDK's
+        // own timeout option is advisory); a missing key is reported when generating, not here.
+        $this->app->singleton(ClaudeAIService::class, function () {
+            $config = config('services.anthropic');
+            $timeout = (float) ($config['timeout'] ?? 120);
+
+            $client = new AnthropicClient(
+                apiKey: (string) ($config['api_key'] ?? ''),
+                requestOptions: RequestOptions::with(
+                    timeout: $timeout,
+                    maxRetries: (int) ($config['max_retries'] ?? 1),
+                    transporter: new GuzzleClient(['timeout' => $timeout, 'connect_timeout' => 10]),
+                ),
+                openTelemetry: false,
+            );
+
+            return new ClaudeAIService($client, (string) ($config['model'] ?? 'claude-sonnet-5-5'), $config['effort'] ?? null);
+        });
+
         $this->app->singleton(ItineraryService::class, function ($app) {
             return new ItineraryService(
-                $app->make(GeminiAIService::class),
+                $app->make(ItineraryAI::class),
                 $app->make(GoogleMapsService::class),
             );
         });

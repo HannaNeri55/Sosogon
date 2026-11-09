@@ -4,6 +4,7 @@ import { getAdminHeroSlides, createHeroSlide, updateHeroSlide, deleteHeroSlide }
 import { getImageUrl } from '../../utils/helpers'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import toast from 'react-hot-toast'
+import useScrollToForm from '../../hooks/useScrollToForm'
 
 const EMPTY_FORM = { title: '', subtitle: '', eyebrow: '', sort_order: 0, is_active: true, image: null }
 
@@ -21,8 +22,9 @@ export default function ManageHeroSlides() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
+  const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+
   const loadData = async () => {
-    setLoading(true)
     try {
       const data = await getAdminHeroSlides({ per_page: 100 })
       setItems(data.data || [])
@@ -32,7 +34,6 @@ export default function ManageHeroSlides() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [])
 
@@ -105,7 +106,7 @@ export default function ManageHeroSlides() {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
-          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Manage Hero Slides</h1>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Hero Slides</h1>
         </div>
         <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
           {showForm ? 'Close Form' : 'Add Hero Slide'}
@@ -113,7 +114,8 @@ export default function ManageHeroSlides() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+        <form
+          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing hero slide' : 'New hero slide'}</p>
           <input className="input-field" placeholder="Eyebrow (small label above title)" value={formData.eyebrow} onChange={(e) => setFormData({ ...formData, eyebrow: e.target.value })} />
           <input className="input-field" placeholder="Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
@@ -157,21 +159,21 @@ export default function ManageHeroSlides() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
           <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Slide</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Sort Order</th>
-                <th className="text-left px-6 py-3 text-sm font-medium text-gray-700">Active</th>
-                <th className="text-right px-6 py-3 text-sm font-medium text-gray-700">Actions</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Slide</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Sort Order</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Active</th>
+                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150">
+                <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-16 h-10 rounded-md overflow-hidden shrink-0 bg-gray-100">

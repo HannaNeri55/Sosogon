@@ -1,78 +1,65 @@
 // frontend/src/pages/public/DestinationDetail.jsx
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { FiMapPin, FiClock, FiDollarSign } from 'react-icons/fi'
-import { getDestination } from '../../api/destinations'
-import { useAuth } from '../../contexts/AuthContext'
-import { submitRating } from '../../api/ratings'
-import { StarDisplay, StarInput } from '../../components/common/StarRating'
-import LocationMap from '../../components/maps/LocationMap'
-import ListingCard from '../../components/cards/ListingCard'
-import DetailHero from '../../components/common/DetailHero'
-import DetailInfoRow from '../../components/common/DetailInfoRow'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { getImageUrl } from '../../utils/helpers'
-import toast from 'react-hot-toast'
+import { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { FiMapPin, FiClock, FiPlus } from "react-icons/fi";
+import { getDestination } from "../../api/destinations";
+import { useAuth } from "../../contexts/AuthContext";
+import { StarDisplay } from "../../components/common/StarRating";
+import LocationMap from "../../components/maps/LocationMap";
+import DetailHero from "../../components/common/DetailHero";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import GuestReviewCarousel from "../../components/common/GuestReviewCarousel";
+import ReviewSection from "../../components/common/ReviewSection";
+import NearbyPlaces from "../../components/common/NearbyPlaces";
+import DetailLayout from "../../components/detail/DetailLayout";
+import DetailSection from "../../components/detail/DetailSection";
+import DiningInfo from "../../components/detail/DiningInfo";
+import FactsCard from "../../components/detail/FactsCard";
+import AmenityGrid from "../../components/detail/AmenityGrid";
+import PriceList from "../../components/detail/PriceList";
+import { formatPeso, getImageUrl, IMAGE_FALLBACK_SVG } from "../../utils/helpers";
+import { approxHours, approxRange, estimateOf } from "../../utils/estimates";
+import { accommodationTypeLabel } from "../../utils/accommodationOptions";
+
+/** Single entrance fee for the facts card (used when no itemised fees exist). */
+function entranceFeeLabel(fee) {
+  if (fee === null || fee === undefined || fee === "") return "Not specified";
+  if (Number(fee) === 0) return "Free";
+  return `₱${Number(fee).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export default function DestinationDetail() {
-  const { id } = useParams()
-  const { isAuthenticated, isTourist } = useAuth()
-  const [destination, setDestination] = useState(null)
-  const [nearbyAccommodations, setNearbyAccommodations] = useState([])
-  const [nearbyFoodBeverages, setNearbyFoodBeverages] = useState([])
-  const [nearbyRetailShops, setNearbyRetailShops] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const { id } = useParams();
+  const { isAuthenticated, isTourist } = useAuth();
+  const [destination, setDestination] = useState(null);
+  // The nearby_* lists and their radius, straight from the API response.
+  const [nearby, setNearby] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const loadDestination = async () => {
     try {
-      const data = await getDestination(id)
-      setDestination(data.destination)
-      setNearbyAccommodations(data.nearby_accommodations || [])
-      setNearbyFoodBeverages(data.nearby_food_beverages || [])
-      setNearbyRetailShops(data.nearby_retail_shops || [])
+      const data = await getDestination(id);
+      setDestination(data.destination);
+      setNearby(data);
     } catch (e) {
-      console.error(e)
+      console.error(e);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadDestination()
+    loadDestination();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id]);
 
-  const handleSubmitReview = async (e) => {
-    e.preventDefault()
-    if (!rating) return toast.error('Please select a rating')
+  if (loading) return <LoadingSpinner size="lg" />;
+  if (!destination)
+    return <div className="p-6 sm:p-8 text-center">Destination not found</div>;
 
-    setSubmitting(true)
-    try {
-      await submitRating({
-        rateable_type: 'destination',
-        rateable_id: destination.id,
-        score: rating,
-        comment,
-      })
-      toast.success('Review submitted successfully')
-      setRating(0)
-      setComment('')
-      loadDestination()
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed to submit review')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (loading) return <LoadingSpinner size="lg" />
-  if (!destination) return <div className="p-6 sm:p-8 text-center">Destination not found</div>
-
-  const imageUrl = getImageUrl(destination.images?.[0])
+  const hasFeeList = destination.fees?.length > 0;
+  const hasPricing = hasFeeList || destination.rates?.length > 0;
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -84,165 +71,145 @@ export default function DestinationDetail() {
         subtitle={destination.address}
         rating={destination.average_rating}
         reviewCount={destination.total_reviews}
-        imageUrl={imageUrl}
+        imageUrl={getImageUrl(destination.images?.[0])}
         imageAlt={destination.name}
-        latitude={destination.latitude}
-        longitude={destination.longitude}
-        website={destination.website}
+        images={[...(destination.images || [])].sort(
+          (a, b) => Number(Boolean(b.is_primary)) - Number(Boolean(a.is_primary)),
+        )}
       />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 space-y-8">
-        <div>
-          <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">About this destination</h2>
-          <p className="text-gray-600 leading-relaxed mb-6">{destination.description}</p>
-          <div className="border-t border-gray-100 pt-4">
-            <DetailInfoRow icon={FiMapPin} label="Municipality">{destination.municipality?.name}</DetailInfoRow>
-            <DetailInfoRow icon={FiClock} label="Operating Hours">{destination.operating_hours || 'Not specified'}</DetailInfoRow>
-            <DetailInfoRow icon={FiDollarSign} label="Entrance Fee">
-              {destination.entrance_fee ? `PHP ${destination.entrance_fee}` : 'Free'}
-            </DetailInfoRow>
-          </div>
-          {isAuthenticated && isTourist && (
-            <Link to="/plan-trip" className="btn-primary mt-6">
-              Add to Itinerary
-            </Link>
-          )}
-        </div>
-
-        <div className="card p-6 sm:p-8">
-          <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-4">Location</h2>
-          <LocationMap
+      <DetailLayout
+        aside={
+          <FactsCard
+            facts={[
+              { icon: FiMapPin, label: "Municipality", value: destination.municipality?.name },
+              { icon: FiClock, label: "Operating Hours", value: destination.operating_hours || approxHours(estimateOf(destination, "operating_hours")) || "Not specified" },
+              ...(hasFeeList
+                ? []
+                : [{
+                    label: "Entrance Fee",
+                    value: destination.entrance_fee == null
+                      ? approxRange(estimateOf(destination, "entrance_fee")) || "Not specified"
+                      : entranceFeeLabel(destination.entrance_fee),
+                  }]),
+            ]}
             latitude={destination.latitude}
             longitude={destination.longitude}
-            title={destination.name}
-          />
-        </div>
-
-        {/* Reviews */}
-        <div className="card p-6 sm:p-8">
-          <h2 className="text-2xl font-heading font-semibold text-gray-900 mb-6">Ratings and Reviews</h2>
-
-          {isAuthenticated && isTourist && (
-            <form onSubmit={handleSubmitReview} className="mb-8 pb-8 border-b border-gray-100">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your Rating</label>
-                <StarInput value={rating} onChange={setRating} />
-              </div>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Share your experience..."
-                rows={4}
-                className="input-field mb-4"
-              />
-              <button type="submit" className="btn-primary" disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Review'}
-              </button>
-            </form>
-          )}
-
-          <div className="space-y-5">
-            {destination.ratings?.length === 0 ? (
-              <p className="text-gray-500">No reviews yet.</p>
-            ) : (
-              destination.ratings?.map((review) => (
-                <div key={review.id} className="flex gap-3 border-b border-gray-100 pb-5 last:border-b-0 last:pb-0">
-                  <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold shrink-0">
-                    {initials(review.user?.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-medium text-gray-900">{review.user?.name}</p>
-                      <StarDisplay rating={review.score} size={14} />
-                    </div>
-                    {review.comment && <p className="text-sm text-gray-600">{review.comment}</p>}
-                  </div>
-                </div>
-              ))
+            website={destination.website}
+          >
+            {isAuthenticated && isTourist && (
+              <Link to="/plan-trip" className="btn-accent w-full">
+                <FiPlus size={16} aria-hidden="true" /> Add to Itinerary
+              </Link>
             )}
-          </div>
-        </div>
+          </FactsCard>
+        }
+      >
+        <DetailSection title="About this destination">
+          <p className="text-gray-700 leading-relaxed whitespace-pre-line">{destination.description}</p>
+        </DetailSection>
 
-        {/* Activities */}
+        {hasPricing && (
+          <DetailSection title="Fees & Rates">
+            <div className="space-y-6">
+              <PriceList title="Entrance Fees" rows={destination.fees} />
+              <PriceList title="Cottage / Rental Rates" rows={destination.rates} />
+            </div>
+          </DetailSection>
+        )}
+
+        {destination.amenities?.length > 0 && (
+          <DetailSection title="Amenities & Facilities">
+            <AmenityGrid items={destination.amenities.map((amenity) => amenity.name)} />
+          </DetailSection>
+        )}
+
+        {destination.dining_details && (
+          <DetailSection title="Food & Dining">
+            <DiningInfo details={destination.dining_details} meals={destination.meals_offered} />
+          </DetailSection>
+        )}
+
+        {destination.visitor_guidelines && (
+          <DetailSection title="Visitor Information">
+            <p className="text-gray-700 leading-relaxed whitespace-pre-line">{destination.visitor_guidelines}</p>
+          </DetailSection>
+        )}
+
+        {/* THINGS TO DO: activities the tourism office has linked to this destination */}
         {destination.activities?.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900 mb-6">Activities</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <DetailSection title="Things to Do" subtitle={`Activities available at ${destination.name}.`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {destination.activities.map((a) => (
-                <Link key={a.id} to={`/activities/${a.id}`} className="card group block">
-                  <div className="aspect-4/3 overflow-hidden">
+                <Link key={a.id} to={`/activities/${a.id}`} className="card group flex flex-col">
+                  <div className="aspect-video overflow-hidden bg-gray-100">
                     <img
                       src={getImageUrl(a.image_path)}
                       alt={a.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = IMAGE_FALLBACK_SVG;
+                      }}
                     />
                   </div>
                   <div className="p-4">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       {a.type && (
-                        <span className="text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded capitalize">
-                          {a.type}
+                        <span className="text-xs font-medium text-secondary-700 bg-secondary-50 px-2 py-0.5 rounded-full capitalize">
+                          {accommodationTypeLabel(a)}
                         </span>
                       )}
-                      <StarDisplay rating={a.average_rating} size={14} />
+                      {Number(a.average_rating) > 0 && <StarDisplay rating={a.average_rating} size={14} />}
                     </div>
                     <h3 className="font-heading font-semibold text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
                       {a.name}
                     </h3>
-                    {a.description && (
-                      <p className="text-sm text-gray-500 line-clamp-2">
-                        {a.description.substring(0, 100)}...
+                    {a.description && <p className="text-sm text-gray-500 line-clamp-2">{a.description}</p>}
+                    {(a.duration_minutes || a.price != null) && (
+                      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                        {a.duration_minutes && (
+                          <span className="inline-flex items-center gap-1">
+                            <FiClock size={12} aria-hidden="true" />
+                            {formatDuration(a.duration_minutes)}
+                          </span>
+                        )}
+                        {a.price != null && (
+                          <span className="font-medium text-primary-700">
+                            {Number(a.price) === 0 ? "Free" : formatPeso(a.price)}
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
                 </Link>
               ))}
             </div>
-          </section>
+          </DetailSection>
         )}
 
-        {/* Accommodations */}
-        {nearbyAccommodations.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900 mb-6">Accommodations</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {nearbyAccommodations.map((item) => (
-                <ListingCard key={item.id} item={item} basePath="/accommodations" typeLabel={item.type} />
-              ))}
-            </div>
-          </section>
+        <DetailSection title="Location">
+          <LocationMap latitude={destination.latitude} longitude={destination.longitude} title={destination.name} address={destination.address} />
+        </DetailSection>
+
+        {destination.ratings?.length > 0 && (
+          <GuestReviewCarousel item={destination} title="What Visitors Are Saying" />
         )}
 
-        {/* Food and Beverage */}
-        {nearbyFoodBeverages.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900 mb-6">Food and Beverage</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {nearbyFoodBeverages.map((item) => (
-                <ListingCard key={item.id} item={item} basePath="/food-beverage" typeLabel={item.cuisine_type} />
-              ))}
-            </div>
-          </section>
-        )}
+        <NearbyPlaces data={nearby} name={destination.name} kind="destination" />
 
-        {/* Souvenirs */}
-        {nearbyRetailShops.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-heading font-bold text-gray-900 mb-6">Souvenir Shops</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {nearbyRetailShops.map((item) => (
-                <ListingCard key={item.id} item={item} basePath="/shops" typeLabel="Pasalubong Shop" />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
+        <div id="reviews" className="scroll-mt-24">
+          <ReviewSection item={destination} rateableType="destination" onReviewed={loadDestination} />
+        </div>
+      </DetailLayout>
     </div>
-  )
+  );
 }
 
-function initials(name) {
-  if (!name) return '?'
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join('')
+function formatDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} hr ${rest} min` : `${hours} hr`;
 }

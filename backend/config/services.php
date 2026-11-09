@@ -22,13 +22,28 @@ return [
         ))),
     ],
 
+    // Used only when AI_PROVIDER=claude.
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'),
+        // low, medium, high, xhigh or max; empty uses the model's own default.
+        'effort' => env('ANTHROPIC_EFFORT'),
+        // Seconds before a request is abandoned (enforced by the HTTP client).
+        'timeout' => (float) env('ANTHROPIC_TIMEOUT', 120),
+        // Extra attempts the SDK makes after a rate limit, server error or timeout.
+        'max_retries' => (int) env('ANTHROPIC_MAX_RETRIES', 1),
+    ],
+
     'itinerary' => [
+        // Which AI picks the destinations: 'gemini' (default) or 'claude'.
+        'ai_provider' => env('AI_PROVIDER', 'gemini'),
         // Successful AI itinerary generations allowed per tourist per day (resets at midnight in 'timezone').
         'daily_limit' => (int) env('ITINERARY_DAILY_LIMIT', 10),
         // Generations allowed per guest (by IP address) per day, before logging in.
         'guest_daily_limit' => (int) env('ITINERARY_GUEST_DAILY_LIMIT', 2),
-        // Peso ranges used for the cost estimate when a listing has no real prices
-        // (no approved rooms / menu items / products), keyed by its price_range level.
+        // Peso ranges used for the cost estimate when a listing has no real prices (no approved
+        // menu items / products), keyed by its price_range level. The planner never uses
+        // room_per_night (a stay with no price is an unknown cost); ListingEstimateSeeder reads it.
         'price_bands' => [
             'meal_per_person' => ['budget' => [100, 250], 'moderate' => [250, 500], 'luxury' => [500, 1200]],
             'room_per_night' => ['budget' => [800, 1500], 'moderate' => [1500, 3500], 'luxury' => [3500, 8000]],
@@ -64,6 +79,12 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    // Wikimedia Commons (images:representative). Their User-Agent policy asks automated clients to
+    // include a way to reach them (a project URL or email); add one here to avoid being throttled.
+    'wikimedia' => [
+        'user_agent' => env('WIKIMEDIA_USER_AGENT', 'SOSOGON-tourism-system/1.0 (image import)'),
     ],
 
 ];

@@ -24,7 +24,7 @@ export default function AccountProfileCard() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 space-y-5">
+    <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 space-y-5 shadow-(--shadow-card)">
       <h2 className="text-lg font-heading font-semibold text-gray-900">Account Profile</h2>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasEstimates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,10 +10,14 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class FoodBeverage extends Model
 {
+    use HasEstimates;
+
     protected $fillable = [
         'user_id',
         'name',
         'description',
+        'meals_served',
+        'specialties',
         'cuisine_type',
         'municipality_id',
         'barangay_id',
@@ -24,6 +29,7 @@ class FoodBeverage extends Model
         'website',
         'operating_hours',
         'status',
+        'publication_review_status',
         'average_rating',
         'total_reviews',
         'view_count',
@@ -33,7 +39,13 @@ class FoodBeverage extends Model
 
     protected function casts(): array
     {
-        return ['approved_at' => 'datetime', 'latitude' => 'decimal:7', 'longitude' => 'decimal:7'];
+        return [
+            'meals_served' => 'array',
+            'approved_at' => 'datetime',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+            'is_sample' => 'boolean',
+        ];
     }
 
     public function user(): BelongsTo
@@ -61,13 +73,20 @@ class FoodBeverage extends Model
         return $this->hasMany(MenuItem::class)->orderBy('created_at');
     }
 
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(FoodBeverageRevision::class);
+    }
+
     public function ratings(): MorphMany
     {
         return $this->morphMany(Rating::class, 'rateable');
     }
 
+    // Publicly listable: approved, and not sample data unless samples are shown (config/listings.php).
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', 'approved')
+            ->when(! config('listings.show_samples'), fn ($q) => $q->where('is_sample', false));
     }
 }

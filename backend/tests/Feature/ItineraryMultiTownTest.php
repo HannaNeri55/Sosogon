@@ -7,6 +7,8 @@ use App\Models\Destination;
 use App\Models\Itinerary;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ItineraryService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -98,9 +100,9 @@ class ItineraryMultiTownTest extends TestCase
         return Accommodation::create($this->fields($town, $name, $lat, $lng) + ['type' => 'Hotel', 'price_range' => 'moderate', 'status' => 'approved'])->id;
     }
 
-    private function generate(array $towns, int $days, string $pace = 'moderate')
+    private function generate(array $towns, int $days, string $pace = 'moderate', ?string $arrival = null)
     {
-        return $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', [
+        return $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', ($arrival ? ['arrival_time' => $arrival] : []) + [
             'municipality_ids' => array_map(fn ($t) => $this->towns[$t], $towns),
             'num_days' => $days,
             'interests' => ['nature'],
@@ -134,8 +136,9 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertSame([2], $matnog->night_days);
         $this->assertStringContainsString('Your base in Matnog', $matnog->reason);
 
-        // Each stay is priced for its own night; the trip total adds them up.
-        $this->assertGreaterThan(0, (float) $bulan->cost_max);
+        // Neither stay lists a price: both are unknown, never guessed; the total adds only known costs.
+        $this->assertNull($bulan->cost_max);
+        $this->assertNull($matnog->cost_max);
         $this->assertEquals((float) $bulan->cost_max + (float) $matnog->cost_max, (float) $itinerary->accommodation_cost_max);
         $this->assertSame($this->ids['inn'], $itinerary->accommodation_id);
         $this->assertEqualsCanonicalizing([$this->towns['bulan'], $this->towns['matnog']], $itinerary->municipalities->pluck('id')->all());
@@ -145,7 +148,7 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertGreaterThan(20, (float) $firstVisit->distance_from_prev_km);
     }
 
-    public function test_every_day_has_one_destination_in_one_town(): void
+    public function test_every_day_stays_in_one_town_and_every_town_gets_a_day(): void
     {
         // The AI forgets Irosin; Bulan has two days, so one of them goes to Irosin.
         $this->reply = ['title' => 'Three towns', 'days' => [$this->day(1, 'bulanHill'), $this->day(2, 'matnogCove'), $this->day(3, 'bulanBeach')]];
@@ -154,15 +157,13 @@ class ItineraryMultiTownTest extends TestCase
 
         $itinerary = Itinerary::with(['items.destination', 'stays'])->latest('id')->firstOrFail();
         $visits = $itinerary->items->where('item_type', 'destination');
-        $this->assertSame([1, 2, 3], $visits->pluck('day_number')->sort()->values()->all(), 'Exactly one destination per day.');
-        $this->assertEqualsCanonicalizing(
-            array_values($this->towns),
-            $visits->map(fn ($v) => $v->destination->municipality_id)->values()->all(),
-            'Each town gets a day of its own.'
-        );
+        $dayTowns = $visits->groupBy('day_number')->map(fn ($day) => $day->map(fn ($v) => $v->destination->municipality_id)->unique()->values()->all());
+        $this->assertSame([1, 2, 3], $dayTowns->keys()->sort()->values()->all(), 'Every day has a destination.');
+        $this->assertTrue($dayTowns->every(fn ($towns) => count($towns) === 1), 'A day never covers two towns.');
+        $this->assertEqualsCanonicalizing(array_values($this->towns), $dayTowns->flatten()->all(), 'Each town gets a day of its own.');
 
-        // One stay per town; a 3-day trip has two nights, in the towns of days 1 and 2.
-        $this->assertCount(3, $itinerary->stays);
+        // A 3-day trip has two nights, in the towns of days 1 and 2; the last town has no stay.
+        $this->assertCount(2, $itinerary->stays);
         $this->assertSame(2, $itinerary->stays->sum(fn ($s) => count($s->night_days)));
     }
 
@@ -173,10 +174,32 @@ class ItineraryMultiTownTest extends TestCase
 
         $this->generate(['bulan', 'matnog'], 3)->assertCreated();
 
+        // Each day's town, in day order.
         $towns = Itinerary::with('items.destination')->latest('id')->firstOrFail()->items
-            ->where('item_type', 'destination')->sortBy('day_number')
-            ->map(fn ($v) => $v->destination->municipality_id)->values()->all();
+            ->where('item_type', 'destination')->groupBy('day_number')->sortKeys()
+            ->map(fn ($day) => $day->first()->destination->municipality_id)->values()->all();
         $this->assertSame([$this->towns['bulan'], $this->towns['bulan'], $this->towns['matnog']], $towns);
+    }
+
+    public function test_a_multi_town_trip_passes_the_planning_rules_at_every_arrival_time(): void
+    {
+        // Two picks a day, one of them in the wrong town; Irosin is forgotten.
+        $this->reply = ['title' => 'Three towns', 'days' => [
+            $this->day(1, 'bulanHill', 'matnogCove'), $this->day(2, 'bulanBeach', 'matnogIsland'), $this->day(3, 'matnogCove'),
+        ]];
+
+        foreach ([null, '06:00', '14:30', '17:00'] as $arrival) {
+            $this->generate(['bulan', 'matnog', 'irosin'], 4, 'moderate', $arrival)->assertCreated();
+            $itinerary = Itinerary::with(['items.destination'])->latest('id')->firstOrFail();
+
+            $visits = $itinerary->items->where('item_type', 'destination');
+            $this->assertSame($visits->pluck('destination_id')->unique()->count(), $visits->count(), "Arrival {$arrival}: a destination repeats.");
+            $this->assertTrue($visits->groupBy('day_number')->every(fn ($day) => $day->pluck('destination.municipality_id')->unique()->count() === 1), "Arrival {$arrival}: a day covers two towns.");
+            $this->assertEqualsCanonicalizing(array_values($this->towns), $visits->pluck('destination.municipality_id')->unique()->values()->all(), "Arrival {$arrival}: every town is visited.");
+
+            $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+            $this->assertSame([], app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => now()->addDays(3)->toDateString()]), "Arrival {$arrival} breaks a planning rule.");
+        }
     }
 
     public function test_more_towns_than_days_gets_a_polite_message(): void
@@ -205,7 +228,7 @@ class ItineraryMultiTownTest extends TestCase
         $this->generate(['bulan'], 1)->assertCreated();
 
         $visit = Itinerary::with('items')->latest('id')->firstOrFail()->items->firstWhere('destination_id', $this->ids['bulanHill']);
-        $names = collect($visit->activities)->pluck('name')->all();
+        $names = collect($visit->activities)->pluck('name')->map(fn ($n) => preg_replace('/ — your picnic lunch$/', '', $n))->all();
         $this->assertEqualsCanonicalizing(
             ['Nature walk at Bulan Hill', 'Photo stop at Bulan Hill', 'Picnic by the view at Bulan Hill'],
             $names
@@ -254,7 +277,7 @@ class ItineraryMultiTownTest extends TestCase
     private function minutes(string $range): array
     {
         return array_map(function ($part) {
-            $t = \Carbon\Carbon::createFromFormat('g:i A', trim($part));
+            $t = Carbon::createFromFormat('g:i A', trim($part));
 
             return $t->hour * 60 + $t->minute;
         }, explode('–', $range));

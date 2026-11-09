@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasEstimates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,9 +10,14 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Destination extends Model
 {
+    use HasEstimates;
+
     protected $fillable = [
         'name',
         'description',
+        'dining_details',
+        'meals_offered',
+        'visitor_guidelines',
         'category_id',
         'municipality_id',
         'barangay_id',
@@ -33,6 +39,7 @@ class Destination extends Model
     protected function casts(): array
     {
         return [
+            'meals_offered' => 'array',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'entrance_fee' => 'decimal:2',
@@ -59,6 +66,21 @@ class Destination extends Model
     public function images(): HasMany
     {
         return $this->hasMany(DestinationImage::class)->orderBy('sort_order');
+    }
+
+    public function fees(): HasMany
+    {
+        return $this->hasMany(DestinationFee::class)->orderBy('sort_order');
+    }
+
+    public function rates(): HasMany
+    {
+        return $this->hasMany(DestinationRate::class)->orderBy('sort_order');
+    }
+
+    public function amenities(): HasMany
+    {
+        return $this->hasMany(DestinationAmenity::class)->orderBy('id');
     }
 
     public function activities(): HasMany
@@ -88,8 +110,8 @@ class Destination extends Model
 
     public function recalculateRating(): void
     {
-        $this->average_rating = $this->ratings()->avg('score') ?? 0;
-        $this->total_reviews = $this->ratings()->count();
+        $this->average_rating = $this->ratings()->visible()->avg('score') ?? 0;
+        $this->total_reviews = $this->ratings()->visible()->count();
         $this->save();
     }
 }

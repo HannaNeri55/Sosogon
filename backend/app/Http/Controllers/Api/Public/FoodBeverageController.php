@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\FoodBeverage;
 use Illuminate\Http\JsonResponse;
@@ -9,6 +10,8 @@ use Illuminate\Http\Request;
 
 class FoodBeverageController extends Controller
 {
+    use FindsNearbyPlaces;
+
     public function index(Request $request): JsonResponse
     {
         $query = FoodBeverage::approved()
@@ -50,13 +53,19 @@ class FoodBeverageController extends Controller
                 'municipality',
                 'barangay',
                 'images',
-                'ratings.user',
-                'menuItems' => fn ($query) => $query->approved(),
+                'ratings' => fn ($query) => $query
+                    ->visible()
+                    ->with(['user:id,name', 'reply'])
+                    ->latest()
+                    ->orderByDesc('id'),
+                'menuItems' => fn ($query) => $query->approved()->with('estimates'),
+                // Typical hours, cuisine and price per person when not stated (shown as approximate).
+                'estimates',
             ])
             ->findOrFail($id);
 
         $item->increment('view_count');
 
-        return response()->json($item);
+        return response()->json($item->toArray() + $this->nearbyPlaces($item, 6));
     }
 }

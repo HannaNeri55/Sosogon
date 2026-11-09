@@ -1,15 +1,25 @@
 import { useEffect, useState } from 'react'
 import { FiPlus, FiEdit2, FiTrash2, FiAlertTriangle, FiPackage } from 'react-icons/fi'
 import { getMyRetailProducts, deleteRetailShopProduct } from '../../../api/retailShopOwner'
-import { getImageUrl } from '../../../utils/helpers'
+import { formatProductPrice, getImageUrl } from '../../../utils/helpers'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import ProductFormModal from './ProductFormModal'
+import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
+import { withProposedValues } from '../../../components/business/itemChanges'
 import toast from 'react-hot-toast'
 
 const MAX_PRODUCTS = 20
 
 const CAPACITY_MESSAGE =
   'Maximum capacity reached: You have registered the limit of 20 products. Delete an existing product to feature a new one.'
+
+const REVIEW_FIELDS = [
+  ['name', 'Name'],
+  ['product_type', 'Type'],
+  ['description', 'Description'],
+  ['price', 'Price', (v) => formatProductPrice(v) ?? '—'],
+  ['website', 'Website'],
+]
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -38,7 +48,8 @@ export default function ProductManagement() {
   }
 
   const openEdit = (item) => {
-    setEditingItem(item)
+    // Edit what the owner last proposed, so saving again keeps that proposal.
+    setEditingItem(withProposedValues(item))
     setShowForm(true)
   }
 
@@ -69,8 +80,8 @@ export default function ProductManagement() {
     <div>
       <div className="flex items-end justify-between flex-wrap gap-4 mb-6">
         <div>
-          <p className="text-primary-600 font-medium mb-2">Local Products Owner Portal</p>
-          <h1 className="text-3xl font-heading font-bold text-gray-900">Product Catalog</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Local Products Owner Portal</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Product Catalog</h1>
           <p className="text-sm text-gray-500 mt-1">{items.length} / {MAX_PRODUCTS} products registered</p>
         </div>
         <button
@@ -94,14 +105,14 @@ export default function ProductManagement() {
       </p>
 
       {items.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
+        <div className="bg-white rounded-2xl p-12 text-center border border-gray-200/70 shadow-(--shadow-card)">
           <FiPackage className="mx-auto text-gray-300 mb-3" size={32} />
           <p className="text-gray-500">No products registered yet. Add your first product to get started.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {items.map((item) => (
-            <div key={item.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden flex flex-col">
+            <div key={item.id} className="bg-white rounded-2xl border border-gray-200/70 overflow-hidden flex flex-col shadow-(--shadow-card)">
               <img src={getImageUrl(item.images?.[0])} alt={item.name} className="w-full h-36 object-cover bg-gray-100" />
               <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-start justify-between gap-2 mb-1">
@@ -114,10 +125,8 @@ export default function ProductManagement() {
                   {item.product_type}
                 </span>
                 {item.description && <p className="text-sm text-gray-500 line-clamp-2 mb-2">{item.description}</p>}
-                <p className="text-sm font-semibold text-primary-700 mb-1">₱{Number(item.price).toFixed(2)}</p>
-                {item.status === 'rejected' && item.admin_notes && (
-                  <p className="text-xs text-red-600 mb-2">{item.admin_notes}</p>
-                )}
+                {item.price != null && <p className="text-sm font-semibold text-primary-700 mb-1">{formatProductPrice(item.price)}</p>}
+                <ItemReviewStatus item={item} fields={REVIEW_FIELDS} noun="product" />
 
                 <div className="mt-auto flex gap-4 pt-2">
                   <button onClick={() => openEdit(item)} className="flex items-center gap-1.5 py-2 sm:py-0 text-primary-600 hover:text-primary-700 text-sm font-medium">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiShoppingBag, FiPackage, FiCheckCircle, FiClock, FiExternalLink } from 'react-icons/fi'
 import { getMyRetailShop } from '../../../api/retailShopOwner'
-import { getImageUrl } from '../../../utils/helpers'
+import { formatProductPrice, getImageUrl } from '../../../utils/helpers'
 import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
@@ -32,11 +32,11 @@ export default function ShopOverview() {
   return (
     <div>
       <div className="mb-8">
-        <p className="text-primary-600 font-medium mb-2">Local Products Owner Portal</p>
-        <h1 className="text-3xl font-heading font-bold text-gray-900">{shop.name}</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Local Products Owner Portal</p>
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">{shop.name}</h1>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200/70 p-4 sm:p-6 mb-8 flex items-center justify-between flex-wrap gap-4 shadow-(--shadow-card)">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
             <FiShoppingBag size={22} />
@@ -56,7 +56,7 @@ export default function ShopOverview() {
         <StatCard icon={FiPackage} label="Product Capacity" value={`${products.length} / 20`} accent="secondary" />
       </div>
 
-      <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-4">
           <div>
             <h2 className="text-xl font-heading font-semibold text-gray-900">What Tourists Currently See</h2>
@@ -79,12 +79,12 @@ export default function ShopOverview() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {approvedProducts.map((item) => (
-              <div key={item.id} className="border border-gray-100 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm">
+              <div key={item.id} className="border border-gray-200/70 rounded-2xl overflow-hidden flex flex-col bg-white shadow-sm">
                 <img src={getImageUrl(item.images?.[0])} alt={item.name} className="w-full h-40 object-cover bg-gray-100" />
                 <div className="p-4 flex flex-col flex-1">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <p className="font-medium text-gray-900 break-words min-w-0">{item.name}</p>
-                    <span className="text-sm font-semibold text-primary-700 shrink-0">₱{Number(item.price).toFixed(2)}</span>
+                    {item.price != null && <span className="text-sm font-semibold text-primary-700 shrink-0">{formatProductPrice(item.price)}</span>}
                   </div>
                   {item.product_type && (
                     <span className="self-start text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded mb-2">{item.product_type}</span>

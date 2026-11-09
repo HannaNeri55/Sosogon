@@ -52,7 +52,7 @@ class RetailProductController extends Controller
     public function show(int $id): JsonResponse
     {
         $product = RetailProduct::approved()
-            ->with(['municipality', 'barangay', 'images', 'ratings.user'])
+            ->with(['municipality', 'barangay', 'images', 'ratings' => fn ($query) => $query->visible()->with('user:id,name')])
             ->findOrFail($id);
 
         $product->increment('view_count');

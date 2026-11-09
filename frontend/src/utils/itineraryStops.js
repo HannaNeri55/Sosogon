@@ -1,6 +1,18 @@
-// Stops can be a destination, the tourist's accommodation (a free day or a meal there), a
-// food place (breakfast, lunch or dinner) or a souvenir shop; this normalizes whichever
-// listing the stop points at.
+// What a stop at the tourist's accommodation is for, read from how its notes start; anything
+// else there (a free day) keeps the "Free day" badge.
+const STAY_BADGES = [
+  [/^Arrive and check in at/, 'Arrival & check-in'],
+  // Arriving before the stay's listed check-in time: check-in is a later stop.
+  [/^Arrive at/, 'Arrival'],
+  [/^Check in at/, 'Check-in'],
+  [/^Check out of/, 'Check-out'],
+  [/^Back to .+ to rest/, 'Rest at your stay'],
+  [/^Free time at/, 'Free time at your stay'],
+]
+
+// Stops can be a destination, the tourist's accommodation (arrival, check-in or check-out,
+// rest, a free day or a meal there), a food place (breakfast, lunch or dinner) or a souvenir
+// shop; this normalizes whichever listing the stop points at.
 export function placeFor(stop) {
   // Older itineraries split destinations (and free days) into a morning and an afternoon block.
   const part = stop.notes?.match(/^(Morning|Afternoon)/)?.[1]
@@ -9,10 +21,11 @@ export function placeFor(stop) {
   switch (stop.item_type) {
     case 'accommodation': {
       const meal = stop.notes?.match(/^(Breakfast|Lunch|Dinner) at/)?.[1]
+      const purpose = STAY_BADGES.find(([pattern]) => pattern.test(stop.notes || ''))?.[1]
       return {
         listing: stop.accommodation,
         link: stop.accommodation && `/accommodations/${stop.accommodation.id}`,
-        badge: meal ? `${meal} at your stay` : withPart('Free day'),
+        badge: meal ? `${meal} at your stay` : purpose || withPart('Free day'),
       }
     }
     case 'food_beverage':

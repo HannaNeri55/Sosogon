@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Business\StoreBusinessSubmissionRequest;
 use App\Http\Requests\Business\UpdateBusinessSubmissionRequest;
 use App\Models\Accommodation;
+use App\Models\BusinessOwnerApplication;
 use App\Models\BusinessSubmission;
 use App\Models\FoodBeverage;
 use App\Models\RetailShop;
@@ -52,8 +53,11 @@ class BusinessSubmissionController extends Controller
         // Business permits contain sensitive personal/government ID data — store them on
         // the private disk, never the public one. Access is only via downloadPermit()
         // below, which checks ownership/admin role before streaming the file.
-        $permitPath = $request->file('business_permit')
-            ->store("business-permits/{$request->user()->id}", 'local');
+        // Reuse the registration permit (same private file, nothing uploaded twice)
+        // unless the owner explicitly attached one.
+        $permitPath = $request->hasFile('business_permit')
+            ? $request->file('business_permit')->store("business-permits/{$request->user()->id}", 'local')
+            : $request->registrationPermitPath();
 
         // Store listing photo, if provided
         $imagePath = null;
@@ -129,8 +133,14 @@ class BusinessSubmissionController extends Controller
     {
         $submission = BusinessSubmission::where('user_id', $request->user()->id)->findOrFail($id);
 
-        if ($submission->business_permit_path) {
-            Storage::disk('local')->delete($submission->business_permit_path);
+        // Never delete a permit shared with the registration application or another submission.
+        $permit = $submission->business_permit_path;
+        $shared = $permit && (
+            BusinessOwnerApplication::where('business_permit_path', $permit)->exists()
+            || BusinessSubmission::where('business_permit_path', $permit)->whereKeyNot($submission->id)->exists()
+        );
+        if ($permit && ! $shared) {
+            Storage::disk('local')->delete($permit);
         }
         if ($submission->image_path) {
             Storage::disk('public')->delete($submission->image_path);

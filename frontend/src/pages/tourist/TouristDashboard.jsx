@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FiMap, FiStar, FiCompass, FiClock, FiMapPin, FiLogOut } from 'react-icons/fi'
+import { FiMap, FiStar, FiCompass, FiClock, FiMapPin, FiLogOut, FiShield } from 'react-icons/fi'
 import { getItineraries, getItinerary } from '../../api/itineraries'
 import { getMyReviews } from '../../api/ratings'
 import { getDestinations } from '../../api/destinations'
@@ -57,12 +57,23 @@ export default function TouristDashboard() {
             <p className="text-gray-900 font-heading font-bold text-lg">Sorsogon Tourist Dashboard</p>
             <p className="text-gray-500 text-xs mt-0.5">{today}</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
-          >
-            <FiLogOut size={16} /> Logout
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/account/status"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                user?.account_state === 'warning' ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'text-gray-600 hover:text-primary-700 hover:bg-gray-50'
+              }`}
+            >
+              <FiShield size={16} /> Account Health
+              {user?.account_state === 'warning' && <span className="rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white">!</span>}
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <FiLogOut size={16} /> Logout
+            </button>
+          </div>
         </div>
 
         <p className="text-gray-500 mb-6">Welcome, {user?.name}!</p>

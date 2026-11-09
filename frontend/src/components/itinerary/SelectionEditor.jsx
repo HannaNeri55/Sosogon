@@ -41,7 +41,7 @@ export default function SelectionEditor({ title, options, picks, onChange, showQ
                 <img src={getImageUrl(option.image)} alt={option.name} className="w-11 h-11 rounded-md object-cover shrink-0 bg-gray-100" />
                 <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] sm:basis-auto">
                   <p className="text-sm font-medium text-gray-900 truncate">{option.name}</p>
-                  <p className="text-xs text-gray-500">{formatPeso(option.price)}{showQuantity && ' each'}</p>
+                  <p className="text-xs text-gray-500">{option.priceLabel || formatPeso(option.price)}{!option.priceLabel && showQuantity && ' each'}</p>
                 </div>
                 <div className="flex items-center gap-3 ml-auto">
                   {showQuantity && (
@@ -67,7 +67,7 @@ export default function SelectionEditor({ title, options, picks, onChange, showQ
                       </button>
                     </div>
                   )}
-                  <span className="w-20 text-right text-sm font-semibold text-gray-800">{formatPeso(option.price * pick.quantity)}</span>
+                  <span className="w-20 text-right text-sm font-semibold text-gray-800">{option.priceLabel ? 'Not listed' : formatPeso(option.price * pick.quantity)}</span>
                   <button
                     type="button"
                     onClick={() => onChange(picks.filter((p) => p.id !== pick.id))}
@@ -110,7 +110,7 @@ export default function SelectionEditor({ title, options, picks, onChange, showQ
                     <span className="block text-sm font-medium text-gray-900 truncate">{option.name}</span>
                     {option.subtitle && <span className="block text-xs text-gray-500 truncate">{option.subtitle}</span>}
                   </span>
-                  <span className="text-sm font-semibold text-gray-800">{formatPeso(option.price)}</span>
+                  <span className="text-sm font-semibold text-gray-800">{option.priceLabel ? 'Not listed' : formatPeso(option.price)}</span>
                 </button>
               </li>
             ))}

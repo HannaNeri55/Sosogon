@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Event extends Model
 {
+    /** Event dates are Philippine calendar dates. */
+    public const LOCAL_TIMEZONE = 'Asia/Manila';
+
     protected $fillable = [
         'title',
         'description',
@@ -50,8 +53,13 @@ class Event extends Model
         return $query->where('status', 'published');
     }
 
+    /**
+     * Events that have not finished yet, judged by Philippine dates (the app clock is UTC):
+     * future events and ones happening today. An event drops out the day after its end
+     * date, or after its start date when it has no end date.
+     */
     public function scopeUpcoming($query)
     {
-        return $query->where('start_date', '>=', now()->toDateString());
+        return $query->whereRaw('COALESCE(end_date, start_date) >= ?', [now(self::LOCAL_TIMEZONE)->toDateString()]);
     }
 }

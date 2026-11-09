@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\BusinessSubmission;
 use App\Models\FoodBeverage;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BusinessTypeAccessTest extends TestCase
@@ -20,6 +23,9 @@ class BusinessTypeAccessTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Permits go to the private (local) disk, listing photos to public: both are throwaway here.
+        Storage::fake('local');
+        Storage::fake('public');
 
         Role::create(['name' => 'business_owner', 'description' => 'Business Establishment Owner']);
 
@@ -90,7 +96,7 @@ class BusinessTypeAccessTest extends TestCase
     public function test_submitting_a_listing_of_a_different_type_than_the_locked_type_is_rejected(): void
     {
         $owner = $this->makeOwner('accommodation');
-        $file = \Illuminate\Http\UploadedFile::fake()->create('permit.pdf', 100, 'application/pdf');
+        $file = UploadedFile::fake()->create('permit.pdf', 100, 'application/pdf');
 
         $response = $this->actingAs($owner)->post('/api/v1/business/submissions', [
             'business_name' => 'Some Eatery',
@@ -107,13 +113,14 @@ class BusinessTypeAccessTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson(['message' => 'You are registered as a accommodation business and can only submit listings of that type.']);
+        $this->assertSame([], Storage::disk('local')->allFiles(), 'a rejected submission stores no permit');
     }
 
     public function test_first_submission_locks_in_the_business_type_for_a_legacy_owner(): void
     {
         $owner = $this->makeOwner(null);
 
-        $file = \Illuminate\Http\UploadedFile::fake()->create('permit.pdf', 100, 'application/pdf');
+        $file = UploadedFile::fake()->create('permit.pdf', 100, 'application/pdf');
 
         $response = $this->actingAs($owner)->post('/api/v1/business/submissions', [
             'business_name' => 'New Shop',
@@ -130,6 +137,11 @@ class BusinessTypeAccessTest extends TestCase
 
         $response->assertCreated();
         $this->assertSame('retail_product', $owner->fresh()->business_type);
+        // The permit is stored privately under the owner's folder and the submission points to it.
+        $path = BusinessSubmission::where('user_id', $owner->id)->value('business_permit_path');
+        $this->assertStringStartsWith("business-permits/{$owner->id}/", $path);
+        Storage::disk('local')->assertExists($path);
+        $this->assertSame([], Storage::disk('public')->allFiles(), 'permits never go to the public disk');
 
         $this->actingAs($owner)
             ->getJson('/api/v1/business/retail-shop')

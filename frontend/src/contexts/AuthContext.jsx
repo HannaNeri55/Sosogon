@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { loginUser, registerUser, logoutUser, getUser } from '../api/auth'
 import useIdleLogout from '../hooks/useIdleLogout'
 import { expiredLoginPathFor } from '../utils/session'
+import { clearOfflineCopies } from '../utils/offlineItineraries'
 import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     await endSession()
+    clearOfflineCopies().catch(() => {})
     setUser(null)
     toast.success('Logged out.')
   }
@@ -69,12 +71,23 @@ export function AuthProvider({ children }) {
 
   useIdleLogout(user, handleIdle)
 
+  // Merge fresh fields (e.g. account_state after a suspension ends) into the signed-in user.
+  const updateUser = useCallback((patch) => {
+    setUser((current) => {
+      if (!current) return current
+      const next = { ...current, ...patch }
+      sessionStorage.setItem('user', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   const value = {
     user,
     loading,
     login,
     register,
     logout,
+    updateUser,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isTourist: user?.role === 'tourist',

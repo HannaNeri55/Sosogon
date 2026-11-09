@@ -32,9 +32,43 @@ export function clearPendingItinerary() {
   }
 }
 
+// A guest's planner answers, saved when they press Generate and are asked to log in first; the
+// planner restores them after login and generates the itinerary for their account.
+const DRAFT_KEY = 'pending_trip_draft'
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+export function saveTripDraft({ form, payload }) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, payload, savedAt: Date.now() }))
+  } catch {
+    // Storage unavailable: the guest re-enters their answers after logging in.
+  }
+}
+
+export function readTripDraft() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DRAFT_KEY))
+    if (stored?.form && stored.payload && Date.now() - stored.savedAt < DRAFT_MAX_AGE_MS) return stored
+    if (stored) localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // Unreadable or unavailable: no draft.
+  }
+  return null
+}
+
+export function clearTripDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // Nothing to clear if storage is unavailable.
+  }
+}
+
 // Where a user should land after logging in or registering.
 export function postAuthPath(user) {
+  // Suspended or deactivated accounts can only see their Account Health page.
+  if (['suspended', 'deactivated'].includes(user.account_state)) return '/account/status'
   if (user.role === 'admin') return '/admin'
   if (user.role === 'business_owner') return '/business'
-  return readPendingItinerary() ? '/plan-trip' : '/dashboard'
+  return readPendingItinerary() || readTripDraft() ? '/plan-trip' : '/dashboard'
 }

@@ -1,11 +1,28 @@
-import { useEffect, useState } from 'react'
-import { FiUpload, FiTrash2 } from 'react-icons/fi'
-import { getMyRetailShop, updateMyRetailShop, updateMyRetailShopLocation, deleteRetailShopImage } from '../../../api/retailShopOwner'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  FiUpload,
+  FiCheckCircle,
+  FiClock,
+  FiAlertCircle,
+  FiImage,
+} from 'react-icons/fi'
+import {
+  getMyRetailShop,
+  updateMyRetailShop,
+  updateMyRetailShopLocation,
+} from '../../../api/retailShopOwner'
 import { getImageUrl } from '../../../utils/helpers'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import AccountProfileCard from '../../../components/business/AccountProfileCard'
 import LocationCard from '../../../components/business/LocationCard'
+import ListingPhotoManager from '../../../components/business/ListingPhotoManager'
+import usePhotoArrangement from '../../../components/business/usePhotoArrangement'
 import toast from 'react-hot-toast'
+
+const MIN_IMAGES = 5
+const MAX_IMAGES = 100
+const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -14,149 +31,690 @@ const STATUS_STYLES = {
   archived: 'bg-gray-100 text-gray-700',
 }
 
+const REVIEW_STYLES = {
+  draft: 'bg-gray-100 text-gray-700',
+  submitted: 'bg-blue-100 text-blue-700',
+  needs_revision: 'bg-red-100 text-red-700',
+  published: 'bg-green-100 text-green-700',
+}
+
+const REVIEW_LABELS = {
+  draft: 'Draft',
+  submitted: 'Submitted for Review',
+  needs_revision: 'Needs Revision',
+  published: 'Published',
+}
+
+function getErrorMessage(error, fallback) {
+  const errors = error?.response?.data?.errors
+
+  if (errors) {
+    return Object.values(errors).flat().join('\n')
+  }
+
+  return error?.response?.data?.message || fallback
+}
+
 export default function MyShop() {
   const [shop, setShop] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '' })
+  const [submittingReview, setSubmittingReview] = useState(false)
+
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+  })
+
   const [newImages, setNewImages] = useState([])
 
-  const load = () =>
-    getMyRetailShop().then((data) => {
-      setShop(data)
-      setForm({ name: data.name, description: data.description })
+  const revision =
+    shop?.status === 'approved' ? shop?.owner_revision : null
+
+  const isUnderReview =
+    revision?.status === 'submitted' ||
+    (shop?.status !== 'approved' &&
+      shop?.publication_review_status === 'submitted')
+
+  const savedImages = useMemo(() => {
+    if (shop?.status === 'approved' && revision) {
+      return (revision.proposed_gallery || []).map(
+        (image, index) => ({ ...image, sort_order: index })
+      )
+    }
+
+    return [...(shop?.images || [])].sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+        a.id - b.id
+    )
+  }, [shop, revision])
+
+  const savedCount = savedImages.length
+
+  // Cover, order and removals stay local until the owner saves.
+  const photos = usePhotoArrangement(savedImages, newImages)
+  const totalCount = photos.items.length
+  const remainingSlots = Math.max(0, MAX_IMAGES - totalCount)
+
+  const reviewStatus =
+    revision?.status ||
+    shop?.publication_review_status ||
+    (shop?.status === 'approved' ? 'published' : 'draft')
+
+  const canSubmitForReview =
+    !isUnderReview &&
+    (shop?.status !== 'approved' || Boolean(revision)) &&
+    savedCount >= MIN_IMAGES &&
+    savedCount <= MAX_IMAGES &&
+    !photos.hasChanges &&
+    !saving &&
+    !submittingReview
+
+  const load = async () => {
+    const data = await getMyRetailShop()
+
+    setShop(data)
+
+    const proposed = data.owner_revision?.proposed_data || {}
+
+    setForm({
+      name: proposed.name ?? data.name ?? '',
+      description: proposed.description ?? data.description ?? '',
     })
 
+    return data
+  }
+
   useEffect(() => {
-    load().finally(() => setLoading(false))
+    let active = true
+
+    getMyRetailShop()
+      .then((data) => {
+        if (!active) return
+
+        setShop(data)
+
+        const proposed = data.owner_revision?.proposed_data || {}
+
+        setForm({
+          name: proposed.name ?? data.name ?? '',
+          description: proposed.description ?? data.description ?? '',
+        })
+      })
+      .catch(() => {
+        if (active) {
+          toast.error('Failed to load shop details.')
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
   }, [])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const refresh = async () => {
+    try {
+      await load()
+    } catch {
+      toast.error('Changes saved, but the shop could not be refreshed.')
+    }
+  }
+
+  const handleSelectImages = (event) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ''
+
+    if (!files.length) return
+
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ]
+
+    const invalidType = files.find(
+      (file) => !allowedTypes.includes(file.type)
+    )
+
+    if (invalidType) {
+      toast.error('Only JPG, JPEG, PNG, and WebP photos are allowed.')
+      return
+    }
+
+    const oversized = files.find(
+      (file) => file.size > MAX_FILE_SIZE
+    )
+
+    if (oversized) {
+      toast.error('Each photo must be 5 MB or smaller.')
+      return
+    }
+
+    if (totalCount + files.length > MAX_IMAGES) {
+      toast.error(
+        `You can only have up to ${MAX_IMAGES} gallery photos.`
+      )
+      return
+    }
+
+    setNewImages((current) => [...current, ...files])
+  }
+
+  const handleRemoveNew = (file) => {
+    setNewImages((current) => current.filter((item) => item !== file))
+  }
+
+  // Published listing only: a declared spelling/formatting fix to the name or
+  // description. The server publishes it only if it really is minor; otherwise it
+  // is saved to the pending draft for review.
+  const handleMinorFix = async () => {
+    if (saving || submittingReview || isUnderReview) return
+
     const payload = new FormData()
-    payload.append('name', form.name)
-    payload.append('description', form.description)
-    newImages.forEach((file) => payload.append('images[]', file))
+    payload.append('name', form.name.trim())
+    payload.append('description', form.description.trim())
+    payload.append('minor_edit', '1')
 
     setSaving(true)
     try {
-      const res = await updateMyRetailShop(payload)
-      toast.success(res.message)
+      const response = await updateMyRetailShop(payload)
+      toast.success(response.message || 'Correction saved.')
+      await refresh()
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to save the correction.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    if (isUnderReview) {
+      toast.error('Please wait for the Tourism Office review result.')
+      return
+    }
+
+    if (totalCount > MAX_IMAGES) {
+      toast.error('Gallery cannot exceed 100 photos.')
+      return
+    }
+
+    const payload = new FormData()
+
+    payload.append('name', form.name)
+    payload.append('description', form.description)
+
+    newImages.forEach((file) => {
+      payload.append('images[]', file)
+    })
+    photos.appendTo(payload)
+
+    setSaving(true)
+
+    try {
+      const response = await updateMyRetailShop(payload)
+
+      toast.success(response.message || 'Shop changes saved.')
       setNewImages([])
-      load()
-    } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(err.response?.data?.message || 'Failed to update shop')
+      photos.reset()
+      await refresh()
+    } catch (error) {
+      toast.error(
+        getErrorMessage(error, 'Failed to update shop.')
+      )
     } finally {
       setSaving(false)
     }
   }
 
   const handleLocationSave = async (data) => {
-    const res = await updateMyRetailShopLocation(data)
-    setShop(res.shop)
-  }
-
-  const handleDeleteImage = async (imageId) => {
-    if (!confirm('Remove this photo?')) return
+    if (isUnderReview) throw new Error('Location is under review.')
     try {
-      await deleteRetailShopImage(imageId)
-      toast.success('Photo removed')
-      load()
-    } catch {
-      toast.error('Failed to remove photo')
+      const response = await updateMyRetailShopLocation(data)
+
+      if (response.shop) {
+        setShop(response.shop)
+      }
+
+      await refresh()
+
+      return response
+    } catch (error) {
+      toast.error(
+        getErrorMessage(error, 'Failed to update location.')
+      )
+      throw error
     }
   }
 
-  if (loading) return <LoadingSpinner size="lg" />
-  if (!shop) return null
+  const handleSubmitForReview = async () => {
+    if (photos.hasChanges) {
+      toast.error(
+        'Save your photo changes before submitting for review.'
+      )
+      return
+    }
+
+    if (savedCount < MIN_IMAGES) {
+      toast.error(
+        `Upload at least ${MIN_IMAGES} photos before submitting.`
+      )
+      return
+    }
+
+    if (
+      !window.confirm(
+        'Submit your saved retail shop changes for Tourism Office review? Published shops remain visible until approval.'
+      )
+    ) {
+      return
+    }
+
+    setSubmittingReview(true)
+
+    try {
+      const { submitRetailShopForReview } = await import(
+        '../../../api/retailShopOwner'
+      )
+
+      if (typeof submitRetailShopForReview !== 'function') {
+        throw new Error(
+          'Submit for review API function is not configured.'
+        )
+      }
+
+      const response = await submitRetailShopForReview()
+
+      toast.success(
+        response.message || 'Shop submitted for review.'
+      )
+
+      await refresh()
+    } catch (error) {
+      toast.error(
+        getErrorMessage(
+          error,
+          error.message || 'Failed to submit shop for review.'
+        )
+      )
+    } finally {
+      setSubmittingReview(false)
+    }
+  }
+
+  if (loading) {
+    return <LoadingSpinner size="lg" />
+  }
+
+  if (!shop) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200/70 p-8 text-center shadow-(--shadow-card)">
+        <FiAlertCircle
+          size={32}
+          className="mx-auto mb-3 text-gray-400"
+        />
+
+        <p className="text-gray-600">
+          Shop details are unavailable.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setLoading(true)
+
+            load()
+              .catch(() => toast.error('Failed to load shop.'))
+              .finally(() => setLoading(false))
+          }}
+          className="btn-primary mt-4"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between flex-wrap gap-3 mb-8">
         <div>
-          <p className="text-primary-600 font-medium mb-2">Local Products Owner Portal</p>
-          <h1 className="text-3xl font-heading font-bold text-gray-900">Profile &amp; Shop</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">
+            Local Products Owner Portal
+          </p>
+
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">
+            Profile &amp; Shop
+          </h1>
         </div>
-        <span className={`text-xs font-medium px-3 py-1.5 rounded-full capitalize ${STATUS_STYLES[shop.status] || 'bg-gray-100 text-gray-700'}`}>
-          {shop.status}
-        </span>
+
+        <div className="flex items-center flex-wrap gap-2">
+          <span
+            className={`text-xs font-medium px-3 py-1.5 rounded-full capitalize ${
+              STATUS_STYLES[shop.status] ||
+              'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {shop.status}
+          </span>
+
+          <span
+            className={`text-xs font-medium px-3 py-1.5 rounded-full ${
+              REVIEW_STYLES[reviewStatus] ||
+              'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {REVIEW_LABELS[reviewStatus] || reviewStatus}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <AccountProfileCard />
+
           <LocationCard
-            address={shop.address}
+            address={revision?.proposed_data?.address ?? shop.address}
             municipality={shop.municipality}
-            municipalityId={shop.municipality_id}
+            municipalityId={revision?.proposed_data?.municipality_id ?? shop.municipality_id}
             onSave={handleLocationSave}
+            readOnly={isUnderReview}
           />
         </div>
 
-        <form onSubmit={handleSubmit} className="lg:col-span-2 bg-white rounded-xl p-4 sm:p-6 border border-gray-100 space-y-6 h-fit">
-          <h2 className="text-lg font-heading font-semibold text-gray-900">Shop Details</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
-            <input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          </div>
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
+            <div className="flex items-center gap-3 mb-3">
+              {reviewStatus === 'published' ? (
+                <FiCheckCircle
+                  className="text-green-600"
+                  size={22}
+                />
+              ) : reviewStatus === 'submitted' ? (
+                <FiClock
+                  className="text-blue-600"
+                  size={22}
+                />
+              ) : (
+                <FiAlertCircle
+                  className="text-amber-600"
+                  size={22}
+                />
+              )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              rows={6}
-              className="input-field"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              required
-              minLength={50}
-            />
-          </div>
+              <h2 className="text-lg font-heading font-semibold text-gray-900">
+                Publication Status
+              </h2>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Storefront / Interior Photos</label>
-            {shop.images?.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                {shop.images.map((img) => (
-                  <div key={img.id} className="relative group">
-                    <img src={getImageUrl(img)} alt="" className="w-full h-24 object-cover rounded-lg bg-gray-100" />
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteImage(img.id)}
-                      className="absolute top-1.5 right-1.5 bg-white/90 text-red-600 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Remove photo"
-                    >
-                      <FiTrash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+            {reviewStatus === 'published' && (
+              <p className="text-sm text-gray-600">
+                Your shop is published. Saving new changes
+                will require another Tourism Office review.
+              </p>
+            )}
+
+            {reviewStatus === 'submitted' && (
+              <p className="text-sm text-gray-600">
+                Your shop has been submitted to the Tourism
+                Office. Please wait for the review result.
+                Saving new changes will return the listing to draft.
+              </p>
+            )}
+
+            {reviewStatus === 'draft' && (
+              <p className="text-sm text-gray-600">
+                Your shop is currently a draft. Complete the
+                details, upload at least 5 photos, save your
+                changes, and submit for publication review.
+              </p>
+            )}
+
+            {reviewStatus === 'needs_revision' && (
+              <div>
+                <p className="text-sm text-gray-600">
+                  Your shop needs revisions before it can be
+                  published. Update the listing and submit it again.
+                </p>
+
+                {(revision?.admin_notes || shop.admin_notes) && (
+                  <p className="text-sm text-red-700 mt-3 bg-red-50 rounded-lg p-3">
+                    <strong>Tourism Office Feedback:</strong>{' '}
+                    {revision?.admin_notes || shop.admin_notes}
+                  </p>
+                )}
               </div>
             )}
-            <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
-              <FiUpload className="text-gray-400 shrink-0" size={18} />
-              <span className="min-w-0 text-sm text-gray-600 leading-snug wrap-anywhere">
-                {newImages.length > 0 ? `${newImages.length} new photo(s) selected` : 'Click to add photos (JPEG, PNG, WebP)'}
-              </span>
-              <input
-                type="file"
-                multiple
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => setNewImages(Array.from(e.target.files))}
-                className="hidden"
-              />
-            </label>
-            <p className="text-xs text-gray-400 mt-1.5">Up to 10 photos total. No videos.</p>
+
+            {shop.status !== 'approved' && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <p className="text-sm font-medium text-gray-700">
+                    Gallery requirement
+                  </p>
+
+                  <span className="text-sm font-semibold text-gray-900">
+                    {savedCount} / {MIN_IMAGES} minimum
+                  </span>
+                </div>
+
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      savedCount >= MIN_IMAGES
+                        ? 'bg-green-500'
+                        : 'bg-primary-500'
+                    }`}
+                    style={{
+                      width: `${
+                        Math.min(
+                          100,
+                          (savedCount / MIN_IMAGES) * 100
+                        )
+                      }%`,
+                    }}
+                  />
+                </div>
+
+                {savedCount < MIN_IMAGES ? (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Add {MIN_IMAGES - savedCount} more saved
+                    photo(s) to meet the minimum requirement.
+                  </p>
+                ) : (
+                  <p className="text-xs text-green-700 mt-2">
+                    Minimum photo requirement completed.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!isUnderReview && (shop.status !== 'approved' || Boolean(revision)) && (
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={handleSubmitForReview}
+                    disabled={!canSubmitForReview}
+                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingReview
+                      ? 'Submitting...'
+                      : 'Submit for Review'}
+                  </button>
+
+                  {photos.hasChanges && (
+                    <p className="text-xs text-amber-700 mt-2">
+                      Save your photo changes before submitting.
+                    </p>
+                  )}
+                </div>
+              )}
           </div>
 
-          {shop.status !== 'pending' && (
-            <p className="text-xs text-gray-500">Saving changes will require the Tourism Office to review and approve your shop again.</p>
-          )}
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 space-y-6 h-fit shadow-(--shadow-card)"
+          >
+            <h2 className="text-lg font-heading font-semibold text-gray-900">
+              Shop Details
+            </h2>
 
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </form>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Business Name
+              </label>
+
+              <input
+                className="input-field"
+                value={form.name}
+                disabled={isUnderReview}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    name: event.target.value,
+                  })
+                }
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description
+              </label>
+
+              <textarea
+                rows={6}
+                className="input-field"
+                value={form.description}
+                disabled={isUnderReview}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    description: event.target.value,
+                  })
+                }
+                required
+                minLength={50}
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Storefront / Interior Photo Gallery
+                  </label>
+
+                  <p className="text-xs text-gray-500 mt-1">
+                    Minimum 5 photos to publish. Maximum 100 photos.
+                  </p>
+                </div>
+
+                <span className="text-sm font-semibold text-gray-700 bg-gray-100 rounded-full px-3 py-1">
+                  <FiImage className="inline mr-1" />
+                  {totalCount} / {MAX_IMAGES}
+                </span>
+              </div>
+
+              {shop.status === 'approved' && (
+                <p className="text-xs text-blue-700 bg-blue-50 rounded-lg p-3 mb-4">
+                  Gallery changes are prepared for review.
+                  Your existing published photos remain visible
+                  until the Tourism Office approves the revision.
+                </p>
+              )}
+
+              {/* SAVED + NEW PHOTOS: cover, order and removals apply on save */}
+              <ListingPhotoManager
+                photos={photos}
+                savedImages={savedImages}
+                getImageUrl={getImageUrl}
+                onRemoveNew={handleRemoveNew}
+                disabled={saving || submittingReview || isUnderReview}
+                label="Shop photo"
+              />
+
+              {totalCount < MAX_IMAGES ? (
+                <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-4 cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-colors">
+                  <FiUpload
+                    className="text-gray-400 shrink-0"
+                    size={20}
+                  />
+
+                  <div className="min-w-0">
+                    <span className="block text-sm font-medium text-gray-700">
+                      Add Shop Photos
+                    </span>
+
+                    <span className="block text-xs text-gray-500 mt-1">
+                      JPEG, PNG, WebP • Up to 5 MB each •{' '}
+                      {remainingSlots} slot(s) remaining
+                    </span>
+                  </div>
+
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleSelectImages}
+                    disabled={saving || submittingReview || isUnderReview}
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <p className="text-sm text-green-700 bg-green-50 p-3 rounded-lg">
+                  Maximum gallery capacity reached (100 photos).
+                </p>
+              )}
+
+              <p className="text-xs text-gray-500 mt-3">
+                Your selected photos will be uploaded when you
+                click Save Changes.
+              </p>
+            </div>
+
+            {shop.status === 'approved' && (
+              <p className="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg">
+                Your published shop remains visible to tourists
+                while proposed changes are reviewed.
+                Only approved changes replace the published listing.
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="btn-primary disabled:opacity-50"
+              disabled={saving || submittingReview || isUnderReview}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+
+            {shop.status === 'approved' && !isUnderReview && (
+              <div className="rounded-lg border border-gray-200 p-3 text-xs text-gray-600 space-y-2">
+                <p>
+                  Only fixing spelling, capitalization or punctuation in the name or description?
+                  Small corrections that don&apos;t change any fact are published right away.
+                  Anything else is saved for Tourism Office review.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleMinorFix}
+                  disabled={saving || submittingReview || photos.hasChanges}
+                  className="inline-flex items-center min-h-9 px-3 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Publish spelling/formatting fix
+                </button>
+                {photos.hasChanges && <p className="text-amber-700">Save or undo your photo changes first.</p>}
+              </div>
+            )}
+          </form>
+        </div>
       </div>
     </div>
   )

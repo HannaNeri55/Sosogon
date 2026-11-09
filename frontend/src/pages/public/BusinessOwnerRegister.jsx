@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { registerUser } from '../../api/auth'
 import { getMunicipalities, getBarangays } from '../../api/admin'
 import toast from 'react-hot-toast'
-import { FiBriefcase, FiUser, FiMail, FiPhone, FiLock, FiMapPin, FiFileText, FiShield, FiUploadCloud, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi'
+import { FiBriefcase, FiUser, FiMail, FiPhone, FiLock, FiMapPin, FiFileText, FiUploadCloud, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi'
 
 function Field({ label, name, type = 'text', value, onChange, error, required = true, icon: Icon, children, autoComplete = 'off' }) {
   return (
@@ -62,8 +62,6 @@ export default function BusinessOwnerRegister() {
     barangay_id: '',
     business_permit_number: '',
     business_permit_file: null,
-    owner_id_type: 'national_id',
-    owner_id_number: '',
   })
 
   useEffect(() => {
@@ -91,7 +89,6 @@ export default function BusinessOwnerRegister() {
     if (!formData.barangay_id) e.barangay_id = 'Barangay is required'
     if (!formData.business_permit_number.trim()) e.business_permit_number = 'Permit number is required'
     if (!formData.business_permit_file) e.business_permit_file = 'Permit document is required'
-    if (!formData.owner_id_number.trim()) e.owner_id_number = 'ID number is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -115,8 +112,6 @@ export default function BusinessOwnerRegister() {
       payload.append('municipality_id', formData.municipality_id)
       payload.append('barangay_id', formData.barangay_id)
       payload.append('business_permit_number', formData.business_permit_number)
-      payload.append('owner_id_type', formData.owner_id_type)
-      payload.append('owner_id_number', formData.owner_id_number)
       if (formData.business_permit_file) {
         payload.append('business_permit_file', formData.business_permit_file)
       }
@@ -187,25 +182,6 @@ export default function BusinessOwnerRegister() {
                   value={formData.phone}
                   error={errors.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                />
-                <Field label="Owner ID Type" name="owner_id_type" error={errors.owner_id_type}>
-                  <div className="relative">
-                    <FiShield size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <select className="input-field pl-10" value={formData.owner_id_type} onChange={(e) => handleInputChange('owner_id_type', e.target.value)}>
-                      <option value="national_id">National ID</option>
-                      <option value="drivers_license">Driver's License</option>
-                      <option value="passport">Passport</option>
-                      <option value="voters_id">Voter's ID</option>
-                    </select>
-                  </div>
-                </Field>
-                <Field
-                  label="Owner ID Number"
-                  name="owner_id_number"
-                  icon={FiShield}
-                  value={formData.owner_id_number}
-                  error={errors.owner_id_number}
-                  onChange={(e) => handleInputChange('owner_id_number', e.target.value)}
                 />
               </div>
             </div>

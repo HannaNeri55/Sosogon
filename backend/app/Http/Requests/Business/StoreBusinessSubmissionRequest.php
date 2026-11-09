@@ -27,8 +27,18 @@ class StoreBusinessSubmissionRequest extends FormRequest
             'longitude' => 'required|numeric|between:-180,180',
             'contact_number' => 'required|string|max:20',
             'operating_hours' => 'nullable|string|max:255',
-            'business_permit' => 'required|file|mimes:pdf,doc,docx|max:10240',
+            // The permit is collected once, at registration. Only owners who registered
+            // before that (no registration permit on file) still upload it here.
+            'business_permit' => ($this->registrationPermitPath() ? 'nullable|' : 'required|').OwnerApplicationRules::PERMIT_RULE,
             'image' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
         ];
+    }
+
+    /** The permit from the owner's approved registration, if any. */
+    public function registrationPermitPath(): ?string
+    {
+        $application = $this->user()?->ownerApplication;
+
+        return $application?->status === 'approved' ? $application->business_permit_path : null;
     }
 }
