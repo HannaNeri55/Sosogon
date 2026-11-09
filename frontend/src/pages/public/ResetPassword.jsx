@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FiLock, FiEye, FiEyeOff, FiAlertTriangle } from 'react-icons/fi'
 import { resetPassword } from '../../api/auth'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../utils/apiErrors'
+import { focusFirstInvalid } from '../../utils/formErrors'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -49,7 +51,10 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate()) {
+      focusFirstInvalid()
+      return
+    }
 
     setLoading(true)
     try {
@@ -60,10 +65,10 @@ export default function ResetPassword() {
       const serverErrors = e.response?.data?.errors
       if (serverErrors) {
         setErrors(serverErrors)
-        Object.values(serverErrors).flat().forEach((msg) => toast.error(msg))
+        focusFirstInvalid()
         if (serverErrors.email) setExpired(true)
       } else {
-        toast.error(e.response?.data?.message || 'Something went wrong. Please try again.')
+        showApiError(e, 'Something went wrong. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -99,7 +104,8 @@ export default function ResetPassword() {
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
-                className={`input-field pl-9 pr-9 ${errors.password ? 'border-red-400 focus:ring-red-400' : ''}`}
+                className={`input-field pl-9 pr-9 ${errors.password ? 'input-error' : ''}`}
+                aria-invalid={!!errors.password}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
               />
@@ -112,7 +118,7 @@ export default function ResetPassword() {
                 {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
               </button>
             </div>
-            {errors.password && <p className="text-red-500 text-xs mt-1">{Array.isArray(errors.password) ? errors.password[0] : errors.password}</p>}
+            {errors.password && <p className="field-error">{Array.isArray(errors.password) ? errors.password[0] : errors.password}</p>}
           </div>
 
           <div>
@@ -123,12 +129,13 @@ export default function ResetPassword() {
                 name="password_confirmation"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
-                className={`input-field pl-9 ${errors.password_confirmation ? 'border-red-400 focus:ring-red-400' : ''}`}
+                className={`input-field pl-9 ${errors.password_confirmation ? 'input-error' : ''}`}
+                aria-invalid={!!errors.password_confirmation}
                 value={formData.password_confirmation}
                 onChange={(e) => handleInputChange('password_confirmation', e.target.value)}
               />
             </div>
-            {errors.password_confirmation && <p className="text-red-500 text-xs mt-1">{Array.isArray(errors.password_confirmation) ? errors.password_confirmation[0] : errors.password_confirmation}</p>}
+            {errors.password_confirmation && <p className="field-error">{Array.isArray(errors.password_confirmation) ? errors.password_confirmation[0] : errors.password_confirmation}</p>}
           </div>
 
           <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>

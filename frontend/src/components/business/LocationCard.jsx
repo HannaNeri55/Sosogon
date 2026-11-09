@@ -2,40 +2,36 @@ import { useEffect, useState } from 'react'
 import { FiMapPin, FiEdit2 } from 'react-icons/fi'
 import { getMunicipalities } from '../../api/admin'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../utils/apiErrors'
 
 export default function LocationCard({ address, municipality, municipalityId, onSave, readOnly = false }) {
   const [editing, setEditing] = useState(false)
   const [municipalities, setMunicipalities] = useState([])
   const [form, setForm] = useState({ address, municipality_id: municipalityId })
   const [saving, setSaving] = useState(false)
-  const [displayMunicipality, setDisplayMunicipality] = useState(municipality?.name)
+  // Name looked up for a municipalityId the `municipality` prop doesn't describe (e.g. right
+  // after a save), remembered with the id it belongs to so a stale lookup is never shown.
+  const [fetchedMunicipality, setFetchedMunicipality] = useState(null)
+  const propMatches = String(municipality?.id ?? '') === String(municipalityId ?? '')
 
   useEffect(() => {
+    if (propMatches || !municipalityId) return undefined
+
     let active = true
-
-    if (String(municipality?.id ?? '') === String(municipalityId ?? '')) {
-      setDisplayMunicipality(municipality?.name)
-      return () => { active = false }
-    }
-
-    setDisplayMunicipality(null)
-
-    if (municipalityId) {
-      getMunicipalities()
-        .then((items) => {
-          if (!active) return
-          const match = items.find(
-            (item) => String(item.id) === String(municipalityId)
-          )
-          setDisplayMunicipality(match?.name ?? null)
-        })
-        .catch(() => {
-          if (active) setDisplayMunicipality(null)
-        })
-    }
+    getMunicipalities()
+      .then((items) => {
+        if (!active) return
+        const match = items.find((item) => String(item.id) === String(municipalityId))
+        setFetchedMunicipality({ id: String(municipalityId), name: match?.name ?? null })
+      })
+      .catch(() => {})
 
     return () => { active = false }
-  }, [municipality?.id, municipality?.name, municipalityId])
+  }, [propMatches, municipalityId])
+
+  const displayMunicipality = propMatches
+    ? municipality?.name
+    : fetchedMunicipality?.id === String(municipalityId ?? '') ? fetchedMunicipality.name : null
 
   const startEditing = () => {
     setForm({ address, municipality_id: municipalityId })
@@ -55,7 +51,7 @@ export default function LocationCard({ address, municipality, municipalityId, on
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error('Failed to update location')
+      else showApiError(err, 'Failed to update location')
     } finally {
       setSaving(false)
     }

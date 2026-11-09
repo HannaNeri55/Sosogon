@@ -30,6 +30,7 @@ const ResetPassword = lazy(() => import('./pages/public/ResetPassword'))
 const PrivacyPolicy = lazy(() => import('./pages/public/PrivacyPolicy'))
 const TermsAndConditions = lazy(() => import('./pages/public/TermsAndConditions'))
 const PhotoCredits = lazy(() => import('./pages/public/PhotoCredits'))
+const SearchResults = lazy(() => import('./pages/public/SearchResults'))
 const RoleSelection = lazy(() => import('./pages/public/RoleSelection'))
 const AdminLogin = lazy(() => import('./pages/public/AdminLogin'))
 const TouristRegister = lazy(() => import('./pages/public/TouristRegister'))
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
           <Route path="/photo-credits" element={<PhotoCredits />} />
+          <Route path="/search" element={<SearchResults />} />
           {/* Any URL no other route matches (React Router ranks "*" last). */}
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -4,6 +4,8 @@ import { registerUser } from '../../api/auth'
 import { getMunicipalities, getBarangays } from '../../api/admin'
 import toast from 'react-hot-toast'
 import { FiBriefcase, FiUser, FiMail, FiPhone, FiLock, FiMapPin, FiFileText, FiUploadCloud, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi'
+import { showApiError } from '../../utils/apiErrors'
+import { focusFirstInvalid } from '../../utils/formErrors'
 
 function Field({ label, name, type = 'text', value, onChange, error, required = true, icon: Icon, children, autoComplete = 'off' }) {
   return (
@@ -18,13 +20,14 @@ function Field({ label, name, type = 'text', value, onChange, error, required = 
             name={name}
             type={type}
             autoComplete={autoComplete}
-            className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'border-red-400' : ''}`}
+            className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'input-error' : ''}`}
             value={value || ''}
             onChange={onChange}
+            aria-invalid={!!error}
           />
         </div>
       )}
-      {error && <p className="text-red-500 text-xs mt-1">{Array.isArray(error) ? error[0] : error}</p>}
+      {error && <p className="field-error">{Array.isArray(error) ? error[0] : error}</p>}
     </div>
   )
 }
@@ -95,7 +98,10 @@ export default function BusinessOwnerRegister() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate()) {
+      focusFirstInvalid()
+      return
+    }
 
     setLoading(true)
     try {
@@ -123,9 +129,9 @@ export default function BusinessOwnerRegister() {
       const serverErrors = e.response?.data?.errors
       if (serverErrors) {
         setErrors(serverErrors)
-        Object.values(serverErrors).flat().forEach((msg) => toast.error(msg))
+        focusFirstInvalid()
       } else {
-        toast.error(e.response?.data?.message || 'Registration failed')
+        showApiError(e, 'Registration failed')
       }
     } finally {
       setLoading(false)
@@ -213,13 +219,13 @@ export default function BusinessOwnerRegister() {
                   onChange={(e) => handleInputChange('business_address', e.target.value)}
                 />
                 <Field label="Municipality" name="municipality_id" error={errors.municipality_id}>
-                  <select className={`input-field ${errors.municipality_id ? 'border-red-400' : ''}`} value={formData.municipality_id} onChange={(e) => { setFormData({ ...formData, municipality_id: e.target.value, barangay_id: '' }); setErrors({ ...errors, municipality_id: '' }) }}>
+                  <select className={`input-field ${errors.municipality_id ? 'input-error' : ''}`} aria-invalid={!!errors.municipality_id} value={formData.municipality_id} onChange={(e) => { setFormData({ ...formData, municipality_id: e.target.value, barangay_id: '' }); setErrors({ ...errors, municipality_id: '' }) }}>
                     <option value="">Select Municipality</option>
                     {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                 </Field>
                 <Field label="Barangay" name="barangay_id" error={errors.barangay_id}>
-                  <select className={`input-field ${errors.barangay_id ? 'border-red-400' : ''}`} value={formData.barangay_id} onChange={(e) => handleInputChange('barangay_id', e.target.value)}>
+                  <select className={`input-field ${errors.barangay_id ? 'input-error' : ''}`} aria-invalid={!!errors.barangay_id} value={formData.barangay_id} onChange={(e) => handleInputChange('barangay_id', e.target.value)}>
                     <option value="">Select Barangay</option>
                     {barangays.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
@@ -259,7 +265,7 @@ export default function BusinessOwnerRegister() {
                     onChange={(e) => handleInputChange('business_permit_file', e.target.files[0])}
                   />
                 </label>
-                {errors.business_permit_file && <p className="text-red-500 text-xs mt-1">{errors.business_permit_file}</p>}
+                {errors.business_permit_file && <p className="field-error">{Array.isArray(errors.business_permit_file) ? errors.business_permit_file[0] : errors.business_permit_file}</p>}
               </div>
             </div>
 

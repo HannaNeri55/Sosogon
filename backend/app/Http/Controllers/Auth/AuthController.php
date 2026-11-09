@@ -111,7 +111,7 @@ class AuthController extends Controller
         ]);
 
         if (! Auth::validate($validated)) {
-            return response()->json(['message' => 'Incorrect Password'], 401);
+            return response()->json(['message' => 'Incorrect email or password.'], 401);
         }
 
         $user = User::where('email', $validated['email'])->firstOrFail();

@@ -5,6 +5,8 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { truncate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published' }
 
@@ -69,18 +71,18 @@ export default function ManageAnnouncements() {
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(editingId ? 'Failed to update announcement' : 'Failed to create announcement')
+      else showApiError(err, editingId ? 'Failed to update announcement' : 'Failed to create announcement')
     }
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this announcement?')) return
+    if (!(await confirmDialog({ title: 'Delete this announcement?', message: 'It will be removed from the site. This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteAnnouncement(id)
       toast.success('Announcement deleted')
       loadData()
-    } catch {
-      toast.error('Failed to delete announcement')
+    } catch (error) {
+      showApiError(error, 'Failed to delete announcement')
     }
   }
 

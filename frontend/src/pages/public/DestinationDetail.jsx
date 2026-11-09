@@ -1,4 +1,5 @@
 // frontend/src/pages/public/DestinationDetail.jsx
+import usePageTitle from "../../hooks/usePageTitle";
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { FiMapPin, FiClock, FiPlus } from "react-icons/fi";
@@ -20,6 +21,7 @@ import PriceList from "../../components/detail/PriceList";
 import { formatPeso, getImageUrl, IMAGE_FALLBACK_SVG } from "../../utils/helpers";
 import { approxHours, approxRange, estimateOf } from "../../utils/estimates";
 import { accommodationTypeLabel } from "../../utils/accommodationOptions";
+import LoadError from "../../components/common/LoadError";
 
 /** Single entrance fee for the facts card (used when no itemised fees exist). */
 function entranceFeeLabel(fee) {
@@ -32,20 +34,29 @@ export default function DestinationDetail() {
   const { id } = useParams();
   const { isAuthenticated, isTourist } = useAuth();
   const [destination, setDestination] = useState(null);
+  usePageTitle(destination?.name);
   // The nearby_* lists and their radius, straight from the API response.
   const [nearby, setNearby] = useState(null);
   const [loading, setLoading] = useState(true);
+  // True when the request failed for a reason other than "no such destination".
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const loadDestination = async () => {
     try {
       const data = await getDestination(id);
       setDestination(data.destination);
       setNearby(data);
+      setLoadFailed(false);
     } catch (e) {
-      console.error(e);
+      setLoadFailed(e.response?.status !== 404);
     } finally {
       setLoading(false);
     }
+  };
+
+  const retry = () => {
+    setLoading(true);
+    loadDestination();
   };
 
   useEffect(() => {
@@ -56,7 +67,9 @@ export default function DestinationDetail() {
 
   if (loading) return <LoadingSpinner size="lg" />;
   if (!destination)
-    return <div className="p-6 sm:p-8 text-center">Destination not found</div>;
+    return loadFailed
+      ? <div className="px-4 py-12 sm:py-16"><LoadError what="this destination" onRetry={retry} className="max-w-xl mx-auto" /></div>
+      : <div className="p-6 sm:p-8 text-center">Destination not found</div>;
 
   const hasFeeList = destination.fees?.length > 0;
   const hasPricing = hasFeeList || destination.rates?.length > 0;

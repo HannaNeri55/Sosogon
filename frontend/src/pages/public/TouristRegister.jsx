@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import toast from 'react-hot-toast'
 import { postAuthPath } from '../../utils/pendingItinerary'
 import { FiCompass, FiUser, FiMail, FiPhone, FiLock } from 'react-icons/fi'
+import { showApiError } from '../../utils/apiErrors'
+import { focusFirstInvalid } from '../../utils/formErrors'
 
 function Field({ label, name, type = 'text', value, onChange, error, required = true, icon: Icon, autoComplete = 'off' }) {
   return (
@@ -17,12 +18,13 @@ function Field({ label, name, type = 'text', value, onChange, error, required = 
           name={name}
           type={type}
           autoComplete={autoComplete}
-          className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'border-red-400 focus:ring-red-400' : ''}`}
+          className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'input-error' : ''}`}
           value={value}
           onChange={onChange}
+          aria-invalid={!!error}
         />
       </div>
-      {error && <p className="text-red-500 text-xs mt-1">{Array.isArray(error) ? error[0] : error}</p>}
+      {error && <p className="field-error">{Array.isArray(error) ? error[0] : error}</p>}
     </div>
   )
 }
@@ -58,7 +60,10 @@ export default function TouristRegister() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate()) {
+      focusFirstInvalid()
+      return
+    }
 
     setLoading(true)
     try {
@@ -68,9 +73,9 @@ export default function TouristRegister() {
       const serverErrors = e.response?.data?.errors
       if (serverErrors) {
         setErrors(serverErrors)
-        Object.values(serverErrors).flat().forEach((msg) => toast.error(msg))
+        focusFirstInvalid()
       } else {
-        toast.error(e.response?.data?.message || 'Registration failed')
+        showApiError(e, 'Registration failed')
       }
     } finally {
       setLoading(false)

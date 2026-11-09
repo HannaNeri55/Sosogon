@@ -5,6 +5,7 @@ import LocationFilterSidebar from "../common/LocationFilterSidebar";
 import Pagination from "../common/Pagination";
 import EmptyState from "../common/EmptyState";
 import SkeletonGrid from "../common/SkeletonCard";
+import LoadError from "../common/LoadError";
 
 /**
  * Shared body of the public listing pages (destinations, accommodations, food,
@@ -27,6 +28,8 @@ export default function ListingLayout({
   pagination,
   onPageChange,
   renderItem,
+  loadFailed = false,
+  onRetry,
 }) {
   const [showFilters, setShowFilters] = useState(false);
   const count = pagination?.total ?? items.length;
@@ -78,7 +81,7 @@ export default function ListingLayout({
             <p className="text-sm text-gray-600" aria-live="polite">
               {loading && items.length === 0 ? (
                 "Loading…"
-              ) : (
+              ) : loadFailed ? null : (
                 <>
                   <span className="font-semibold text-gray-900">{count}</span> {count === 1 ? noun.one : noun.many} found
                 </>
@@ -97,6 +100,8 @@ export default function ListingLayout({
 
           {loading && items.length === 0 ? (
             <SkeletonGrid className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6" />
+          ) : loadFailed ? (
+            <LoadError what={noun.many} onRetry={onRetry} />
           ) : items.length === 0 ? (
             <EmptyState
               icon={FiSearch}

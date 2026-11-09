@@ -1,4 +1,5 @@
 // frontend/src/pages/public/About.jsx
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiTarget, FiMapPin, FiUsers, FiHome, FiCoffee, FiShoppingBag, FiArrowRight, FiCompass } from 'react-icons/fi'
@@ -35,6 +36,7 @@ const PILLARS = [
 ]
 
 export default function About() {
+  usePageTitle('About')
   const [stats, setStats] = useState({ destinations: 0, accommodations: 0, food: 0 })
   const [loaded, setLoaded] = useState(false)
 

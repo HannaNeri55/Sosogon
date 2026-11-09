@@ -26,6 +26,8 @@ export async function openPrivateFile(fetchBlob, filename = 'attachment') {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (error) {
     tab?.close()
-    toast.error(error.response?.status === 404 ? 'That file is no longer available.' : 'Could not open the file. Please try again.')
+    if (!error.errorDialogShown) {
+      toast.error(error.response?.status === 404 ? 'That file is no longer available.' : 'Could not open the file. Please try again.')
+    }
   }
 }

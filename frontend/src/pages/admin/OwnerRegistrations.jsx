@@ -10,6 +10,8 @@ import {
 } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { formatShortDate } from '../../utils/helpers'
+import { getErrorMessage, showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 /**
  * Business Owner registration review (account approval). Approving activates
@@ -46,11 +48,6 @@ const PERMIT_EXTENSIONS = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
 }
 
-function errorMessage(error, fallback) {
-  const data = error?.response?.data
-  return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback
-}
-
 function Detail({ label, children }) {
   return (
     <div>
@@ -75,7 +72,7 @@ export default function OwnerRegistrations() {
       const data = await getOwnerApplications(filter ? { status: filter } : {})
       setItems(Array.isArray(data) ? data : [])
     } catch (error) {
-      setLoadError(errorMessage(error, 'Could not load owner registrations.'))
+      setLoadError(getErrorMessage(error, 'Could not load owner registrations.'))
     } finally {
       setLoading(false)
     }
@@ -109,13 +106,10 @@ export default function OwnerRegistrations() {
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch (error) {
       tab?.close()
-      const status = error.response?.status
-      toast.error(
-        status === 404 ? 'No permit file was found for this registration.'
-          : status === 401 ? 'Your session has expired. Please sign in again.'
-            : status === 403 ? 'You do not have access to this business permit.'
-              : 'Could not open the business permit.'
-      )
+      // An expired session or missing access is already explained by the error dialog.
+      if (!error.errorDialogShown) {
+        toast.error(error.response?.status === 404 ? 'No permit file was found for this registration.' : 'Could not open the business permit.')
+      }
     } finally {
       setActingId(null)
     }
@@ -123,7 +117,7 @@ export default function OwnerRegistrations() {
 
   const approve = async (application) => {
     if (actingId) return
-    if (!window.confirm(`Approve the registration for "${application.business_name}"? The owner's account will be activated so they can sign in and submit their listing.`)) return
+    if (!(await confirmDialog({ title: `Approve "${application.business_name}"?`, message: "The owner's account will be activated so they can sign in and submit their listing.", confirmLabel: 'Approve' }))) return
 
     setActingId(application.id)
     try {
@@ -131,7 +125,7 @@ export default function OwnerRegistrations() {
       toast.success(response.message || 'Registration approved.')
       await load()
     } catch (error) {
-      toast.error(errorMessage(error, 'Could not approve this registration.'))
+      showApiError(error, 'Could not approve this registration.')
       if (error.response?.status === 409) await load()
     } finally {
       setActingId(null)
@@ -155,7 +149,7 @@ export default function OwnerRegistrations() {
       setRejecting(null)
       await load()
     } catch (error) {
-      setRejecting((current) => current && { ...current, error: errorMessage(error, 'Could not reject this registration.') })
+      setRejecting((current) => current && { ...current, error: getErrorMessage(error, 'Could not reject this registration.') })
       if (error.response?.status === 409) await load()
     } finally {
       setActingId(null)

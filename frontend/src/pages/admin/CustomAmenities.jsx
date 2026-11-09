@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { getCustomAmenities, promoteAmenity } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { showApiError } from '../../utils/apiErrors'
 
 const SCOPES = [
   { value: 'property', label: 'Property' },
@@ -41,7 +42,7 @@ export default function CustomAmenities() {
       toast.success(`"${entry.name}" added to the suggestions.`)
       await load()
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not add this suggestion.')
+      showApiError(err, 'Could not add this suggestion.')
     } finally {
       setActing(null)
     }

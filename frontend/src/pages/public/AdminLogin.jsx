@@ -1,28 +1,54 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import toast from 'react-hot-toast'
 import { FiShield } from 'react-icons/fi'
 import SessionExpiredNotice from '../../components/common/SessionExpiredNotice'
+import LoginAlert from '../../components/common/LoginAlert'
+import { loginErrors, validateLogin } from '../../utils/loginErrors'
 
 export default function AdminLogin() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '' })
+  // Messages under each field, and the dialog for a refused sign-in (see utils/loginErrors.js).
+  const [errors, setErrors] = useState({})
+  const [alert, setAlert] = useState(null)
+  const emailRef = useRef(null)
+  const passwordRef = useRef(null)
+
+  const change = (name, value) => {
+    setFormData({ ...formData, [name]: value })
+    // Typing again clears the red. A wrong-credentials error belongs to both fields.
+    setErrors((current) => (current.credentials ? {} : { ...current, [name]: undefined }))
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const invalid = validateLogin(formData)
+    setErrors(invalid)
+    if (invalid.email || invalid.password) {
+      (invalid.email ? emailRef : passwordRef).current?.focus()
+      return
+    }
+
     setLoading(true)
     try {
       const user = await login(formData)
       if (user.role !== 'admin') {
-        toast.error('This login is for administrators only.')
+        setAlert({
+          icon: FiShield,
+          title: 'Administrators only',
+          message: 'This login is for Tourism Office staff. Please use the main login page for your account.',
+          button: 'OK',
+        })
         return
       }
       navigate('/admin')
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Invalid admin credentials')
+    } catch (error) {
+      const result = loginErrors(error)
+      setErrors(result.fields)
+      setAlert(result.alert)
     } finally {
       setLoading(false)
     }
@@ -41,19 +67,51 @@ export default function AdminLogin() {
 
         <SessionExpiredNotice />
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <input name="email" type="email" autoComplete="username" className="input-field" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+            <label htmlFor="admin-email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+            <input
+              ref={emailRef}
+              id="admin-email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              className={`input-field ${errors.email ? 'input-error' : ''}`}
+              value={formData.email}
+              onChange={(e) => change('email', e.target.value)}
+              aria-invalid={!!errors.email}
+              aria-describedby={typeof errors.email === 'string' ? 'admin-email-error' : errors.credentials ? 'admin-password-error' : undefined}
+            />
+            {typeof errors.email === 'string' && <p id="admin-email-error" className="field-error">{errors.email}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-            <input name="password" type="password" autoComplete="current-password" className="input-field" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required />
+            <label htmlFor="admin-password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <input
+              ref={passwordRef}
+              id="admin-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              className={`input-field ${errors.password ? 'input-error' : ''}`}
+              value={formData.password}
+              onChange={(e) => change('password', e.target.value)}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'admin-password-error' : undefined}
+            />
+            {typeof errors.password === 'string' && <p id="admin-password-error" className="field-error">{errors.password}</p>}
           </div>
           <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
             {loading ? 'Authenticating...' : 'Login as Admin'}
           </button>
         </form>
+
+        <LoginAlert
+          alert={alert}
+          onClose={() => {
+            setAlert(null)
+            if (errors.credentials) passwordRef.current?.select()
+          }}
+        />
 
         <p className="text-center text-xs text-gray-400 mt-6">
           Admin accounts are managed by the system administrator.

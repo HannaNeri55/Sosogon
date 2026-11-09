@@ -66,15 +66,15 @@ Route::prefix('v1')->group(function () {
 
     // Public listings
     Route::get('/destinations', [DestinationController::class, 'index']);
-    Route::get('/destinations/{id}', [DestinationController::class, 'show'])->name('destinations.show');
+    Route::get('/destinations/{id}', [DestinationController::class, 'show'])->name('destinations.show')->middleware('track.visitor');
     Route::get('/accommodations', [AccommodationController::class, 'index']);
-    Route::get('/accommodations/{id}', [AccommodationController::class, 'show'])->name('accommodations.show');
+    Route::get('/accommodations/{id}', [AccommodationController::class, 'show'])->name('accommodations.show')->middleware('track.visitor');
     Route::get('/food-beverages', [FoodBeverageController::class, 'index']);
-    Route::get('/food-beverages/{id}', [FoodBeverageController::class, 'show'])->name('food-beverages.show');
+    Route::get('/food-beverages/{id}', [FoodBeverageController::class, 'show'])->name('food-beverages.show')->middleware('track.visitor');
     Route::get('/retail-products', [RetailProductController::class, 'index']);
-    Route::get('/retail-products/{id}', [RetailProductController::class, 'show'])->name('retail-products.show');
+    Route::get('/retail-products/{id}', [RetailProductController::class, 'show'])->name('retail-products.show')->middleware('track.visitor');
     Route::get('/retail-shops', [RetailShopController::class, 'index']);
-    Route::get('/retail-shops/{id}', [RetailShopController::class, 'show'])->name('retail-shops.show');
+    Route::get('/retail-shops/{id}', [RetailShopController::class, 'show'])->name('retail-shops.show')->middleware('track.visitor');
     Route::get('/activities/{id}', [ActivityController::class, 'show']);
     Route::get('/amenity-suggestions', [AmenitySuggestionController::class, 'index']);
     Route::get('/photo-credits', [PhotoCreditController::class, 'index']);
@@ -90,7 +90,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/categories', [LocationController::class, 'categories']);
 
     // Search
-    Route::get('/search', [SearchController::class, 'search']);
+    Route::get('/search', [SearchController::class, 'search'])->middleware('throttle:60,1');
 
     // A shared itinerary, read-only, for whoever holds the secret link its owner created.
     Route::middleware('throttle:60,1')->where(['token' => '[A-Za-z0-9]{48}'])->group(function () {

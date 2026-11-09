@@ -1,3 +1,4 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { FiMapPin, FiPhone, FiClock, FiShoppingBag } from 'react-icons/fi'
@@ -14,6 +15,7 @@ import DetailSection from '../../components/detail/DetailSection'
 import FactsCard from '../../components/detail/FactsCard'
 import ProductDetailModal from '../../components/shops/ProductDetailModal'
 import { formatProductPrice, getImageUrl } from '../../utils/helpers'
+import LoadError from '../../components/common/LoadError'
 
 // Cover photo first, then the owner's order.
 const sortImages = (images = []) =>
@@ -28,18 +30,20 @@ export default function RetailShopDetail() {
   const { id } = useParams()
 
   const [shop, setShop] = useState(null)
+  usePageTitle(shop?.name)
   const [loading, setLoading] = useState(true)
   const [openProduct, setOpenProduct] = useState(null)
-  const [error, setError] = useState(false)
+  // 'not_found', or 'failed' when the request failed for another reason (offline, server error).
+  const [error, setError] = useState(null)
 
   const load = async () => {
     try {
       const data = await getRetailShop(id)
       setShop(data)
-      setError(false)
-    } catch {
+      setError(null)
+    } catch (e) {
       setShop(null)
-      setError(true)
+      setError(e.response?.status === 404 ? 'not_found' : 'failed')
     } finally {
       setLoading(false)
     }
@@ -52,16 +56,25 @@ export default function RetailShopDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  const retry = () => {
+    setLoading(true)
+    load()
+  }
+
   const gallery = useMemo(() => sortImages(shop?.images), [shop])
 
   if (loading) {
     return <LoadingSpinner size="lg" />
   }
 
+  if (error === 'failed') {
+    return <div className="px-4 py-12 sm:py-16"><LoadError what="this shop" onRetry={retry} className="max-w-xl mx-auto" /></div>
+  }
+
   if (error || !shop) {
     return (
       <div className="p-6 sm:p-8 text-center text-gray-600">
-        Shop not found or could not be loaded.
+        Shop not found.
       </div>
     )
   }

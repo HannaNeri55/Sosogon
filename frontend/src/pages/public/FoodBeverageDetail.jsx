@@ -1,3 +1,4 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { FiMapPin, FiPhone, FiClock } from 'react-icons/fi'
@@ -14,6 +15,7 @@ import FactsCard from '../../components/detail/FactsCard'
 import DiningInfo from '../../components/detail/DiningInfo'
 import { getImageUrl } from '../../utils/helpers'
 import { approxHours, approxRange, estimateOf } from '../../utils/estimates'
+import LoadError from '../../components/common/LoadError'
 
 // Cover photo first, then the owner's order.
 const sortGallery = (images = []) =>
@@ -28,17 +30,19 @@ export default function FoodBeverageDetail() {
   const { id } = useParams()
 
   const [item, setItem] = useState(null)
+  usePageTitle(item?.name)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // 'not_found', or 'failed' when the request failed for another reason (offline, server error).
+  const [error, setError] = useState(null)
 
   const load = async () => {
     try {
       const data = await getFoodBeverage(id)
       setItem(data)
-      setError(false)
-    } catch {
+      setError(null)
+    } catch (e) {
       setItem(null)
-      setError(true)
+      setError(e.response?.status === 404 ? 'not_found' : 'failed')
     } finally {
       setLoading(false)
     }
@@ -51,16 +55,25 @@ export default function FoodBeverageDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  const retry = () => {
+    setLoading(true)
+    load()
+  }
+
   const gallery = useMemo(() => sortGallery(item?.images), [item])
 
   if (loading) {
     return <LoadingSpinner size="lg" />
   }
 
+  if (error === 'failed') {
+    return <div className="px-4 py-12 sm:py-16"><LoadError what="this place" onRetry={retry} className="max-w-xl mx-auto" /></div>
+  }
+
   if (error || !item) {
     return (
       <div className="p-6 sm:p-8 text-center text-gray-600">
-        Food &amp; Beverage establishment not found or could not be loaded.
+        Food &amp; Beverage establishment not found.
       </div>
     )
   }

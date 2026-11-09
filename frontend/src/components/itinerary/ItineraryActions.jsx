@@ -5,13 +5,11 @@ import { downloadItineraryPdf, getItineraryDocument, saveItinerary } from '../..
 import { hasOfflineCopy, keepOfflineCopy } from '../../utils/offlineItineraries'
 import { openPrintWindow, pdfFilename, printDocument, saveBlobAs } from '../../utils/itineraryExport'
 import ShareItineraryModal from './ShareItineraryModal'
+import { showApiError } from '../../utils/apiErrors'
 
 const BUTTON =
   'inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 min-h-11 text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
 const OUTLINE = `${BUTTON} text-primary-600 bg-white border border-primary-200 hover:bg-primary-50`
-
-const failure = (error, fallback) =>
-  error.response ? error.response.data?.message || fallback : 'No connection right now. Try again when you have signal.'
 
 /** Save, Download PDF, Print and Share for one of the tourist's itineraries. */
 export default function ItineraryActions({ itinerary, onSaved }) {
@@ -47,7 +45,7 @@ export default function ItineraryActions({ itinerary, onSaved }) {
       try {
         savedAt = (await saveItinerary(itinerary.id)).saved_at
       } catch (error) {
-        toast.error(failure(error, 'Could not save this itinerary.'))
+        showApiError(error, 'Could not save this itinerary.')
         return
       }
       onSaved(savedAt)
@@ -66,7 +64,7 @@ export default function ItineraryActions({ itinerary, onSaved }) {
         saveBlobAs(await downloadItineraryPdf(itinerary.id), pdfFilename(itinerary.title))
         toast.success('PDF downloaded. It opens without internet.')
       } catch (error) {
-        toast.error(failure(error, 'Could not create the PDF.'))
+        showApiError(error, 'Could not create the PDF.')
       }
     })
 
@@ -83,7 +81,7 @@ export default function ItineraryActions({ itinerary, onSaved }) {
         await printDocument(win, html)
       } catch (error) {
         win.close()
-        toast.error(failure(error, 'Could not prepare the itinerary for printing.'))
+        showApiError(error, 'Could not prepare the itinerary for printing.')
       }
     })
   }

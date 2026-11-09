@@ -3,6 +3,8 @@ import { FiCheck, FiCopy, FiFileText, FiLink, FiLoader, FiShare2, FiX } from 're
 import toast from 'react-hot-toast'
 import { createShareLink, downloadItineraryPdf, getShareLink, revokeShareLink } from '../../api/itineraries'
 import { canShareFile, canShareNatively, copyText, pdfFilename } from '../../utils/itineraryExport'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const canShareFiles = () => canShareNatively() && typeof navigator.canShare === 'function'
 
@@ -38,7 +40,7 @@ export default function ShareItineraryModal({ itinerary, onClose }) {
   useEffect(() => {
     getShareLink(itinerary.id)
       .then((data) => setToken(data.share_token))
-      .catch(() => toast.error('Could not check this itinerary’s sharing. Check your connection.'))
+      .catch((error) => showApiError(error, 'Could not check this itinerary’s sharing. Check your connection.'))
       .finally(() => setLoading(false))
   }, [itinerary.id])
 
@@ -69,23 +71,23 @@ export default function ShareItineraryModal({ itinerary, onClose }) {
     try {
       setToken((await createShareLink(itinerary.id)).share_token)
       toast.success('Share link created.')
-    } catch {
-      toast.error('Could not create the link. Check your connection.')
+    } catch (error) {
+      showApiError(error, 'Could not create the link. Check your connection.')
     } finally {
       setBusy(false)
     }
   }
 
   const stopSharing = async () => {
-    if (!confirm('Stop sharing? The link will stop working for everyone you sent it to.')) return
+    if (!(await confirmDialog({ title: 'Stop sharing?', message: 'The link will stop working for everyone you sent it to.', confirmLabel: 'Stop sharing', danger: true }))) return
     setBusy(true)
     try {
       await revokeShareLink(itinerary.id)
       setToken(null)
       setCopied(false)
       toast.success('This itinerary is private again.')
-    } catch {
-      toast.error('Could not stop sharing. Check your connection.')
+    } catch (error) {
+      showApiError(error, 'Could not stop sharing. Check your connection.')
     } finally {
       setBusy(false)
     }

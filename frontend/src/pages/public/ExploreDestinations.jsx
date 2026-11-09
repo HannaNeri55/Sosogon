@@ -1,3 +1,4 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { getDestinations } from '../../api/destinations'
 import { getCategories } from '../../api/admin'
@@ -9,10 +10,14 @@ import useUrlFilters from '../../hooks/useUrlFilters'
 import useListingScroll from '../../hooks/useListingScroll'
 
 export default function ExploreDestinations() {
+  usePageTitle('Destinations')
   const [destinations, setDestinations] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  // A failed load shows an error with Try again (attempt re-runs it), not "nothing found".
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useUrlFilters({
     q: '',
     category_id: '',
@@ -32,13 +37,14 @@ export default function ExploreDestinations() {
 
     async function loadDestinations() {
       setLoading(true)
+      setLoadFailed(false)
       try {
         const data = await getDestinations(filters)
         if (ignore) return
         setDestinations(data.data || [])
         setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
-      } catch (e) {
-        if (!ignore) console.error(e)
+      } catch {
+        if (!ignore) setLoadFailed(true)
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -48,7 +54,7 @@ export default function ExploreDestinations() {
     return () => {
       ignore = true
     }
-  }, [filters])
+  }, [filters, attempt])
 
   useListingScroll(!loading)
 
@@ -78,6 +84,8 @@ export default function ExploreDestinations() {
           )
         }
         loading={loading}
+        loadFailed={loadFailed}
+        onRetry={() => setAttempt((n) => n + 1)}
         items={destinations}
         noun={{ one: 'destination', many: 'destinations' }}
         pagination={pagination}

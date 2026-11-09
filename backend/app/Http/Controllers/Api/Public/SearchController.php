@@ -26,7 +26,7 @@ class SearchController extends Controller
         if ($type === 'all' || $type === 'destination') {
             $results['destinations'] = Destination::published()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
-                ->with('category:id,name', 'images')
+                ->with('category:id,name', 'municipality:id,name', 'images')
                 ->select('id', 'name', 'category_id', 'municipality_id', 'average_rating', 'latitude', 'longitude')
                 ->limit(10)->get();
         }
@@ -34,32 +34,32 @@ class SearchController extends Controller
         if ($type === 'all' || $type === 'accommodation') {
             $results['accommodations'] = Accommodation::approved()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
-                ->with('images')
-                ->select('id', 'name', 'type', 'classifications', 'municipality_id', 'price_range', 'average_rating')
+                ->with('municipality:id,name', 'images')
+                ->select('id', 'name', 'type', 'classifications', 'municipality_id', 'price_range', 'average_rating', 'is_sample')
                 ->limit(10)->get();
         }
 
         if ($type === 'all' || $type === 'food_beverage') {
             $results['food_beverages'] = FoodBeverage::approved()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
-                ->with('images')
-                ->select('id', 'name', 'cuisine_type', 'municipality_id', 'price_range', 'average_rating')
+                ->with('municipality:id,name', 'images')
+                ->select('id', 'name', 'cuisine_type', 'municipality_id', 'price_range', 'average_rating', 'is_sample')
                 ->limit(10)->get();
         }
 
         if ($type === 'all' || $type === 'retail_product') {
             $results['retail_products'] = RetailProduct::approved()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
-                ->with('images')
-                ->select('id', 'name', 'product_type', 'municipality_id', 'price')
+                ->with('municipality:id,name', 'images')
+                ->select('id', 'name', 'product_type', 'municipality_id', 'price', 'retail_shop_id')
                 ->limit(10)->get();
         }
 
         if ($type === 'all' || $type === 'retail_shop') {
             $results['retail_shops'] = RetailShop::approved()
                 ->where(fn ($query) => $query->where('name', 'like', "%{$q}%")->orWhere('description', 'like', "%{$q}%"))
-                ->with('images')
-                ->select('id', 'name', 'municipality_id')
+                ->with('municipality:id,name', 'images')
+                ->select('id', 'name', 'municipality_id', 'is_sample')
                 ->limit(10)->get();
         }
 

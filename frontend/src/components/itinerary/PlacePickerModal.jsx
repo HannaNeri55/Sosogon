@@ -111,7 +111,7 @@ export default function PlacePickerModal({ itineraryId, mode, usedPlaces, stayId
               <h2 className="text-lg font-heading font-semibold text-gray-900">{title}</h2>
               <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100" aria-label="Close">
+            <button onClick={onClose} className="-m-1 p-2.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100" aria-label="Close">
               <FiX size={20} />
             </button>
           </div>

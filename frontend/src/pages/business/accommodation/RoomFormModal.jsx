@@ -6,6 +6,8 @@ import { getImageUrl } from '../../../utils/helpers'
 import { ROOM_CATEGORIES } from '../../../utils/constants'
 import { PRICING_MODES, UNIT_TYPES, isEntireProperty, optionName } from '../../../utils/accommodationOptions'
 import AmenityPicker from '../../../components/common/AmenityPicker'
+import { showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const textOf = (value) => (value === null || value === undefined ? '' : String(value))
 
@@ -45,7 +47,7 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
   const noun = whole ? 'Entire Property' : 'Option'
 
   const handleRemoveExistingImage = async (imageId) => {
-    if (!window.confirm('Remove this photo?')) return
+    if (!(await confirmDialog({ title: 'Remove this photo?', confirmLabel: 'Remove', danger: true }))) return
 
     setRemovingId(imageId)
 
@@ -54,8 +56,8 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
       setExistingImages((prev) => prev.filter((img) => img.id !== imageId))
       setImagesChanged(true)
       toast.success('Photo removed')
-    } catch {
-      toast.error('Failed to remove photo')
+    } catch (error) {
+      showApiError(error, 'Failed to remove photo')
     } finally {
       setRemovingId(null)
     }
@@ -102,7 +104,7 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
       if (errors) {
         Object.values(errors).flat().forEach((msg) => toast.error(msg))
       } else {
-        toast.error(err.response?.data?.message || 'Failed to save')
+        showApiError(err, 'Failed to save')
       }
     } finally {
       setSaving(false)
@@ -254,10 +256,10 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
                         type="button"
                         onClick={() => handleRemoveExistingImage(img.id)}
                         disabled={removingId === img.id}
-                        className="absolute top-1 right-1 bg-white/90 text-red-600 p-1 rounded-full sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
+                        className="absolute top-1 right-1 bg-white/90 text-red-600 p-1.5 rounded-full shadow-sm [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
                         aria-label="Remove photo"
                       >
-                        <FiTrash2 size={12} />
+                        <FiTrash2 size={14} />
                       </button>
                     </div>
                   ))}

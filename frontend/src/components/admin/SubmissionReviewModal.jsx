@@ -21,6 +21,7 @@ import {
   IMAGE_FALLBACK_SVG,
 } from '../../utils/helpers'
 import { STATUS_COLORS } from '../../utils/constants'
+import { showApiError } from '../../utils/apiErrors'
 
 function Detail({ icon: Icon, label, children }) {
   return (
@@ -73,8 +74,8 @@ export default function SubmissionReviewModal({
       setTimeout(() => {
         URL.revokeObjectURL(url)
       }, 60000)
-    } catch {
-      toast.error('Could not open the business permit.')
+    } catch (error) {
+      showApiError(error, 'Could not open the business permit.')
     }
   }
 

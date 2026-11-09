@@ -5,6 +5,7 @@ import { FiAlertTriangle, FiArrowLeft, FiPaperclip, FiX } from 'react-icons/fi'
 import Modal from '../../common/Modal'
 import { enforceUser } from '../../../api/admin'
 import { ACTION_CONSEQUENCES, ENFORCEMENT_ACTIONS, formatDay, roleLabel } from '../../../utils/accountStates'
+import { showApiError } from '../../../utils/apiErrors'
 
 const FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const FILE_MAX = 5 * 1024 * 1024
@@ -99,7 +100,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
         setErrors(Object.fromEntries(Object.entries(serverErrors).map(([key, messages]) => [key.split('.')[0], messages[0]])))
         setStep('form')
       }
-      toast.error(error.response?.data?.message || 'The action could not be applied.')
+      showApiError(error, 'The action could not be applied.')
     } finally {
       setBusy(false)
     }
@@ -214,7 +215,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
                   {files.map((file, index) => (
                     <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-sm text-gray-700">
                       <span className="truncate">{file.name}</span>
-                      <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="p-1 text-gray-400 hover:text-red-600" aria-label={`Remove ${file.name}`}>
+                      <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600" aria-label={`Remove ${file.name}`}>
                         <FiX size={14} />
                       </button>
                     </li>

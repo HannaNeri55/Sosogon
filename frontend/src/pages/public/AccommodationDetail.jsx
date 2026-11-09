@@ -1,3 +1,4 @@
+import usePageTitle from "../../hooks/usePageTitle";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { FiMapPin, FiPhone, FiClock, FiKey, FiMail, FiHome } from "react-icons/fi";
@@ -17,6 +18,7 @@ import AmenityGrid from "../../components/detail/AmenityGrid";
 import DiningInfo from "../../components/detail/DiningInfo";
 import RoomCard from "../../components/rooms/RoomCard";
 import RoomDetailsModal from "../../components/rooms/RoomDetailsModal";
+import LoadError from "../../components/common/LoadError";
 
 function EntirePropertyDetails({ option, onOpen }) {
   const price = optionPrice(option);
@@ -40,7 +42,10 @@ function EntirePropertyDetails({ option, onOpen }) {
 export default function AccommodationDetail() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
+  usePageTitle(item?.name);
   const [loading, setLoading] = useState(true);
+  // True when the request failed for a reason other than "no such accommodation".
+  const [loadFailed, setLoadFailed] = useState(false);
   // The open option lives in the link, so a tourist can share it or go back to the page.
   const [searchParams, setSearchParams] = useSearchParams();
   const openOption = useCallback((option) => setSearchParams({ option: option.id }), [setSearchParams]);
@@ -48,8 +53,17 @@ export default function AccommodationDetail() {
 
   const load = () =>
     getAccommodation(id)
-      .then(setItem)
+      .then((data) => {
+        setItem(data);
+        setLoadFailed(false);
+      })
+      .catch((error) => setLoadFailed(error.response?.status !== 404))
       .finally(() => setLoading(false));
+
+  const retry = () => {
+    setLoading(true);
+    load();
+  };
 
   useEffect(() => {
     load();
@@ -59,7 +73,9 @@ export default function AccommodationDetail() {
   if (loading) return <LoadingSpinner size="lg" />;
 
   if (!item) {
-    return <div className="p-6 sm:p-8 text-center">Accommodation not found</div>;
+    return loadFailed
+      ? <div className="px-4 py-12 sm:py-16"><LoadError what="this accommodation" onRetry={retry} className="max-w-xl mx-auto" /></div>
+      : <div className="p-6 sm:p-8 text-center">Accommodation not found</div>;
   }
 
   const options = item.rooms || [];

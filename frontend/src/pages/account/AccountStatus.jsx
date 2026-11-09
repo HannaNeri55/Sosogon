@@ -123,7 +123,7 @@ function AppealModal({ violation, onClose, onDone }) {
               {files.map((file, index) => (
                 <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-sm">
                   <span className="truncate">{file.name}</span>
-                  <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="p-1 text-gray-400 hover:text-red-600" aria-label={`Remove ${file.name}`}>
+                  <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600" aria-label={`Remove ${file.name}`}>
                     <FiX size={14} />
                   </button>
                 </li>

@@ -5,6 +5,8 @@ import { getImageUrl } from '../../utils/helpers'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const EMPTY_FORM = { title: '', subtitle: '', eyebrow: '', sort_order: 0, is_active: true, image: null }
 
@@ -84,18 +86,18 @@ export default function ManageHeroSlides() {
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(editingId ? 'Failed to update hero slide' : 'Failed to create hero slide')
+      else showApiError(err, editingId ? 'Failed to update hero slide' : 'Failed to create hero slide')
     }
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this hero slide?')) return
+    if (!(await confirmDialog({ title: 'Delete this hero slide?', message: 'It will be removed from the homepage slideshow. This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteHeroSlide(id)
       toast.success('Hero slide deleted')
       loadData()
-    } catch {
-      toast.error('Failed to delete hero slide')
+    } catch (error) {
+      showApiError(error, 'Failed to delete hero slide')
     }
   }
 

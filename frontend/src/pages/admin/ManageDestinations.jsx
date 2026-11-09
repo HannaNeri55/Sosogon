@@ -26,6 +26,8 @@ const MAX_NEW_PHOTOS_PER_SAVE = 10;
 import toast from "react-hot-toast";
 import MapLocationPicker from "../../components/maps/MapLocationPicker";
 import useScrollToForm from "../../hooks/useScrollToForm";
+import { showApiError } from "../../utils/apiErrors";
+import { confirmDialog } from "../../utils/dialogs";
 
 const EMPTY_FORM = {
   name: "",
@@ -326,12 +328,7 @@ export default function ManageDestinations() {
             ),
           );
         });
-      else
-        toast.error(
-          editingId
-            ? "Failed to update destination"
-            : "Failed to create destination",
-        );
+      else showApiError(e, editingId ? "Failed to update destination" : "Failed to create destination");
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -339,13 +336,13 @@ export default function ManageDestinations() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this destination?")) return;
+    if (!(await confirmDialog({ title: "Delete this destination?", message: "Its photos and activities will be removed too. This cannot be undone.", confirmLabel: "Delete", danger: true }))) return;
     try {
       await deleteDestination(id);
       toast.success("Destination deleted");
       loadData();
-    } catch {
-      toast.error("Failed to delete destination");
+    } catch (error) {
+      showApiError(error, "Failed to delete destination");
     }
   };
 

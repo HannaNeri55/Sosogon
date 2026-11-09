@@ -1,11 +1,12 @@
 // frontend/src/pages/public/Login.jsx
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
-import toast from 'react-hot-toast'
 import { postAuthPath } from '../../utils/pendingItinerary'
+import { loginErrors, validateLogin } from '../../utils/loginErrors'
 import SessionExpiredNotice from '../../components/common/SessionExpiredNotice'
+import LoginAlert from '../../components/common/LoginAlert'
 
 export default function Login() {
   const { login } = useAuth()
@@ -14,9 +15,27 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '' })
+  // Messages under each field, and the dialog for a refused sign-in (see utils/loginErrors.js).
+  const [errors, setErrors] = useState({})
+  const [alert, setAlert] = useState(null)
+  const emailRef = useRef(null)
+  const passwordRef = useRef(null)
+
+  const change = (name, value) => {
+    setFormData({ ...formData, [name]: value })
+    // Typing again clears the red. A wrong-credentials error belongs to both fields.
+    setErrors((current) => (current.credentials ? {} : { ...current, [name]: undefined }))
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const invalid = validateLogin(formData)
+    setErrors(invalid)
+    if (invalid.email || invalid.password) {
+      (invalid.email ? emailRef : passwordRef).current?.focus()
+      return
+    }
+
     setLoading(true)
     try {
       const user = await login(formData)
@@ -25,12 +44,9 @@ export default function Login() {
       const restricted = ['suspended', 'deactivated'].includes(user.account_state)
       navigate(!restricted && user.role === 'tourist' && from?.startsWith('/') ? from : postAuthPath(user))
     } catch (error) {
-      // 403 = signed in correctly but refused (closed account, registration under review): show why.
-      toast.error(
-        error.response?.status === 403 && error.response.data?.message
-          ? error.response.data.message
-          : 'Invalid email or password. Please try again.'
-      )
+      const result = loginErrors(error)
+      setErrors(result.fields)
+      setAlert(result.alert)
     } finally {
       setLoading(false)
     }
@@ -64,34 +80,41 @@ export default function Login() {
 
           <SessionExpiredNotice />
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">Email</label>
               <div className="relative">
-                <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <FiMail className={`absolute left-3 top-1/2 -translate-y-1/2 ${errors.email ? 'text-red-500' : 'text-gray-400'}`} size={16} />
                 <input
+                  ref={emailRef}
+                  id="login-email"
                   name="email"
                   type="email"
                   autoComplete="username"
-                  className="input-field pl-9"
+                  className={`input-field pl-9 ${errors.email ? 'input-error' : ''}`}
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
+                  onChange={(e) => change('email', e.target.value)}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={typeof errors.email === 'string' ? 'login-email-error' : errors.credentials ? 'login-password-error' : undefined}
                 />
               </div>
+              {typeof errors.email === 'string' && <p id="login-email-error" className="field-error">{errors.email}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
               <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <FiLock className={`absolute left-3 top-1/2 -translate-y-1/2 ${errors.password ? 'text-red-500' : 'text-gray-400'}`} size={16} />
                 <input
+                  ref={passwordRef}
+                  id="login-password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  className="input-field pl-9 pr-9"
+                  className={`input-field pl-9 pr-9 ${errors.password ? 'input-error' : ''}`}
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
+                  onChange={(e) => change('password', e.target.value)}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'login-password-error' : undefined}
                 />
                 <button
                   type="button"
@@ -102,6 +125,7 @@ export default function Login() {
                   {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
                 </button>
               </div>
+              {typeof errors.password === 'string' && <p id="login-password-error" className="field-error">{errors.password}</p>}
               <div className="text-right mt-2">
                 <Link to="/forgot-password" className="text-sm text-primary-600 font-medium hover:text-primary-700">
                   Forgot password?
@@ -112,6 +136,14 @@ export default function Login() {
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
+
+          <LoginAlert
+            alert={alert}
+            onClose={() => {
+              setAlert(null)
+              if (errors.credentials) passwordRef.current?.select()
+            }}
+          />
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Don't have an account?{' '}

@@ -15,6 +15,8 @@ import SubmissionReviewModal from '../../components/admin/SubmissionReviewModal'
 import { STATUS_COLORS } from '../../utils/constants'
 import { daysUntil, formatShortDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const TABS = [
   { key: 'pending', label: 'Pending' },
@@ -32,8 +34,6 @@ const DEFAULT_REMOVAL_REASON =
 function warningPreview(name) {
   return `We have observed a continued pattern of negative reviews from visitors for "${name}". We kindly ask that you review recent visitor feedback and take appropriate corrective action. If negative reviews persist, your business will be removed from the system after ${WARNING_GRACE_DAYS} days.`
 }
-
-const errorMessage = (err, fallback) => err.response?.data?.message || fallback
 
 export default function ReviewSubmissions() {
   const [items, setItems] = useState([])
@@ -82,7 +82,7 @@ export default function ReviewSubmissions() {
       setReviewing(null)
       loadData()
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to approve'))
+      showApiError(err, 'Failed to approve')
     }
   }
 
@@ -93,7 +93,7 @@ export default function ReviewSubmissions() {
       setReviewing(null)
       loadData()
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to reject'))
+      showApiError(err, 'Failed to reject')
     }
   }
 
@@ -105,20 +105,20 @@ export default function ReviewSubmissions() {
       closePanel()
       loadData()
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to send warning'))
+      showApiError(err, 'Failed to send warning')
     } finally {
       setBusy(false)
     }
   }
 
   const handleClearWarning = async (item) => {
-    if (!confirm(`Clear the warning for "${item.business_name}"? The owner's dashboard notice will be removed.`)) return
+    if (!(await confirmDialog({ title: `Clear the warning for "${item.business_name}"?`, message: "The owner's dashboard notice will be removed.", confirmLabel: 'Clear warning' }))) return
     try {
       await clearSubmissionWarning(item.id)
       toast.success('Warning cleared')
       loadData()
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to clear warning'))
+      showApiError(err, 'Failed to clear warning')
     }
   }
 
@@ -133,7 +133,7 @@ export default function ReviewSubmissions() {
       : left > 0
         ? `\n\nNote: the ${WARNING_GRACE_DAYS}-day notice period has not ended yet (${left} day${left === 1 ? '' : 's'} left).`
         : ''
-    if (!confirm(`Remove "${item.business_name}" from the system? Its listing, photos and reviews will be permanently deleted.${caution}`)) return
+    if (!(await confirmDialog({ title: `Remove "${item.business_name}"?`, message: `Its listing, photos and reviews will be permanently deleted.${caution}`, confirmLabel: 'Remove', danger: true }))) return
 
     setBusy(true)
     try {
@@ -142,7 +142,7 @@ export default function ReviewSubmissions() {
       closePanel()
       loadData()
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to remove business'))
+      showApiError(err, 'Failed to remove business')
     } finally {
       setBusy(false)
     }

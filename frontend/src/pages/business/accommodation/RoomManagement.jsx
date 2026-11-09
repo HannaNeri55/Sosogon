@@ -8,6 +8,8 @@ import RoomFormModal from './RoomFormModal'
 import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
 import { withProposedValues } from '../../../components/business/itemChanges'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const MAX_OPTIONS = 30
 
@@ -104,13 +106,13 @@ export default function RoomManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this option? This cannot be undone.')) return
+    if (!(await confirmDialog({ title: 'Delete this option?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteRoom(id)
       toast.success('Option deleted')
       load()
-    } catch {
-      toast.error('Failed to delete option')
+    } catch (error) {
+      showApiError(error, 'Failed to delete option')
     }
   }
 

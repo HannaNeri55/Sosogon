@@ -19,6 +19,8 @@ import LocationCard from '../../../components/business/LocationCard'
 import ListingPhotoManager from '../../../components/business/ListingPhotoManager'
 import usePhotoArrangement from '../../../components/business/usePhotoArrangement'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -43,16 +45,6 @@ const REVIEW_LABELS = {
   submitted: 'Submitted for Review',
   needs_revision: 'Needs Revision',
   published: 'Published',
-}
-
-function getErrorMessage(error, fallback) {
-  const errors = error?.response?.data?.errors
-
-  if (errors) {
-    return Object.values(errors).flat().join('\n')
-  }
-
-  return error?.response?.data?.message || fallback
 }
 
 export default function MyShop() {
@@ -142,9 +134,9 @@ export default function MyShop() {
           description: proposed.description ?? data.description ?? '',
         })
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
-          toast.error('Failed to load shop details.')
+          showApiError(error, 'Failed to load shop details.')
         }
       })
       .finally(() => {
@@ -225,7 +217,7 @@ export default function MyShop() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to save the correction.'))
+      showApiError(error, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -264,9 +256,7 @@ export default function MyShop() {
       photos.reset()
       await refresh()
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to update shop.')
-      )
+      showApiError(error, 'Failed to update shop.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -285,9 +275,7 @@ export default function MyShop() {
 
       return response
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to update location.')
-      )
+      showApiError(error, 'Failed to update location.', { allErrors: true })
       throw error
     }
   }
@@ -308,9 +296,7 @@ export default function MyShop() {
     }
 
     if (
-      !window.confirm(
-        'Submit your saved retail shop changes for Tourism Office review? Published shops remain visible until approval.'
-      )
+      !(await confirmDialog({ title: 'Submit for review?', message: 'Your saved shop changes go to the Tourism Office for review. A published shop stays visible until they are approved.', confirmLabel: 'Submit for review' }))
     ) {
       return
     }
@@ -336,11 +322,11 @@ export default function MyShop() {
 
       await refresh()
     } catch (error) {
-      toast.error(
-        getErrorMessage(
-          error,
-          error.message || 'Failed to submit shop for review.'
-        )
+      // Checks above throw plain Errors with their own message; request failures use the API's.
+      showApiError(
+        error,
+        error.isAxiosError ? 'Failed to submit shop for review.' : error.message || 'Failed to submit shop for review.',
+        { allErrors: true }
       )
     } finally {
       setSubmittingReview(false)
@@ -369,7 +355,7 @@ export default function MyShop() {
             setLoading(true)
 
             load()
-              .catch(() => toast.error('Failed to load shop.'))
+              .catch((error) => showApiError(error, 'Failed to load shop.'))
               .finally(() => setLoading(false))
           }}
           className="btn-primary mt-4"
