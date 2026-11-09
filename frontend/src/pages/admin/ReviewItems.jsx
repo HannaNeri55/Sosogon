@@ -10,8 +10,9 @@ import Pagination from '../../components/common/Pagination'
 import StatCard from '../../components/common/StatCard'
 import ItemReviewModal from '../../components/admin/ItemReviewModal'
 import { formatShortDate } from '../../utils/helpers'
-import { ITEM_KINDS, REVIEW_TABS, priceLabel, reviewError } from '../../utils/itemReview'
+import { ITEM_KINDS, REVIEW_TABS, priceLabel } from '../../utils/itemReview'
 import RoomFormModal from '../business/accommodation/RoomFormModal'
+import { getErrorMessage, showApiError } from '../../utils/apiErrors'
 
 /**
  * Review queue for rooms, menu items and retail products:
@@ -101,7 +102,7 @@ export default function ReviewItems() {
       }
       return result
     } catch (error) {
-      if (request === latestRequest.current) setLoadError(reviewError(error, 'Could not load the review queue.'))
+      if (request === latestRequest.current) setLoadError(getErrorMessage(error, 'Could not load the review queue.'))
       return null
     } finally {
       if (request === latestRequest.current) setLoading(false)
@@ -180,7 +181,7 @@ export default function ReviewItems() {
       }
       await load()
     } catch (error) {
-      toast.error(reviewError(error, 'This item could not be processed.'))
+      showApiError(error, 'This item could not be processed.')
     } finally {
       setBusy(false)
     }
@@ -204,7 +205,7 @@ export default function ReviewItems() {
       else toast.success(`${plural(result.succeeded)} ${verb(bulk.action)}. 0 failed.`)
       await load()
     } catch (error) {
-      setBulk((current) => current && { ...current, error: reviewError(error, 'Could not process these items. Nothing was changed.') })
+      setBulk((current) => current && { ...current, error: getErrorMessage(error, 'Could not process these items. Nothing was changed.') })
     } finally {
       setBusy(false)
     }

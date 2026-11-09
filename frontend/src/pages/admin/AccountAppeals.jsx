@@ -11,6 +11,7 @@ import StatusPill from '../../components/account/StatusPill'
 import ViolationCard from '../../components/admin/accounts/ViolationCard'
 import { openPrivateFile } from '../../utils/privateFile'
 import { APPEAL_STATUSES, formatDateTime, roleLabel } from '../../utils/accountStates'
+import { showApiError } from '../../utils/apiErrors'
 
 const STATUS_TABS = [
   { value: 'pending', label: 'Waiting for review' },
@@ -33,8 +34,7 @@ function DecisionModal({ appeal, onClose, onDone }) {
       toast.success(data.message)
       onDone()
     } catch (error) {
-      const errors = error.response?.data?.errors
-      toast.error(errors ? Object.values(errors).flat()[0] : error.response?.data?.message || 'The decision could not be saved.')
+      showApiError(error, 'The decision could not be saved.')
     } finally {
       setBusy(false)
     }

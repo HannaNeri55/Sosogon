@@ -1,4 +1,5 @@
 // frontend/src/pages/public/Accommodations.jsx
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { getAccommodations } from '../../api/accommodations'
 import ListingCard from '../../components/cards/ListingCard'
@@ -17,9 +18,13 @@ const PRICE_RANGES = [
 ]
 
 export default function Accommodations() {
+  usePageTitle('Accommodations')
   const [items, setItems] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [loading, setLoading] = useState(true)
+  // A failed load shows an error with Try again (attempt re-runs it), not "nothing found".
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useUrlFilters({
     q: '',
     type: '',
@@ -35,11 +40,14 @@ export default function Accommodations() {
 
     async function loadItems() {
       setLoading(true)
+      setLoadFailed(false)
       try {
         const data = await getAccommodations(filters)
         if (ignore) return
         setItems(data.data || [])
         setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
+      } catch {
+        if (!ignore) setLoadFailed(true)
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -49,7 +57,7 @@ export default function Accommodations() {
     return () => {
       ignore = true
     }
-  }, [filters])
+  }, [filters, attempt])
 
   useListingScroll(!loading)
 
@@ -86,6 +94,8 @@ export default function Accommodations() {
           </>
         }
         loading={loading}
+        loadFailed={loadFailed}
+        onRetry={() => setAttempt((n) => n + 1)}
         items={items}
         noun={{ one: 'accommodation', many: 'accommodations' }}
         pagination={pagination}

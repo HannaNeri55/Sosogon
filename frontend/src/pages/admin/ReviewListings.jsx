@@ -41,6 +41,7 @@ import {
   getImageUrl,
   IMAGE_FALLBACK_SVG,
 } from '../../utils/helpers'
+import { showApiError } from '../../utils/apiErrors'
 
 const BUSINESS_TYPES = [
   { key: 'accommodation', label: 'Accommodations' },
@@ -212,20 +213,6 @@ function getPhotoPath(image) {
   )
 }
 
-function getErrorMessage(error, fallback) {
-  const response = error?.response?.data
-
-  if (response?.errors) {
-    const message = Object.values(response.errors)
-      .flat()
-      .find(Boolean)
-
-    if (message) return message
-  }
-
-  return response?.message || error?.message || fallback
-}
-
 function extractItems(response) {
   if (Array.isArray(response)) return response
   if (Array.isArray(response?.data)) return response.data
@@ -265,11 +252,8 @@ function InformationField({ label, value }) {
 }
 
 function GalleryViewer({ images }) {
+  // Starts at the first photo; the caller's `key` remounts it for each listing.
   const [selectedIndex, setSelectedIndex] = useState(0)
-
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [images])
 
   if (!images.length) {
     return (
@@ -383,7 +367,7 @@ function CategoryEditor({ listing, locked, onSaved }) {
       onSaved(response.accommodation)
       toast.success('Categories saved.')
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Could not save the categories.'))
+      showApiError(error, 'Could not save the categories.')
     } finally {
       setSaving(false)
     }
@@ -556,7 +540,7 @@ function ReviewModal({
               </span>
             </div>
 
-            <GalleryViewer images={images} />
+            <GalleryViewer key={`${type}-${listing.id}-${isRevision ? 'revision' : 'listing'}`} images={images} />
 
             {!hasValidGallery && (
               <p className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
@@ -839,9 +823,7 @@ export default function ReviewListings() {
         if (active) setItems(extractItems(response))
       } catch (error) {
         if (active) {
-          toast.error(
-            getErrorMessage(error, 'Failed to load business listings.')
-          )
+          showApiError(error, 'Failed to load business listings.')
           setItems([])
         }
       } finally {
@@ -875,9 +857,7 @@ export default function ReviewListings() {
         data: extractDetail(response),
       })
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to load listing details.')
-      )
+      showApiError(error, 'Failed to load listing details.')
     } finally {
       setLoadingDetail(false)
     }
@@ -914,9 +894,7 @@ export default function ReviewListings() {
       setSelectedListing(null)
       setRefreshKey((value) => value + 1)
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to review listing.')
-      )
+      showApiError(error, 'Failed to review listing.')
     } finally {
       setBusy(false)
     }

@@ -7,6 +7,8 @@ import MenuItemFormModal from './MenuItemFormModal'
 import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
 import { withProposedValues } from '../../../components/business/itemChanges'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const MAX_MENU_ITEMS = 20
 
@@ -62,13 +64,13 @@ export default function MenuManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this dish? This cannot be undone.')) return
+    if (!(await confirmDialog({ title: 'Delete this dish?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteMenuItem(id)
       toast.success('Dish deleted')
       load()
-    } catch {
-      toast.error('Failed to delete dish')
+    } catch (error) {
+      showApiError(error, 'Failed to delete dish')
     }
   }
 

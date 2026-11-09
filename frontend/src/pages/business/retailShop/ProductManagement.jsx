@@ -7,6 +7,8 @@ import ProductFormModal from './ProductFormModal'
 import ItemReviewStatus from '../../../components/business/ItemReviewStatus'
 import { withProposedValues } from '../../../components/business/itemChanges'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const MAX_PRODUCTS = 20
 
@@ -64,13 +66,13 @@ export default function ProductManagement() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this product? This cannot be undone.')) return
+    if (!(await confirmDialog({ title: 'Delete this product?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteRetailShopProduct(id)
       toast.success('Product deleted')
       load()
-    } catch {
-      toast.error('Failed to delete product')
+    } catch (error) {
+      showApiError(error, 'Failed to delete product')
     }
   }
 

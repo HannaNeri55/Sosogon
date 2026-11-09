@@ -15,6 +15,7 @@ import { SUBMISSION_TYPES } from '../../utils/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import MapLocationPicker from '../../components/maps/MapLocationPicker'
+import { showApiError } from '../../utils/apiErrors'
 
 function SectionLabel({ icon: Icon, children }) {
   return (
@@ -95,7 +96,7 @@ export default function SubmitListing({ onSuccess }) {
           .flat()
           .forEach((msg) => toast.error(msg))
       } else {
-        toast.error('Failed to submit listing')
+        showApiError(e, 'Failed to submit listing')
       }
     } finally {
       setLoading(false)

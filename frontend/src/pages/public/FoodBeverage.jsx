@@ -1,4 +1,5 @@
 // frontend/src/pages/public/FoodBeverage.jsx
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { FiSearch } from 'react-icons/fi'
 import { getFoodBeverages } from '../../api/foodBeverages'
@@ -16,9 +17,13 @@ const PRICE_RANGES = [
 ]
 
 export default function FoodBeverage() {
+  usePageTitle('Food & Beverage')
   const [items, setItems] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [loading, setLoading] = useState(true)
+  // A failed load shows an error with Try again (attempt re-runs it), not "nothing found".
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useUrlFilters({
     q: '',
     cuisine_type: '',
@@ -34,11 +39,14 @@ export default function FoodBeverage() {
 
     async function loadItems() {
       setLoading(true)
+      setLoadFailed(false)
       try {
         const data = await getFoodBeverages(filters)
         if (ignore) return
         setItems(data.data || [])
         setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
+      } catch {
+        if (!ignore) setLoadFailed(true)
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -48,7 +56,7 @@ export default function FoodBeverage() {
     return () => {
       ignore = true
     }
-  }, [filters])
+  }, [filters, attempt])
 
   useListingScroll(!loading)
 
@@ -92,6 +100,8 @@ export default function FoodBeverage() {
           </div>
         }
         loading={loading}
+        loadFailed={loadFailed}
+        onRetry={() => setAttempt((n) => n + 1)}
         items={items}
         noun={{ one: 'place', many: 'places' }}
         pagination={pagination}

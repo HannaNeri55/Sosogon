@@ -1,3 +1,4 @@
+import usePageTitle from "../../hooks/usePageTitle";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FiFlag, FiStar, FiSun, FiClock, FiUsers, FiTag, FiMapPin } from "react-icons/fi";
@@ -8,22 +9,36 @@ import DetailLayout from "../../components/detail/DetailLayout";
 import DetailSection from "../../components/detail/DetailSection";
 import FactsCard from "../../components/detail/FactsCard";
 import { getImageUrl } from "../../utils/helpers";
+import LoadError from "../../components/common/LoadError";
 
 export default function ActivityDetail() {
   const { id } = useParams();
   const [activity, setActivity] = useState(null);
+  usePageTitle(activity?.name);
   const [loading, setLoading] = useState(true);
+  // True when the request failed for a reason other than "not found"; attempt re-runs the load.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     getActivity(id)
-      .then(setActivity)
-      .catch(() => setActivity(null))
+      .then((data) => {
+        setActivity(data);
+        setLoadFailed(false);
+      })
+      .catch((error) => {
+        setActivity(null);
+        setLoadFailed(error.response?.status !== 404);
+      })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, attempt]);
+
+  const retry = () => setAttempt((n) => n + 1);
 
   if (loading) return <LoadingSpinner size="lg" />;
+  if (!activity && loadFailed) return <div className="px-4 py-12 sm:py-16"><LoadError what="this activity" onRetry={retry} className="max-w-xl mx-auto" /></div>;
   if (!activity)
     return <div className="p-6 sm:p-8 text-center text-gray-500">Activity not found.</div>;
 

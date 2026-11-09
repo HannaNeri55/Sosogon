@@ -33,7 +33,7 @@ function VisitorTrendChart({ data }) {
       <div className="flex items-end justify-between gap-2 sm:gap-4 h-40 border-b border-gray-100">
         {data.map((d) => (
           <div key={d.date} className="group flex-1 flex flex-col items-center justify-end h-full gap-1.5">
-            <span className="text-xs font-semibold text-gray-700 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-xs font-semibold text-gray-700 tabular-nums [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
               {d.views}
             </span>
             <div

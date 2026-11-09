@@ -20,6 +20,7 @@ import LocationCard from '../../../components/business/LocationCard'
 import ListingPhotoManager from '../../../components/business/ListingPhotoManager'
 import usePhotoArrangement from '../../../components/business/usePhotoArrangement'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -44,12 +45,6 @@ const REVIEW_LABELS = {
   submitted: 'Under Review',
   needs_revision: 'Needs Revision',
   published: 'Published',
-}
-
-function getErrorMessage(error, fallback) {
-  const errors = error?.response?.data?.errors
-  if (errors) return Object.values(errors).flat().join('\n')
-  return error?.response?.data?.message || error?.message || fallback
 }
 
 function getEditableData(data) {
@@ -133,8 +128,8 @@ export default function MyEstablishment() {
       .then((data) => {
         if (active) applyData(data)
       })
-      .catch(() => {
-        if (active) toast.error('Failed to load establishment details.')
+      .catch((error) => {
+        if (active) showApiError(error, 'Failed to load establishment details.')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -209,7 +204,7 @@ export default function MyEstablishment() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to save the correction.'))
+      showApiError(error, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -264,12 +259,7 @@ export default function MyEstablishment() {
       await refresh()
       scrollToStatus()
     } catch (error) {
-      toast.error(
-        getErrorMessage(
-          error,
-          'Could not complete Save & Submit for Review.'
-        )
-      )
+      showApiError(error, 'Could not complete Save & Submit for Review.', { allErrors: true })
 
       // Refresh because saving may have succeeded even if
       // the subsequent submission failed.
@@ -289,9 +279,7 @@ export default function MyEstablishment() {
       await refresh()
       return response
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, 'Failed to update location.')
-      )
+      showApiError(error, 'Failed to update location.', { allErrors: true })
       throw error
     }
   }
@@ -312,8 +300,8 @@ export default function MyEstablishment() {
             setLoading(true)
             try {
               await load()
-            } catch {
-              toast.error('Failed to load establishment.')
+            } catch (error) {
+              showApiError(error, 'Failed to load establishment.')
             } finally {
               setLoading(false)
             }

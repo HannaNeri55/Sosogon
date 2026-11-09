@@ -13,6 +13,8 @@ import EnforcementModal from '../../components/admin/accounts/EnforcementModal'
 import ReasonActionModal from '../../components/admin/accounts/ReasonActionModal'
 import UserAccountPanel from '../../components/admin/accounts/UserAccountPanel'
 import { formatDateTime } from '../../utils/accountStates'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const ROLE_STYLES = {
   admin: 'bg-primary-50 text-primary-700',
@@ -85,13 +87,13 @@ export default function ManageUsers() {
   }
 
   const activateLegacyOwner = async (user) => {
-    if (!confirm(`Activate ${user.name}'s business owner account? This owner registered before registration review existed.`)) return
+    if (!(await confirmDialog({ title: `Activate ${user.name}'s account?`, message: 'This business owner registered before registration review existed.', confirmLabel: 'Activate' }))) return
     try {
       await updateAdminUser(user.id, { status: 'active' })
       toast.success('Owner account activated.')
       loadData()
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Could not activate this account.')
+      showApiError(e, 'Could not activate this account.')
     }
   }
 

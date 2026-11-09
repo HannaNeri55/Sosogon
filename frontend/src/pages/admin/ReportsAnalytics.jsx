@@ -12,10 +12,10 @@ import {
   Legend,
 } from 'chart.js'
 import { FiEye, FiSearch, FiTrendingUp, FiStar, FiDownload } from 'react-icons/fi'
-import toast from 'react-hot-toast'
 import { getReportOverview, getReportVisitors, getReportPopular, getReportSearches, exportReportPdf } from '../../api/admin'
 import StatCard from '../../components/common/StatCard'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { showApiError } from '../../utils/apiErrors'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 // Charts use the site's body font instead of Chart.js's default Helvetica.
@@ -52,8 +52,8 @@ export default function ReportsAnalytics() {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Failed to export the report')
+    } catch (error) {
+      showApiError(error, 'Failed to export the report')
     } finally {
       setExporting(false)
     }

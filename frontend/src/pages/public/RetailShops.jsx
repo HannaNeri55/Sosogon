@@ -1,3 +1,4 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { getRetailShops } from '../../api/retailShops'
 import ListingCard from '../../components/cards/ListingCard'
@@ -7,9 +8,13 @@ import useUrlFilters from '../../hooks/useUrlFilters'
 import useListingScroll from '../../hooks/useListingScroll'
 
 export default function RetailShops() {
+  usePageTitle('Shops')
   const [items, setItems] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [loading, setLoading] = useState(true)
+  // A failed load shows an error with Try again (attempt re-runs it), not "nothing found".
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [filters, setFilters] = useUrlFilters({
     q: '',
     municipality_id: '',
@@ -23,11 +28,14 @@ export default function RetailShops() {
 
     async function loadItems() {
       setLoading(true)
+      setLoadFailed(false)
       try {
         const data = await getRetailShops(filters)
         if (ignore) return
         setItems(data.data || [])
         setPagination({ current_page: data.current_page, last_page: data.last_page, total: data.total })
+      } catch {
+        if (!ignore) setLoadFailed(true)
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -37,7 +45,7 @@ export default function RetailShops() {
     return () => {
       ignore = true
     }
-  }, [filters])
+  }, [filters, attempt])
 
   useListingScroll(!loading)
 
@@ -56,6 +64,8 @@ export default function RetailShops() {
         hasActiveFilters={[filters.q, filters.municipality_id].some(Boolean)}
         onClearAll={() => setFilters((prev) => ({ sort: prev.sort, dir: prev.dir }))}
         loading={loading}
+        loadFailed={loadFailed}
+        onRetry={() => setAttempt((n) => n + 1)}
         items={items}
         noun={{ one: 'shop', many: 'shops' }}
         pagination={pagination}

@@ -4,23 +4,66 @@ import { FiX } from 'react-icons/fi'
 
 const WIDTHS = { sm: 'sm:max-w-md', md: 'sm:max-w-xl', lg: 'sm:max-w-2xl', xl: 'sm:max-w-4xl' }
 
+// Open modals, newest last. Escape closes only the top one, e.g. an error dialog shown over a form.
+const openModals = []
+
 /**
  * Standard dialog: title bar with close button, scrollable body, optional footer.
  * Escape and a click outside close it (unless `busy`). Bottom sheet on phones.
+ *
+ * `variant="alert"` is the short centered message used for errors and confirmations: an
+ * optional `icon` in a red circle, the title, the message, and full-width buttons.
  */
-export default function Modal({ title, subtitle, onClose, footer, size = 'md', busy = false, children }) {
+export default function Modal({ title, subtitle, onClose, footer, size = 'md', busy = false, variant, icon: Icon, children }) {
   const titleId = useId()
 
   useEffect(() => {
-    const onKey = (event) => event.key === 'Escape' && !busy && onClose()
+    openModals.push(titleId)
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', onKey)
     return () => {
+      openModals.splice(openModals.indexOf(titleId), 1)
       document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', onKey)
     }
-  }, [onClose, busy])
+  }, [titleId])
+
+  // Capture phase, so the top modal sees Escape before panels and menus underneath it that
+  // also close on Escape, and can keep the key from reaching them.
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key !== 'Escape' || openModals.at(-1) !== titleId) return
+      event.stopPropagation()
+      if (!busy) onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose, busy, titleId])
+
+  if (variant === 'alert') {
+    return (
+      <div
+        className="fixed inset-0 z-100 bg-black/50 flex items-center justify-center p-4"
+        onClick={() => !busy && onClose()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <div
+          className="bg-white w-full max-w-sm rounded-2xl shadow-xl px-6 py-7 text-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {Icon && (
+            <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <Icon size={22} aria-hidden="true" />
+            </span>
+          )}
+          <h2 id={titleId} className="font-heading text-xl font-bold text-gray-900">{title}</h2>
+          <div className="mt-2 text-sm leading-relaxed text-gray-600">{children}</div>
+          {footer && <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row [&>*]:flex-1 [&>*]:justify-center">{footer}</div>}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div

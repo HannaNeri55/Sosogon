@@ -26,6 +26,8 @@ import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import StayCard from '../../components/itinerary/StayCard'
 import { transportGuide } from '../../utils/transportGuidance'
 import { refreshOfflineCopy, removeOfflineCopy } from '../../utils/offlineItineraries'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 // The itinerary_items column holding the listing for each kind of stop.
 const LISTING_COLUMNS = {
@@ -253,14 +255,14 @@ export default function ItineraryView() {
   ]
 
   const handleDelete = async () => {
-    if (!confirm('Delete this itinerary?')) return
+    if (!(await confirmDialog({ title: 'Delete this itinerary?', message: 'It will be removed from your saved itineraries. This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteItinerary(id)
       removeOfflineCopy(id).catch(() => {})
       toast.success('Itinerary deleted')
       navigate('/my-itineraries')
-    } catch {
-      toast.error('Failed to delete itinerary')
+    } catch (error) {
+      showApiError(error, 'Failed to delete itinerary')
     }
   }
 
@@ -397,8 +399,7 @@ export default function ItineraryView() {
       setEditMode(false)
       toast.success('Itinerary updated')
     } catch (e) {
-      const errors = e.response?.data?.errors
-      toast.error((errors && Object.values(errors)[0]?.[0]) || e.response?.data?.message || 'Failed to save changes')
+      showApiError(e, 'Failed to save changes')
     } finally {
       setSaving(false)
     }

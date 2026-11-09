@@ -5,6 +5,8 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getImageUrl } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
@@ -129,18 +131,18 @@ export default function ManageEvents() {
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(editingId ? 'Failed to update event' : 'Failed to create event')
+      else showApiError(err, editingId ? 'Failed to update event' : 'Failed to create event')
     }
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this event?')) return
+    if (!(await confirmDialog({ title: 'Delete this event?', message: 'It will be removed from the site and the calendar. This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteEvent(id)
       toast.success('Event deleted')
       loadData()
-    } catch {
-      toast.error('Failed to delete event')
+    } catch (error) {
+      showApiError(error, 'Failed to delete event')
     }
   }
 

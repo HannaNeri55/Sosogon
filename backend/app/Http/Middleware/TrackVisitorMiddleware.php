@@ -2,9 +2,10 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\VisitorStatistic;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class TrackVisitorMiddleware
@@ -35,16 +36,37 @@ class TrackVisitorMiddleware
             'retail-shops.show' => ['App\Models\RetailShop', 'retail_shop'],
         ];
 
-        if (isset($mapping[$routeName])) {
-            [$type, $param] = $mapping[$routeName];
-            $id = $route->parameter($param) ?? $route->parameter('id');
+        if (! isset($mapping[$routeName])) {
+            return;
+        }
 
-            if ($id) {
-                VisitorStatistic::updateOrCreate(
-                    ['trackable_type' => $type, 'trackable_id' => $id, 'date' => now()->toDateString()],
-                    []
-                )->increment('page_views');
-            }
+        [$type, $param] = $mapping[$routeName];
+        $id = $route->parameter($param) ?? $route->parameter('id');
+
+        if (! $id) {
+            return;
+        }
+
+        // One row per listing per day (the all-time view_count is raised by each show action).
+        // The upsert adds the view in a single statement, so two visitors opening the same page
+        // at once can't both try to create that day's row. A failure here is logged, never
+        // shown: the visitor still gets the page.
+        try {
+            $now = now();
+            DB::table('visitor_statistics')->upsert(
+                [[
+                    'trackable_type' => $type,
+                    'trackable_id' => (int) $id,
+                    'date' => $now->toDateString(),
+                    'page_views' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]],
+                ['trackable_type', 'trackable_id', 'date'],
+                ['page_views' => DB::raw('page_views + 1'), 'updated_at' => $now]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Could not record a page view', ['route' => $routeName, 'id' => $id, 'error' => $e->getMessage()]);
         }
     }
 }

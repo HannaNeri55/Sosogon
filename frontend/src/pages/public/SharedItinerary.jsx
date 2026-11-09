@@ -11,6 +11,7 @@ import { formatTripCost } from '../../utils/helpers'
 import { itineraryStays } from '../../utils/selections'
 import { transportGuide } from '../../utils/transportGuidance'
 import { pdfFilename, saveBlobAs } from '../../utils/itineraryExport'
+import { showApiError } from '../../utils/apiErrors'
 
 function labelFor(list, value) {
   const match = list.find((item) => item.value === value)
@@ -42,8 +43,8 @@ export default function SharedItinerary() {
     try {
       saveBlobAs(await downloadSharedItineraryPdf(token), pdfFilename(itinerary.title))
       toast.success('PDF downloaded. It opens without internet.')
-    } catch {
-      toast.error('Could not create the PDF. Check your connection.')
+    } catch (error) {
+      showApiError(error, 'Could not create the PDF. Check your connection.')
     } finally {
       running.current = false
       setDownloading(false)

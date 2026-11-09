@@ -26,6 +26,7 @@ import HeroSlideshow from '../../components/common/HeroSlideshow'
 import SectionHeader from '../../components/common/SectionHeader'
 import SkeletonGrid from '../../components/common/SkeletonCard'
 import EmptyState from '../../components/common/EmptyState'
+import LoadError from '../../components/common/LoadError'
 import { StarDisplay } from '../../components/common/StarRating'
 import { getImageUrl } from '../../utils/helpers'
 import { accommodationTypeLabel } from '../../utils/accommodationOptions'
@@ -149,11 +150,16 @@ export default function Home() {
   const [announcements, setAnnouncements] = useState([])
   const [stats, setStats] = useState({ destinations: 0, accommodations: 0, food: 0 })
   const [loading, setLoading] = useState(true)
+  // Sections whose request failed: they show an error with Try again (attempt re-runs the load).
+  const [failed, setFailed] = useState(() => new Set())
+  const [attempt, setAttempt] = useState(0)
   const [openAnnouncement, setOpenAnnouncement] = useState(null)
   const closeAnnouncement = useCallback(() => setOpenAnnouncement(null), [])
 
   useEffect(() => {
-    Promise.all([
+    const sections = ['destinations', 'events', 'accommodations', 'food', 'shops', 'announcements']
+    // Each section loads on its own, so one failed request doesn't empty the whole page.
+    Promise.allSettled([
       getDestinations({ per_page: 5, sort: 'featured' }),
       getEvents({ per_page: 3, upcoming: 1 }), // soonest first; past events excluded by the API
       getAccommodations({ per_page: 3 }),
@@ -161,7 +167,10 @@ export default function Home() {
       getRetailShops({ per_page: 3 }),
       getAnnouncements({ per_page: 3 }),
     ])
-      .then(([destData, eventData, accomData, foodData, shopData, announcementData]) => {
+      .then((results) => {
+        setFailed(new Set(sections.filter((_, i) => results[i].status === 'rejected')))
+        const [destData, eventData, accomData, foodData, shopData, announcementData] =
+          results.map((result) => (result.status === 'fulfilled' ? result.value : {}))
         setFeaturedDestinations(destData.data || [])
         setEvents(eventData.data || [])
         setFeaturedAccommodations(accomData.data || [])
@@ -175,7 +184,12 @@ export default function Home() {
         })
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [attempt])
+
+  const retry = () => {
+    setLoading(true)
+    setAttempt((n) => n + 1)
+  }
 
   const categories = [
     { to: '/destinations', label: 'Destinations', description: 'Beaches, lakes, and natural wonders', icon: FiSun, image: primaryImage(featuredDestinations[1] || featuredDestinations[0]) },
@@ -193,14 +207,14 @@ export default function Home() {
       <section className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-2 lg:grid-cols-4 divide-x divide-gray-100">
           {[
-            { label: 'Destinations', value: stats.destinations },
+            { label: 'Destinations', value: stats.destinations, section: 'destinations' },
             { label: 'Municipalities', value: 15 },
-            { label: 'Places to Stay', value: stats.accommodations },
-            { label: 'Food Spots', value: stats.food },
+            { label: 'Places to Stay', value: stats.accommodations, section: 'accommodations' },
+            { label: 'Food Spots', value: stats.food, section: 'food' },
           ].map((s, i) => (
             <Reveal key={s.label} delay={i * 80} className="py-7 sm:py-9 text-center">
               <p className="text-3xl lg:text-4xl font-heading font-semibold text-primary-700">
-                {loading ? '–' : s.value}
+                {loading || failed.has(s.section) ? '–' : s.value}
               </p>
               <p className="mt-1 text-xs sm:text-sm font-medium uppercase tracking-wider text-gray-500">{s.label}</p>
             </Reveal>
@@ -241,6 +255,8 @@ export default function Home() {
           </Reveal>
           {loading ? (
             <SkeletonGrid count={3} />
+          ) : failed.has('destinations') ? (
+            <LoadError what="destinations" onRetry={retry} />
           ) : featuredDestinations.length > 0 ? (
             <Reveal className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 sm:auto-rows-[16rem]">
               {featuredDestinations.map((destination, i) => (
@@ -374,7 +390,9 @@ export default function Home() {
                 linkLabel="View event calendar"
               />
             </Reveal>
-            {events.length > 0 ? (
+            {failed.has('events') ? (
+              <LoadError what="events" onRetry={retry} />
+            ) : events.length > 0 ? (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {events.map((event, i) => (
                   <Reveal key={event.id} delay={i * 100}>

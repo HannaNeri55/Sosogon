@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { getOwnerApplication, downloadOwnerPermit, resubmitOwnerApplication } from '../../api/business'
 import { getMunicipalities, getBarangays } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { showApiError } from '../../utils/apiErrors'
 
 /**
  * Shown instead of the dashboard while a Business Owner's registration is not
@@ -43,8 +44,8 @@ export default function ApplicationStatus() {
     try {
       const blob = await downloadOwnerPermit()
       window.open(URL.createObjectURL(blob), '_blank', 'noopener')
-    } catch {
-      toast.error('Could not open your business permit.')
+    } catch (error) {
+      showApiError(error, 'Could not open your business permit.')
     }
   }
 
@@ -61,7 +62,7 @@ export default function ApplicationStatus() {
       setData((current) => ({ ...current, application: res.application }))
     } catch (err) {
       setErrors(err.response?.data?.errors || {})
-      toast.error(err.response?.data?.message || 'Could not resubmit your application.')
+      showApiError(err, 'Could not resubmit your application.')
     } finally {
       setSaving(false)
     }

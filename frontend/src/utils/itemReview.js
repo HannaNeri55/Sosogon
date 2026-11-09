@@ -51,11 +51,6 @@ export function sameValue(a, b) {
   return (a ?? '') === (b ?? '')
 }
 
-export function reviewError(error, fallback) {
-  const data = error?.response?.data
-  return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback
-}
-
 function priceOf(kind, source) {
   if (kind !== 'rooms') return formatProductPrice(source.price) ?? '—'
   if (source.pricing_mode === 'contact' || !(Number(source.price) > 0)) return CONTACT_FOR_RATES.replace('.', '')

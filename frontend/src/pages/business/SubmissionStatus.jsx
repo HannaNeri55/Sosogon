@@ -3,6 +3,8 @@ import { FiFileText, FiClock, FiCheckCircle, FiXCircle, FiEdit2, FiTrash2, FiPlu
 import { updateSubmission, deleteSubmission } from '../../api/business'
 import StatCard from '../../components/common/StatCard'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../utils/apiErrors'
+import { confirmDialog } from '../../utils/dialogs'
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -45,20 +47,20 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error('Failed to update submission')
+      else showApiError(err, 'Failed to update submission')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this submission? This cannot be undone.')) return
+    if (!(await confirmDialog({ title: 'Delete this submission?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteSubmission(id)
       toast.success('Submission deleted')
       onChange?.()
-    } catch {
-      toast.error('Failed to delete submission')
+    } catch (error) {
+      showApiError(error, 'Failed to delete submission')
     }
   }
 

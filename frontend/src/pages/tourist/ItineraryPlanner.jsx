@@ -1,3 +1,4 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { generateItinerary, getGenerationQuota, claimItinerary } from '../../api/itineraries'
@@ -20,6 +21,7 @@ import {
   FiLogIn,
   FiUserPlus,
 } from 'react-icons/fi'
+import { showApiError } from '../../utils/apiErrors'
 
 function labelFor(list, value) {
   const match = list.find((item) => item.value === value)
@@ -202,6 +204,7 @@ function GeneratingState({ claiming }) {
 }
 
 export default function ItineraryPlanner() {
+  usePageTitle('Plan Your Trip')
   const navigate = useNavigate()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const isTourist = isAuthenticated && user?.role === 'tourist'
@@ -245,7 +248,7 @@ export default function ItineraryPlanner() {
       toast.success('Itinerary generated successfully!')
     } catch (e) {
       if (e.response?.data?.quota) setQuota(e.response.data.quota)
-      toast.error(e.response?.data?.message || 'Failed to generate itinerary')
+      showApiError(e, 'Failed to generate itinerary')
     } finally {
       setLoading(false)
     }
@@ -279,7 +282,7 @@ export default function ItineraryPlanner() {
         // Expired or already saved: nothing left to claim. Other errors keep it for a retry.
         if (e.response?.status === 404) clearPendingItinerary()
         setClaiming(false)
-        toast.error(e.response?.data?.message || 'Could not open your saved itinerary. Please refresh to try again.')
+        showApiError(e, 'Could not open your saved itinerary. Please refresh to try again.')
       })
   }, [authLoading, isTourist, navigate])
 

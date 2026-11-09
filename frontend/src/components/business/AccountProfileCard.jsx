@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getBusinessProfile, updateBusinessProfile } from '../../api/business'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../utils/apiErrors'
 
 export default function AccountProfileCard() {
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' })
@@ -16,8 +17,8 @@ export default function AccountProfileCard() {
     try {
       await updateBusinessProfile(profileForm)
       toast.success('Profile updated successfully')
-    } catch {
-      toast.error('Failed to update profile')
+    } catch (error) {
+      showApiError(error, 'Failed to update profile')
     } finally {
       setSaving(false)
     }

@@ -100,8 +100,8 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
                     {name}
                     {!disabled && (
                       <>
-                        <button type="button" onClick={() => setEditing({ name, text: name })} className="p-1.5 hover:text-primary-700" aria-label={`Edit ${name}`}><FiEdit2 size={12} /></button>
-                        <button type="button" onClick={() => toggle(name)} className="p-1.5 hover:text-red-600" aria-label={`Remove ${name}`}><FiX size={13} /></button>
+                        <button type="button" onClick={() => setEditing({ name, text: name })} className="p-2 hover:text-primary-700" aria-label={`Edit ${name}`}><FiEdit2 size={12} /></button>
+                        <button type="button" onClick={() => toggle(name)} className="p-2 hover:text-red-600" aria-label={`Remove ${name}`}><FiX size={13} /></button>
                       </>
                     )}
                   </span>

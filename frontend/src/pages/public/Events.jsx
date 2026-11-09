@@ -1,8 +1,10 @@
+import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useMemo, useState } from 'react'
 import { FiBell, FiCalendar } from 'react-icons/fi'
 import { getEventsCalendar, getAnnouncements } from '../../api/events'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import EmptyState from '../../components/common/EmptyState'
+import LoadError from '../../components/common/LoadError'
 import SkeletonGrid from '../../components/common/SkeletonCard'
 import EventCalendar from '../../components/calendar/EventCalendar'
 import EventCard from '../../components/events/EventCard'
@@ -15,12 +17,18 @@ import useListingScroll from '../../hooks/useListingScroll'
 const today = new Date()
 
 export default function Events() {
+  usePageTitle('Events')
   // Tab and calendar month live in the URL, so "Back to Events" returns to the same view.
   const [view, setView] = useUrlFilters({ tab: 'events', year: today.getFullYear(), month: today.getMonth() + 1 })
   const { tab: activeTab, year, month } = view
   const setActiveTab = (tab) => setView((prev) => ({ ...prev, tab }))
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
+  // Failed loads show an error with Try again (the attempt counters re-run them), not "no events".
+  const [announcementsFailed, setAnnouncementsFailed] = useState(false)
+  const [announcementsAttempt, setAnnouncementsAttempt] = useState(0)
+  const [calendarFailed, setCalendarFailed] = useState(false)
+  const [calendarAttempt, setCalendarAttempt] = useState(0)
 
   const [monthEvents, setMonthEvents] = useState([])
   const [calendarLoading, setCalendarLoading] = useState(true)
@@ -28,24 +36,30 @@ export default function Events() {
 
   useEffect(() => {
     getAnnouncements()
-      .then((data) => setAnnouncements(data.data || []))
+      .then((data) => {
+        setAnnouncements(data.data || [])
+        setAnnouncementsFailed(false)
+      })
+      .catch(() => setAnnouncementsFailed(true))
       .finally(() => setLoading(false))
-  }, [])
+  }, [announcementsAttempt])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCalendarLoading(true)
     getEventsCalendar({ month, year })
       .then((events) => {
+        setCalendarFailed(false)
         setMonthEvents(events)
         const stillValid = events.some((e) => eventCoversDate(e, selectedDateKey))
         if (!stillValid) {
           setSelectedDateKey(events[0] ? events[0].start_date.slice(0, 10) : null)
         }
       })
+      .catch(() => setCalendarFailed(true))
       .finally(() => setCalendarLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, year])
+  }, [month, year, calendarAttempt])
 
   const eventDateKeys = useMemo(() => {
     const keys = new Set()
@@ -125,7 +139,7 @@ export default function Events() {
                 <h3 className="font-heading font-bold text-2xl text-gray-900">
                   {new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </h3>
-                {!calendarLoading && monthEvents.length > 0 && (
+                {!calendarLoading && !calendarFailed && monthEvents.length > 0 && (
                   <p className="text-sm text-gray-600">
                     <span className="font-semibold text-gray-900">{monthEvents.length}</span> event{monthEvents.length === 1 ? '' : 's'} this month
                   </p>
@@ -133,6 +147,8 @@ export default function Events() {
               </div>
               {calendarLoading ? (
                 <SkeletonGrid count={2} className="grid sm:grid-cols-2 gap-5" />
+              ) : calendarFailed ? (
+                <LoadError what="events" onRetry={() => setCalendarAttempt((n) => n + 1)} />
               ) : monthEvents.length === 0 ? (
                 <EmptyState icon={FiCalendar} title="No events this month">
                   Use the arrows on the calendar to look at other months.
@@ -153,6 +169,8 @@ export default function Events() {
               )}
             </div>
           </div>
+        ) : announcementsFailed ? (
+          <LoadError what="announcements" onRetry={() => setAnnouncementsAttempt((n) => n + 1)} />
         ) : announcements.length === 0 ? (
           <EmptyState icon={FiBell} title="No announcements yet">
             News and advisories from the tourism office will appear here.

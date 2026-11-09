@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/common/ErrorBoundary'
+import DialogHost from './components/common/DialogHost'
 import ScrollManager from './components/layout/ScrollManager'
 import './index.css'
 
@@ -20,7 +21,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ScrollManager />
         <AuthProvider>
           <App />
-          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <Toaster position="top-right" toastOptions={{ duration: 3000, style: { whiteSpace: 'pre-line' } }} />
+          <DialogHost />
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

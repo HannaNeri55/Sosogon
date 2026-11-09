@@ -3,6 +3,7 @@ import { FiUpload, FiX } from 'react-icons/fi'
 import { createRetailShopProduct, updateRetailShopProduct } from '../../../api/retailShopOwner'
 import { getImageUrl } from '../../../utils/helpers'
 import toast from 'react-hot-toast'
+import { showApiError } from '../../../utils/apiErrors'
 
 const PRODUCT_TYPES = ['Souvenir', 'Local Food Product', 'Handicraft', 'Clothing']
 
@@ -32,7 +33,7 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
     } catch (err) {
       const errors = err.response?.data?.errors
       if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else toast.error(err.response?.data?.message || 'Failed to save product')
+      else showApiError(err, 'Failed to save product')
     } finally {
       setSaving(false)
     }

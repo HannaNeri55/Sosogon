@@ -23,6 +23,8 @@ import LocationCard from '../../../components/business/LocationCard'
 import toast from 'react-hot-toast'
 import AmenityPicker from '../../../components/common/AmenityPicker'
 import { CLASSIFICATIONS, OFFERING_ARRANGEMENTS } from '../../../utils/accommodationOptions'
+import { getErrorMessage, showApiError } from '../../../utils/apiErrors'
+import { confirmDialog } from '../../../utils/dialogs'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -62,16 +64,6 @@ const EMPTY_FORM = {
   classifications: [],
   check_in_time: '',
   check_out_time: '',
-}
-
-function getErrorMessage(err, fallback) {
-  const errors = err?.response?.data?.errors
-
-  if (errors) {
-    return Object.values(errors).flat().join('\n')
-  }
-
-  return err?.response?.data?.message || fallback
 }
 
 function getReviewStatus(property) {
@@ -187,9 +179,9 @@ export default function MyProperty() {
         setAccommodation(data)
         setForm(getEditableData(data))
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
-          toast.error('Failed to load property details.')
+          showApiError(error, 'Failed to load property details.')
         }
       })
       .finally(() => {
@@ -261,7 +253,7 @@ export default function MyProperty() {
       await refresh()
       return response
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to update location.'))
+      showApiError(err, 'Failed to update location.', { allErrors: true })
       throw err
     }
   }
@@ -283,7 +275,7 @@ export default function MyProperty() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save the correction.'))
+      showApiError(err, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -335,7 +327,7 @@ export default function MyProperty() {
       ? 'Submit your updated property details and photos for Tourism Office approval? Your currently published listing will remain visible until the changes are approved.'
       : 'Save your property details and photos, then submit the completed listing to the Tourism Office for review?'
 
-    if (submit && !window.confirm(confirmationMessage)) return
+    if (submit && !(await confirmDialog({ title: 'Submit for review?', message: confirmationMessage, confirmLabel: 'Submit for review' }))) return
 
     const payload = new FormData()
 
@@ -471,21 +463,13 @@ export default function MyProperty() {
         }
       } catch (err) {
         toast.error(
-          `Changes were saved, but submission failed: ${getErrorMessage(
-            err,
-            'Please try again.'
-          )}`
+          `Changes were saved, but submission failed: ${getErrorMessage(err, 'Please try again.', { allErrors: true })}`
         )
       } finally {
         setSubmittingReview(false)
       }
     } catch (err) {
-      toast.error(
-        getErrorMessage(
-          err,
-          'Failed to save property. Nothing was submitted.'
-        )
-      )
+      showApiError(err, 'Failed to save property. Nothing was submitted.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -511,7 +495,7 @@ export default function MyProperty() {
             setLoading(true)
 
             load()
-              .catch(() => toast.error('Failed to load property.'))
+              .catch((error) => showApiError(error, 'Failed to load property.'))
               .finally(() => setLoading(false))
           }}
           className="btn-primary mt-4"

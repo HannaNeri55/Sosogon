@@ -127,6 +127,15 @@
     }
 }
 
+/* iPhones zoom the whole page into any form field whose text is under 16px, and stay zoomed.
+   Phone-width screens get 16px fields; wider screens keep each field's own size. Outside a
+   layer on purpose, so it wins over size utilities like text-sm. */
+@media (max-width: 639px) {
+    input, select, textarea {
+        font-size: 16px;
+    }
+}
+
 @layer components {
     .btn-primary {
         @apply bg-primary-500 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-primary-600 active:bg-primary-700 transition-colors duration-200 inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed;
@@ -142,6 +151,15 @@
 
     .input-field {
         @apply w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all duration-200;
+    }
+
+    /* Added to .input-field when the value was rejected; pair it with aria-invalid and a message. */
+    .input-error {
+        @apply border-red-500 bg-red-50/40 focus:ring-red-500 focus:border-red-500;
+    }
+
+    .field-error {
+        @apply mt-1.5 text-xs font-medium text-red-600;
     }
 
     .card {

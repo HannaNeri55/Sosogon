@@ -8,6 +8,7 @@ import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
 import MapLocationPicker from '../../components/maps/MapLocationPicker'
 import { googleMapsPlaceUrl, toCoordinates } from '../../components/maps/mapsConfig'
+import { showApiError } from '../../utils/apiErrors'
 
 const TYPES = [
   { value: 'destination', label: 'Destinations', publicPath: '/destinations' },
@@ -48,8 +49,7 @@ function EditLocationModal({ type, item, onClose, onSaved }) {
       toast.success(data.message)
       onSaved()
     } catch (error) {
-      const errors = error.response?.data?.errors
-      toast.error(errors ? Object.values(errors).flat()[0] : error.response?.data?.message || 'The location could not be saved.')
+      showApiError(error, 'The location could not be saved.')
     } finally {
       setBusy(false)
     }
