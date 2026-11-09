@@ -15,7 +15,6 @@ import {
   FiCalendar,
   FiActivity,
   FiHeart,
-  FiDollarSign,
   FiSun,
   FiCamera,
   FiCoffee,
@@ -105,7 +104,7 @@ function SectionLabel({ icon: Icon, children, aside, htmlFor }) {
   return (
     <div className="flex items-center justify-between gap-2 mb-3">
       <Tag htmlFor={htmlFor} className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
-        <Icon size={15} className="text-primary-500" aria-hidden="true" /> {children}
+        {Icon && <Icon size={15} className="text-primary-500" aria-hidden="true" />} {children}
       </Tag>
       {aside}
     </div>
@@ -729,7 +728,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
             </div>
 
             <div>
-              <SectionLabel icon={FiDollarSign}>Budget</SectionLabel>
+              <SectionLabel>Budget</SectionLabel>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Budget">
                 {BUDGETS.map((budget) => {
                   const isSelected = formData.budget === budget.value

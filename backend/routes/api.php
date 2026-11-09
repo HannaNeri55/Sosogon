@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\AdminDestinationController;
 use App\Http\Controllers\Api\Admin\AdminEventController;
 use App\Http\Controllers\Api\Admin\AdminFoodBeverageController;
 use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
+use App\Http\Controllers\Api\Admin\AdminItemReviewController;
 use App\Http\Controllers\Api\Admin\AdminListingLocationController;
 use App\Http\Controllers\Api\Admin\AdminMenuItemController;
 use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
@@ -45,7 +46,9 @@ use App\Http\Controllers\Api\Public\PhotoCreditController;
 use App\Http\Controllers\Api\Public\RetailProductController;
 use App\Http\Controllers\Api\Public\RetailShopController;
 use App\Http\Controllers\Api\Public\SearchController;
+use App\Http\Controllers\Api\Public\SharedItineraryController;
 use App\Http\Controllers\Api\Tourist\ItineraryController;
+use App\Http\Controllers\Api\Tourist\ItineraryDocumentController;
 use App\Http\Controllers\Api\Tourist\RatingController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +92,12 @@ Route::prefix('v1')->group(function () {
     // Search
     Route::get('/search', [SearchController::class, 'search']);
 
+    // A shared itinerary, read-only, for whoever holds the secret link its owner created.
+    Route::middleware('throttle:60,1')->where(['token' => '[A-Za-z0-9]{48}'])->group(function () {
+        Route::get('/shared-itineraries/{token}', [SharedItineraryController::class, 'show']);
+        Route::get('/shared-itineraries/{token}/pdf', [SharedItineraryController::class, 'pdf'])->middleware('throttle:20,1');
+    });
+
     // Guest itinerary planner: returns a preview only; the full itinerary is claimed after login.
     Route::middleware('throttle:5,1')->group(function () {
         Route::post('/itineraries/guest-generate', [ItineraryController::class, 'guestGenerate']);
@@ -118,6 +127,14 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::put('/itineraries/{id}', [ItineraryController::class, 'update']);
         Route::delete('/itineraries/{id}', [ItineraryController::class, 'destroy']);
         Route::get('/itineraries/{id}/eligible-listings', [ItineraryController::class, 'eligibleListings']);
+
+        // Save, print and share. Only the owner's itineraries are found; a link stays off until asked for.
+        Route::post('/itineraries/{id}/save', [ItineraryDocumentController::class, 'save']);
+        Route::get('/itineraries/{id}/document', [ItineraryDocumentController::class, 'document'])->middleware('throttle:30,1');
+        Route::get('/itineraries/{id}/pdf', [ItineraryDocumentController::class, 'pdf'])->middleware('throttle:20,1');
+        Route::get('/itineraries/{id}/share', [ItineraryDocumentController::class, 'shareStatus']);
+        Route::post('/itineraries/{id}/share', [ItineraryDocumentController::class, 'share']);
+        Route::delete('/itineraries/{id}/share', [ItineraryDocumentController::class, 'unshare']);
 
         Route::post('/ratings', [RatingController::class, 'store']);
         Route::put('/ratings/{id}', [RatingController::class, 'update']);
@@ -267,6 +284,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::get('/owner-applications/{id}/permit', [AdminOwnerApplicationController::class, 'permit']);
         Route::put('/owner-applications/{id}/approve', [AdminOwnerApplicationController::class, 'approve']);
         Route::put('/owner-applications/{id}/reject', [AdminOwnerApplicationController::class, 'reject']);
+
+        // One queue over rooms, menu items and products, with bulk decisions
+        Route::get('/item-reviews', [AdminItemReviewController::class, 'index']);
+        Route::post('/item-reviews/bulk', [AdminItemReviewController::class, 'bulk']);
 
         // Proposed changes to approved rooms, menu items and products
         Route::put('/accommodation-rooms/{id}/approve-changes', [AdminAccommodationRoomController::class, 'approveChanges']);

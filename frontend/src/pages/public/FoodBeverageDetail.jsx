@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { FiMapPin, FiPhone, FiClock, FiDollarSign } from 'react-icons/fi'
+import { FiMapPin, FiPhone, FiClock } from 'react-icons/fi'
 import { getFoodBeverage } from '../../api/foodBeverages'
 import LocationMap from '../../components/maps/LocationMap'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -88,7 +88,6 @@ export default function FoodBeverageDetail() {
               { icon: FiPhone, label: 'Contact', value: item.contact_number || 'Not available' },
               { icon: FiClock, label: 'Operating Hours', value: item.operating_hours || approxHours(estimateOf(item, 'operating_hours')) || 'Not specified' },
               {
-                icon: FiDollarSign,
                 label: 'Price Range',
                 value: item.price_range && (
                   <span>

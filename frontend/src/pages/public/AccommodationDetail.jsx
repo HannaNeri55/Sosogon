@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { FiMapPin, FiPhone, FiClock, FiDollarSign, FiKey, FiMail, FiHome } from "react-icons/fi";
+import { FiMapPin, FiPhone, FiClock, FiKey, FiMail, FiHome } from "react-icons/fi";
 import { estimateOf } from "../../utils/estimates";
 import { accommodationTypeLabel, isEntireProperty, optionFacts, optionName, optionPrice } from "../../utils/accommodationOptions";
 import { getAccommodation } from "../../api/accommodations";
@@ -96,7 +96,6 @@ export default function AccommodationDetail() {
               ...(item.email ? [{ icon: FiMail, label: "Email", value: item.email }] : []),
               { icon: FiClock, label: "Operating Hours", value: item.operating_hours || "Not specified" },
               {
-                icon: FiDollarSign,
                 label: "Price Range",
                 value: item.price_range && <span className="capitalize">{item.price_range}</span>,
               },

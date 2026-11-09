@@ -43,6 +43,7 @@ const TouristDashboard = lazy(() => import('./pages/tourist/TouristDashboard'))
 const ItineraryPlanner = lazy(() => import('./pages/tourist/ItineraryPlanner'))
 const ItineraryView = lazy(() => import('./pages/tourist/ItineraryView'))
 const SavedItineraries = lazy(() => import('./pages/tourist/SavedItineraries'))
+const SharedItinerary = lazy(() => import('./pages/public/SharedItinerary'))
 const MyReviews = lazy(() => import('./pages/tourist/MyReviews'))
 
 // Business pages
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="/about" element={<About />} />
           {/* Public so guests can fill in the planner; generating still requires a tourist login. */}
           <Route path="/plan-trip" element={<ItineraryPlanner />} />
+          <Route path="/shared/itineraries/:token" element={<SharedItinerary />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />

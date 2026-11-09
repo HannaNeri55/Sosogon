@@ -23,9 +23,11 @@ export default function FactsCard({ title = "Plan your visit", facts = [], latit
         <dl className="mt-4 divide-y divide-gray-100">
           {shown.map(({ icon: Icon, label, value }) => (
             <div key={label} className="flex items-start gap-3 py-3 first:pt-0">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
-                <Icon size={15} aria-hidden="true" />
-              </span>
+              {Icon && (
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                  <Icon size={15} aria-hidden="true" />
+                </span>
+              )}
               <div className="min-w-0">
                 <dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</dt>
                 <dd className="mt-0.5 text-sm text-gray-800 wrap-break-word">{value}</dd>

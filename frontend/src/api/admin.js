@@ -134,6 +134,16 @@ export const getItemsWithPendingChanges = async (kind) => {
 }
 
 // changesHash must be the pending_changes_hash the admin reviewed.
+export const getItemReviews = async (params = {}) => {
+  const response = await api.get('/admin/item-reviews', { params })
+  return response.data
+}
+
+export const bulkReviewItems = async (payload) => {
+  const response = await api.post('/admin/item-reviews/bulk', payload)
+  return response.data
+}
+
 export const approveItemChanges = async (kind, id, changesHash, notes = '') => {
   const response = await api.put(`/admin/${kind}/${id}/approve-changes`, { changes_hash: changesHash, notes })
   return response.data

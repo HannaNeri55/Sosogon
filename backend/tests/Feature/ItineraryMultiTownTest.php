@@ -162,8 +162,8 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertTrue($dayTowns->every(fn ($towns) => count($towns) === 1), 'A day never covers two towns.');
         $this->assertEqualsCanonicalizing(array_values($this->towns), $dayTowns->flatten()->all(), 'Each town gets a day of its own.');
 
-        // One stay per town; a 3-day trip has two nights, in the towns of days 1 and 2.
-        $this->assertCount(3, $itinerary->stays);
+        // A 3-day trip has two nights, in the towns of days 1 and 2; the last town has no stay.
+        $this->assertCount(2, $itinerary->stays);
         $this->assertSame(2, $itinerary->stays->sum(fn ($s) => count($s->night_days)));
     }
 

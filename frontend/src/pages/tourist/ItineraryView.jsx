@@ -3,13 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getItinerary, deleteItinerary, updateItinerary } from '../../api/itineraries'
 import ItineraryDayCard from '../../components/itinerary/ItineraryDayCard'
 import PlacePickerModal from '../../components/itinerary/PlacePickerModal'
+import ItineraryActions from '../../components/itinerary/ItineraryActions'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import BackButton from '../../components/layout/BackButton'
 import toast from 'react-hot-toast'
 import {
   FiCalendar,
   FiActivity,
-  FiDollarSign,
   FiNavigation,
   FiHome,
   FiTrash2,
@@ -25,6 +25,7 @@ import { costNoteIsEstimate, stayCostIsEstimate, stayCostUnknown } from '../../u
 import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import StayCard from '../../components/itinerary/StayCard'
 import { transportGuide } from '../../utils/transportGuidance'
+import { refreshOfflineCopy, removeOfflineCopy } from '../../utils/offlineItineraries'
 
 // The itinerary_items column holding the listing for each kind of stop.
 const LISTING_COLUMNS = {
@@ -112,7 +113,7 @@ function BudgetCard({ itinerary }) {
     <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 mb-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <p className="flex items-center gap-1.5 text-primary-600 font-medium">
-          <FiDollarSign size={16} /> Trip Budget
+          Trip Budget
         </p>
         {budget && (
           <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
@@ -255,6 +256,7 @@ export default function ItineraryView() {
     if (!confirm('Delete this itinerary?')) return
     try {
       await deleteItinerary(id)
+      removeOfflineCopy(id).catch(() => {})
       toast.success('Itinerary deleted')
       navigate('/my-itineraries')
     } catch {
@@ -390,6 +392,7 @@ export default function ItineraryView() {
       })
       const res = await updateItinerary(id, payload)
       setItinerary(res.itinerary)
+      refreshOfflineCopy(res.itinerary).catch(() => {})
       setPendingEdits(emptyPendingEdits())
       setEditMode(false)
       toast.success('Itinerary updated')
@@ -422,7 +425,7 @@ export default function ItineraryView() {
   const stats = [
     { icon: <FiCalendar size={18} />, label: `${itinerary.num_days} Day${itinerary.num_days > 1 ? 's' : ''}` },
     { icon: <FiActivity size={18} />, label: `${labelFor(TRAVEL_PACES, itinerary.travel_pace)} pace` },
-    { icon: <FiDollarSign size={18} />, label: formatTripCost(itinerary, labelFor(BUDGETS, itinerary.budget)) },
+    { label: formatTripCost(itinerary, labelFor(BUDGETS, itinerary.budget)) },
     { icon: <FiNavigation size={18} />, label: `${itinerary.total_distance_km} km total` },
   ]
 
@@ -474,11 +477,18 @@ export default function ItineraryView() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
             {stats.map((stat, i) => (
               <div key={i} className="flex items-center gap-2.5">
-                <span className="text-primary-500 shrink-0">{stat.icon}</span>
+                {stat.icon && <span className="text-primary-500 shrink-0">{stat.icon}</span>}
                 <span className="text-sm font-medium text-gray-700">{stat.label}</span>
               </div>
             ))}
           </div>
+
+          {!editMode && (
+            <ItineraryActions
+              itinerary={itinerary}
+              onSaved={(savedAt) => setItinerary((current) => ({ ...current, saved_at: savedAt }))}
+            />
+          )}
         </div>
 
         {(stays.length > 0 || editMode || itinerary.accommodation_note) && (

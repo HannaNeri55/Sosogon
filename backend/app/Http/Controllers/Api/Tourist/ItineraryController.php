@@ -33,7 +33,7 @@ class ItineraryController extends Controller
      * dishes/souvenirs, and what else can be picked (the stay's rooms, each food place's
      * menu, each shop's products).
      */
-    private function relations(): array
+    public static function relations(): array
     {
         return [
             'municipality:id,name',

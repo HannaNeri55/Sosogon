@@ -9,7 +9,6 @@ import {
   FiRotateCcw,
   FiPlus,
   FiThumbsUp,
-  FiDollarSign,
   FiRepeat,
   FiAlertTriangle,
   FiCoffee,
@@ -230,7 +229,6 @@ function StopDetails({ stop, compact = false }) {
           {stop.duration_minutes > 0 && <span className="text-xs text-gray-500">{stop.duration_minutes} min</span>}
           {stop.cost_note && (
             <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
-              <FiDollarSign size={11} className="text-primary-500" />
               {Number(stop.cost_max) > 0 && `${formatPesoRange(stop.cost_min, stop.cost_max)} · `}
               <span className="font-normal text-gray-500">{stop.cost_note}</span>
             </span>

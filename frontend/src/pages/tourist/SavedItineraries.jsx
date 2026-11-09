@@ -4,7 +4,7 @@ import { getItineraries } from '../../api/itineraries'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { formatShortDate, formatTripCost } from '../../utils/helpers'
 import { INTERESTS, TRAVEL_PACES, BUDGETS } from '../../utils/constants'
-import { FiPlus, FiCalendar, FiActivity, FiDollarSign, FiChevronRight, FiCompass } from 'react-icons/fi'
+import { FiPlus, FiCalendar, FiActivity, FiChevronRight, FiCompass, FiWifiOff, FiBookmark } from 'react-icons/fi'
 
 function labelFor(list, value) {
   const match = list.find((item) => item.value === value)
@@ -41,9 +41,14 @@ export default function SavedItineraries() {
               </p>
             )}
           </div>
-          <Link to="/plan-trip" className="btn-primary shrink-0">
-            <FiPlus size={16} /> Plan New Trip
-          </Link>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <a href="/offline.html" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors">
+              <FiWifiOff size={15} aria-hidden="true" /> Offline Copies
+            </a>
+            <Link to="/plan-trip" className="btn-primary">
+              <FiPlus size={16} /> Plan New Trip
+            </Link>
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -74,6 +79,11 @@ export default function SavedItineraries() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {item.saved_at && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
+                          <FiBookmark size={11} aria-hidden="true" /> Saved
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
                         <FiCalendar size={11} /> {item.num_days} day{item.num_days > 1 ? 's' : ''}
                       </span>
@@ -81,7 +91,7 @@ export default function SavedItineraries() {
                         <FiActivity size={11} /> {labelFor(TRAVEL_PACES, item.travel_pace)}
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                        <FiDollarSign size={11} /> {formatTripCost(item, labelFor(BUDGETS, item.budget))}
+                        {formatTripCost(item, labelFor(BUDGETS, item.budget))}
                       </span>
                       {item.interests?.slice(0, 3).map((interest) => (
                         <span

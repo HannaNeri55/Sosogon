@@ -166,13 +166,22 @@ class ItineraryStayChoiceTest extends TestCase
         $this->assertNull($north->cost_max);
         $this->assertNull($north->cost_min);
         $this->assertTrue($itinerary->rooms->isEmpty());
-        // Southtown is only the last day: its stay is still suggested, with no nights booked.
-        $this->assertSame($this->ids['resort'], $this->stayIn($itinerary, $this->south)->accommodation_id);
-        $this->assertSame([], $this->stayIn($itinerary, $this->south)->night_days);
+        // Southtown is only the last day: no night is spent there, so the trip has no stay there.
+        $this->assertNull($this->stayIn($itinerary, $this->south));
         // Check-in on Day 1 and check-out on the last morning are at the chosen stay.
         $this->assertSame($this->ids['inn'], $itinerary->items->where('day_number', 1)->sortBy('sequence')->first()->accommodation_id);
         $this->assertTrue($itinerary->items->contains(fn ($i) => $i->day_number === 3 && $i->accommodation_id === $this->ids['inn'] && str_starts_with((string) $i->notes, 'Check out')));
         $this->assertSame([], $this->problems($itinerary));
+    }
+
+    public function test_a_town_with_no_night_gets_no_stay_even_when_one_was_picked_there(): void
+    {
+        $itinerary = $this->generate(['accommodation_needed' => true, 'accommodation_id' => $this->ids['resort']]);
+
+        $this->assertNull($this->stayIn($itinerary, $this->south), 'Southtown is only the last day.');
+        $this->assertFalse($itinerary->stays->contains('accommodation_id', $this->ids['resort']));
+        $this->assertTrue($itinerary->stays->every(fn ($stay) => $stay->night_days !== []));
+        $this->assertSame([1, 2], $this->stayIn($itinerary, $this->north)->night_days);
     }
 
     public function test_the_chosen_room_is_booked_and_costed_for_every_night(): void
@@ -237,7 +246,7 @@ class ItineraryStayChoiceTest extends TestCase
 
         $this->assertSame([$this->ids['room103']], $itinerary->rooms->pluck('id')->all());
         $this->assertNull($north->cost_max);
-        $this->assertEquals($itinerary->items->sum(fn ($i) => (float) $i->cost_max) + (float) $this->stayIn($itinerary, $this->south)->cost_max, (float) $itinerary->estimated_cost_max, 'Unknown costs add nothing to the known total.');
+        $this->assertEquals($itinerary->items->sum(fn ($i) => (float) $i->cost_max), (float) $itinerary->estimated_cost_max, 'Unknown costs add nothing to the known total.');
     }
 
     public function test_a_priced_stay_is_costed_from_its_prices(): void

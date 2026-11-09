@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { loginUser, registerUser, logoutUser, getUser } from '../api/auth'
 import useIdleLogout from '../hooks/useIdleLogout'
 import { expiredLoginPathFor } from '../utils/session'
+import { clearOfflineCopies } from '../utils/offlineItineraries'
 import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     await endSession()
+    clearOfflineCopies().catch(() => {})
     setUser(null)
     toast.success('Logged out.')
   }

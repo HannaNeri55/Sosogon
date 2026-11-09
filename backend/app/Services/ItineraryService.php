@@ -1442,12 +1442,7 @@ class ItineraryService
         $travelers = $this->travelers($preferences);
         foreach ($stays as $town => $stay) {
             $nights = count($stay['night_days']);
-            if ($nights === 0) {
-                $stays[$town]['note'] = trim(($stay['note'] ?? '')." You pass through {$stay['town']} during the day — this stay is here if you'd like to spend a night.");
-
-                continue;
-            }
-            if (! $stay['accommodation']) {
+            if ($nights === 0 || ! $stay['accommodation']) {
                 continue;
             }
 
@@ -1464,7 +1459,8 @@ class ItineraryService
             $stays[$town]['rooms'] = $rooms;
         }
 
-        return array_values($stays);
+        // Only where the tourist actually sleeps is a stay of this trip; a town they just pass through has none.
+        return array_values(array_filter($stays, fn ($stay) => $stay['night_days'] !== []));
     }
 
     /**

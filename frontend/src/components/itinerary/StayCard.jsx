@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
-import { FiDollarSign, FiMail, FiMapPin, FiMoon, FiPhone, FiRepeat } from 'react-icons/fi'
+import { FiMail, FiMapPin, FiMoon, FiPhone, FiRepeat } from 'react-icons/fi'
 import SelectionEditor from './SelectionEditor'
 import { PreferenceNote } from './ItineraryDayCard'
-import { getImageUrl, formatPeso, formatPesoRange } from '../../utils/helpers'
-import { roomLabel, roomOptions, picksFrom, stayRooms, stayNights, roomsSummary } from '../../utils/selections'
+import { getImageUrl, formatPesoRange } from '../../utils/helpers'
+import { roomOptions, picksFrom, stayRooms, stayNights } from '../../utils/selections'
 import { stayCostIsEstimate, stayCostUnknown } from '../../utils/estimates'
-import { accommodationTypeLabel, CONTACT_FOR_RATES, optionName } from '../../utils/accommodationOptions'
+import { accommodationTypeLabel, CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 
 // "Night after Day 1", "Nights after Days 1 and 2", "Nights after Days 1, 2 and 3"
 function nightsLabel(days) {
@@ -29,7 +29,6 @@ export default function StayCard({ stay, itinerary, pending = {}, editMode, onCh
   // Saved earlier from a typical range for its price level; editing the trip replaces it.
   const costEstimated = stayCostIsEstimate(stay, rooms)
   const costUnknown = stayCostUnknown(stay)
-  const travelers = Number(itinerary.travelers) || 1
   const changed = Boolean(pending.accommodation)
 
   return (
@@ -127,38 +126,16 @@ export default function StayCard({ stay, itinerary, pending = {}, editMode, onCh
             </>
           ) : (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Suggested options</p>
-              {rooms.length > 0 ? (
-                <ul className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {rooms.map((room) => (
-                    <li key={room.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
-                      <img
-                        src={getImageUrl(room.images?.[0]?.thumbnail_path || room.images?.[0]?.image_path)}
-                        alt={optionName(room)}
-                        className="w-10 h-10 rounded-md object-cover shrink-0 bg-gray-200"
-                        loading="lazy"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{roomLabel(room)}</p>
-                        <p className="text-xs text-gray-500">{Number(room.price) > 0 ? `${formatPeso(room.price)} / night (indicative)` : 'Rate not listed'}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500">No option picked.</p>
-              )}
               {costUnknown ? (
-                <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800 mt-3">
-                  <FiDollarSign size={13} className="text-primary-500" aria-hidden="true" /> {CONTACT_FOR_RATES}
+                <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                  {CONTACT_FOR_RATES}
                   <span className="text-xs font-normal text-gray-500">· Not included in the known costs</span>
                 </p>
               ) : cost && (
-                <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800 mt-3">
-                  <FiDollarSign size={13} className="text-primary-500" /> {costEstimated && 'Est. '}{cost}
+                <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                  {costEstimated && 'Est. '}{cost}
                   <span className="text-xs font-normal text-gray-500">
-                    · {rooms.length ? `${roomsSummary(rooms, travelers)}, ` : ''}
-                    {nights} night{nights > 1 ? 's' : ''}
+                    · {nights} night{nights > 1 ? 's' : ''}
                     {costEstimated ? ' · saved earlier from a typical rate; confirm with the property' : ' · indicative; confirm with the property'}
                   </span>
                 </p>

@@ -13,7 +13,6 @@ import {
   FiMap,
   FiCalendar,
   FiActivity,
-  FiDollarSign,
   FiClock,
   FiArrowRight,
   FiRefreshCw,
@@ -50,7 +49,7 @@ function LockedPreview({ preview, onUnlock }) {
           <FiActivity size={11} /> {labelFor(TRAVEL_PACES, preview.travel_pace)}
         </span>
         <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
-          <FiDollarSign size={11} /> {formatTripCost(preview, labelFor(BUDGETS, preview.budget))}
+          {formatTripCost(preview, labelFor(BUDGETS, preview.budget))}
         </span>
         {preview.municipality && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
@@ -382,7 +381,7 @@ export default function ItineraryPlanner() {
                     <FiActivity size={11} /> {labelFor(TRAVEL_PACES, generatedItinerary.travel_pace)}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full">
-                    <FiDollarSign size={11} /> {formatTripCost(generatedItinerary, labelFor(BUDGETS, generatedItinerary.budget))}
+                    {formatTripCost(generatedItinerary, labelFor(BUDGETS, generatedItinerary.budget))}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 bg-primary-50 px-2.5 py-1 rounded-full">
                     <FiMap size={11} /> {generatedItinerary.total_distance_km} km

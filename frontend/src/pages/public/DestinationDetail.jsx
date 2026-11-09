@@ -1,7 +1,7 @@
 // frontend/src/pages/public/DestinationDetail.jsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { FiMapPin, FiClock, FiDollarSign, FiPlus } from "react-icons/fi";
+import { FiMapPin, FiClock, FiPlus } from "react-icons/fi";
 import { getDestination } from "../../api/destinations";
 import { useAuth } from "../../contexts/AuthContext";
 import { StarDisplay } from "../../components/common/StarRating";
@@ -87,7 +87,6 @@ export default function DestinationDetail() {
               ...(hasFeeList
                 ? []
                 : [{
-                    icon: FiDollarSign,
                     label: "Entrance Fee",
                     value: destination.entrance_fee == null
                       ? approxRange(estimateOf(destination, "entrance_fee")) || "Not specified"
