@@ -421,6 +421,7 @@ function ReviewModal({
 }) {
   const [decision, setDecision] = useState(null)
   const [notes, setNotes] = useState('')
+  const [notesError, setNotesError] = useState('')
 
   const revision = useMemo(
     () => getRevision(listing, type),
@@ -449,7 +450,7 @@ function ReviewModal({
     }
 
     if (decision === 'reject' && !notes.trim()) {
-      toast.error('Please provide a reason for requesting changes.')
+      setNotesError('Explain what needs to be corrected.')
       return
     }
 
@@ -707,8 +708,13 @@ function ReviewModal({
               </label>
 
               <textarea
+                name="notes"
                 value={notes}
-                onChange={(event) => setNotes(event.target.value)}
+                onChange={(event) => {
+                  setNotes(event.target.value)
+                  setNotesError('')
+                }}
+                aria-invalid={!!notesError}
                 rows={3}
                 maxLength={1000}
                 placeholder={
@@ -718,6 +724,7 @@ function ReviewModal({
                 }
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
               />
+              {notesError && <p className="field-error" role="alert">{notesError}</p>}
 
               <div className="flex flex-wrap gap-2">
                 <button

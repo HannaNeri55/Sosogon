@@ -167,26 +167,30 @@ export default function MapLocationPicker({ latitude, longitude, onChange, onAdd
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 mb-1">Latitude{required && ' *'}</span>
           <input
-            className={`input-field ${latInvalid ? 'border-red-400' : ''}`}
+            name="latitude"
+            className="input-field"
+            aria-invalid={latInvalid || undefined}
             inputMode="decimal"
             placeholder="e.g. 12.9718000"
             value={latitude ?? ''}
             onChange={(e) => onChange({ latitude: e.target.value.trim(), longitude: longitude ?? '' })}
             required={required}
           />
-          {latInvalid && <span className="mt-1 block text-xs text-red-600">Latitude must be between -90 and 90.</span>}
+          {latInvalid && <span className="field-error block">Latitude must be between -90 and 90.</span>}
         </label>
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 mb-1">Longitude{required && ' *'}</span>
           <input
-            className={`input-field ${lngInvalid ? 'border-red-400' : ''}`}
+            name="longitude"
+            className="input-field"
+            aria-invalid={lngInvalid || undefined}
             inputMode="decimal"
             placeholder="e.g. 124.0055000"
             value={longitude ?? ''}
             onChange={(e) => onChange({ latitude: latitude ?? '', longitude: e.target.value.trim() })}
             required={required}
           />
-          {lngInvalid && <span className="mt-1 block text-xs text-red-600">Longitude must be between -180 and 180.</span>}
+          {lngInvalid && <span className="field-error block">Longitude must be between -180 and 180.</span>}
         </label>
       </div>
 

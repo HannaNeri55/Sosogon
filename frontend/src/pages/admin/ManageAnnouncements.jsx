@@ -7,6 +7,8 @@ import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published' }
 
@@ -25,6 +27,7 @@ export default function ManageAnnouncements() {
   }, [items, search])
 
   const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+  const form = useFormErrors(formRef)
 
   const loadData = async () => {
     try {
@@ -51,6 +54,7 @@ export default function ManageAnnouncements() {
   }
 
   const closeForm = () => {
+    form.setErrors({})
     setShowForm(false)
     setEditingId(null)
     setFormData(EMPTY_FORM)
@@ -58,6 +62,7 @@ export default function ManageAnnouncements() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
     try {
       if (editingId) {
         await updateAnnouncement(editingId, formData)
@@ -69,9 +74,7 @@ export default function ManageAnnouncements() {
       closeForm()
       loadData()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, editingId ? 'Failed to update announcement' : 'Failed to create announcement')
+      if (!form.fromResponse(err)) showApiError(err, editingId ? 'Failed to update announcement' : 'Failed to create announcement')
     }
   }
 
@@ -102,16 +105,23 @@ export default function ManageAnnouncements() {
 
       {showForm && (
         <form
-          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+          ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing announcement' : 'New announcement'}</p>
-          <input className="input-field" placeholder="Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
-          <textarea className="input-field" rows={4} placeholder="Content" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} required />
+          <FormErrorSummary form={form} />
+          <div>
+            <input name="title" className="input-field" placeholder="Title" aria-label="Title" maxLength={255} value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
+            <FieldError form={form} name="title" />
+          </div>
+          <div>
+            <textarea name="content" className="input-field" rows={4} placeholder="Content" aria-label="Content" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} required />
+            <FieldError form={form} name="content" />
+          </div>
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={formData.is_pinned} onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })} />
+              <input type="checkbox" name="is_pinned" checked={formData.is_pinned} onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })} />
               Pinned announcement
             </label>
-            <select className="input-field w-auto" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+            <select name="status" className="input-field w-auto" aria-label="Status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
               <option value="published">Published</option>
               <option value="draft">Draft</option>
             </select>

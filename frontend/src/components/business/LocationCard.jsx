@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { FiMapPin, FiEdit2 } from 'react-icons/fi'
 import { getMunicipalities } from '../../api/admin'
 import toast from 'react-hot-toast'
 import { showApiError } from '../../utils/apiErrors'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 export default function LocationCard({ address, municipality, municipalityId, onSave, readOnly = false }) {
   const [editing, setEditing] = useState(false)
   const [municipalities, setMunicipalities] = useState([])
   const [form, setForm] = useState({ address, municipality_id: municipalityId })
   const [saving, setSaving] = useState(false)
+  const formRef = useRef(null)
+  const fieldErrors = useFormErrors(formRef)
   // Name looked up for a municipalityId the `municipality` prop doesn't describe (e.g. right
   // after a save), remembered with the id it belongs to so a stale lookup is never shown.
   const [fetchedMunicipality, setFetchedMunicipality] = useState(null)
@@ -34,6 +38,7 @@ export default function LocationCard({ address, municipality, municipalityId, on
     : fetchedMunicipality?.id === String(municipalityId ?? '') ? fetchedMunicipality.name : null
 
   const startEditing = () => {
+    fieldErrors.setErrors({})
     setForm({ address, municipality_id: municipalityId })
     if (readOnly) return
     if (municipalities.length === 0) getMunicipalities().then(setMunicipalities)
@@ -42,16 +47,14 @@ export default function LocationCard({ address, municipality, municipalityId, on
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (readOnly) return
+    if (readOnly || !fieldErrors.check()) return
     setSaving(true)
     try {
       await onSave(form)
       toast.success('Location updated')
       setEditing(false)
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, 'Failed to update location')
+      if (!fieldErrors.fromResponse(err)) showApiError(err, 'Failed to update location')
     } finally {
       setSaving(false)
     }
@@ -81,19 +84,21 @@ export default function LocationCard({ address, municipality, municipalityId, on
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} noValidate onChange={fieldErrors.onChange} onSubmit={handleSubmit} className="space-y-4">
+          <FormErrorSummary form={fieldErrors} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-            <input
+            <input name="address" maxLength={500}
               className="input-field"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               required
             />
+            <FieldError form={fieldErrors} name="address" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Municipality</label>
-            <select
+            <select name="municipality_id"
               className="input-field"
               value={form.municipality_id}
               onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
@@ -104,6 +109,7 @@ export default function LocationCard({ address, municipality, municipalityId, on
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
+            <FieldError form={fieldErrors} name="municipality_id" />
           </div>
           <div className="flex items-center gap-3">
             <button type="submit" className="btn-primary" disabled={saving}>

@@ -9,7 +9,8 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class PasswordResetMail extends Mailable implements ShouldQueue
+// Sent right away, not queued: no queue worker runs on the server, and the caller logs any SMTP failure.
+class PasswordResetMail extends Mailable
 {
     use Queueable, SerializesModels;
 

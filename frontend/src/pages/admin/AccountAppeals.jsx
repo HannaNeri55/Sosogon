@@ -25,16 +25,25 @@ function DecisionModal({ appeal, onClose, onDone }) {
   const [decision, setDecision] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [errors, setErrors] = useState({})
   const pending = appeal.status === 'pending'
 
   const submit = async () => {
+    const found = {
+      decision: !decision ? 'Choose Approve or Reject.' : undefined,
+      note: note.trim().length < 10 ? 'Explain the decision in at least 10 characters.' : undefined,
+    }
+    setErrors(found)
+    if (found.decision || found.note) return
     setBusy(true)
     try {
       const data = await decideAccountAppeal(appeal.id, { decision, note: note.trim() })
       toast.success(data.message)
       onDone()
     } catch (error) {
-      showApiError(error, 'The decision could not be saved.')
+      const serverErrors = error.response?.status === 422 && error.response.data?.errors
+      if (serverErrors) setErrors({ decision: serverErrors.decision?.[0], note: serverErrors.note?.[0] })
+      else showApiError(error, 'The decision could not be saved.')
     } finally {
       setBusy(false)
     }
@@ -53,7 +62,7 @@ function DecisionModal({ appeal, onClose, onDone }) {
           <button
             type="button"
             onClick={submit}
-            disabled={!decision || note.trim().length < 10 || busy}
+            disabled={busy}
             className={`inline-flex items-center justify-center px-6 py-2.5 rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${decision === 'rejected' ? 'bg-gray-800 hover:bg-gray-900' : 'bg-green-600 hover:bg-green-700'}`}
           >
             {busy ? 'Saving…' : decision === 'rejected' ? 'Reject appeal' : decision === 'approved' ? 'Approve and reverse' : 'Choose a decision'}
@@ -98,14 +107,16 @@ function DecisionModal({ appeal, onClose, onDone }) {
                   { value: 'rejected', title: 'Reject', text: 'Keep the original decision. This is final for this violation.' },
                 ].map((option) => (
                   <label key={option.value} className={`cursor-pointer rounded-xl border-2 p-3 text-sm ${decision === option.value ? 'border-primary-500 bg-primary-50/60' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <input type="radio" name="decision" value={option.value} checked={decision === option.value} onChange={() => setDecision(option.value)} className="sr-only" />
+                    <input type="radio" name="decision" value={option.value} checked={decision === option.value} onChange={() => { setDecision(option.value); setErrors((prev) => ({ ...prev, decision: undefined })) }} className="sr-only" />
                     <span className="block font-semibold text-gray-900">{option.title}</span>
                     <span className="block text-xs text-gray-500 mt-0.5">{option.text}</span>
                   </label>
                 ))}
               </div>
+              {errors.decision && <p className="field-error" role="alert">{errors.decision}</p>}
               <label htmlFor="decision-note" className="mt-3 block text-sm font-semibold text-gray-800 mb-1.5">Decision explanation (sent to the user)</label>
-              <textarea id="decision-note" rows={4} maxLength={2000} className="input-field" value={note} onChange={(e) => setNote(e.target.value)} />
+              <textarea id="decision-note" name="note" rows={4} maxLength={2000} className="input-field" value={note} aria-invalid={!!errors.note} onChange={(e) => { setNote(e.target.value); setErrors((prev) => ({ ...prev, note: undefined })) }} />
+              {errors.note && <p className="field-error" role="alert">{errors.note}</p>}
               <p className="mt-1 text-xs text-gray-500">At least 10 characters. Your name and the date are recorded.</p>
             </div>
           ) : (

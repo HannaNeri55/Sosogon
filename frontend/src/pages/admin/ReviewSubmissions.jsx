@@ -43,6 +43,7 @@ export default function ReviewSubmissions() {
   // Inline action panel on an approved card: { id, type: 'warn' | 'remove' }
   const [panel, setPanel] = useState(null)
   const [panelText, setPanelText] = useState('')
+  const [panelError, setPanelError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const loadData = async () => {
@@ -67,6 +68,7 @@ export default function ReviewSubmissions() {
 
   const openPanel = (id, type) => {
     setPanel({ id, type })
+    setPanelError('')
     setPanelText(type === 'remove' ? DEFAULT_REMOVAL_REASON : '')
   }
 
@@ -124,7 +126,7 @@ export default function ReviewSubmissions() {
 
   const handleRemove = async (item) => {
     if (!panelText.trim()) {
-      toast.error('Please enter a reason for removal')
+      setPanelError('Enter a reason for removal. It is sent to the owner.')
       return
     }
     const left = daysUntil(item.warning_deadline)
@@ -309,13 +311,19 @@ export default function ReviewSubmissions() {
                     </label>
                     <textarea
                       id={`remove-reason-${item.id}`}
+                      name="reason"
                       value={panelText}
-                      onChange={(e) => setPanelText(e.target.value)}
+                      onChange={(e) => {
+                        setPanelText(e.target.value)
+                        setPanelError('')
+                      }}
+                      aria-invalid={!!panelError}
                       rows={3}
                       autoFocus
                       maxLength={1000}
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400"
                     />
+                    {panelError && <p className="field-error" role="alert">{panelError}</p>}
                     <p className="text-xs text-gray-500 mt-1">
                       The live listing, its photos and reviews will be deleted. The submission record is kept under the Removed tab.
                     </p>

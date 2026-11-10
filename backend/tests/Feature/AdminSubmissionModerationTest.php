@@ -120,7 +120,7 @@ class AdminSubmissionModerationTest extends TestCase
         $this->assertNotNull($submission->warned_at);
         $this->assertSame('Please respond to guests.', $submission->warning_notes);
         $this->assertTrue($submission->warning_deadline->isSameDay(now()->addDays(BusinessSubmission::WARNING_GRACE_DAYS)));
-        Mail::assertQueued(ListingWarningMail::class, fn ($mail) => $mail->hasTo('owner@example.com'));
+        Mail::assertSent(ListingWarningMail::class, fn ($mail) => $mail->hasTo('owner@example.com'));
 
         $this->actingAs($this->owner)
             ->getJson('/api/v1/business/dashboard')
@@ -183,7 +183,7 @@ class AdminSubmissionModerationTest extends TestCase
         $this->assertSame('Unresolved negative reviews.', $submission->admin_notes);
         $this->assertNull(FoodBeverage::find($listingId));
         $this->assertSame(0, Rating::where('rateable_type', FoodBeverage::class)->where('rateable_id', $listingId)->count());
-        Mail::assertQueued(SubmissionStatusMail::class, fn ($mail) => $mail->hasTo('owner@example.com'));
+        Mail::assertSent(SubmissionStatusMail::class, fn ($mail) => $mail->hasTo('owner@example.com'));
 
         $this->actingAs($this->owner)
             ->getJson('/api/v1/business/dashboard')

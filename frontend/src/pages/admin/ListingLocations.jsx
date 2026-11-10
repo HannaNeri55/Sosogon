@@ -32,13 +32,15 @@ function EditLocationModal({ type, item, onClose, onSaved }) {
     longitude: item.longitude ?? '',
   })
   const [busy, setBusy] = useState(false)
+  const [errors, setErrors] = useState({})
   const point = toCoordinates(form.latitude, form.longitude)
 
   const save = async () => {
     if (!point) {
-      toast.error('Choose the location on the map or enter valid coordinates.')
+      setErrors({ location: 'Choose the location on the map or enter valid coordinates.' })
       return
     }
+    setErrors({})
     setBusy(true)
     try {
       const data = await updateListingLocation(type, item.id, {
@@ -49,7 +51,12 @@ function EditLocationModal({ type, item, onClose, onSaved }) {
       toast.success(data.message)
       onSaved()
     } catch (error) {
-      showApiError(error, 'The location could not be saved.')
+      const serverErrors = error.response?.status === 422 && error.response.data?.errors
+      if (serverErrors) {
+        setErrors({ address: serverErrors.address?.[0], location: (serverErrors.latitude ?? serverErrors.longitude)?.[0] })
+      } else {
+        showApiError(error, 'The location could not be saved.')
+      }
     } finally {
       setBusy(false)
     }
@@ -65,23 +72,28 @@ function EditLocationModal({ type, item, onClose, onSaved }) {
       footer={
         <>
           <button type="button" onClick={onClose} disabled={busy} className="btn-secondary">Cancel</button>
-          <button type="button" onClick={save} disabled={busy || !point} className="btn-primary">{busy ? 'Saving…' : 'Save location'}</button>
+          <button type="button" onClick={save} disabled={busy} className="btn-primary">{busy ? 'Saving…' : 'Save location'}</button>
         </>
       }
     >
       <div className="space-y-4">
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 mb-1">Complete address</span>
-          <input className="input-field" maxLength={500} value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} />
+          <input name="address" className="input-field" maxLength={500} value={form.address} aria-invalid={!!errors.address} onChange={(e) => { setForm((prev) => ({ ...prev, address: e.target.value })); setErrors((prev) => ({ ...prev, address: undefined })) }} />
+          {errors.address && <span className="field-error block" role="alert">{errors.address}</span>}
         </label>
         <MapLocationPicker
           required
           latitude={form.latitude}
           longitude={form.longitude}
           searchHint={`${item.name}${item.municipality?.name ? `, ${item.municipality.name}` : ''}`}
-          onChange={({ latitude, longitude }) => setForm((prev) => ({ ...prev, latitude, longitude }))}
+          onChange={({ latitude, longitude }) => {
+            setForm((prev) => ({ ...prev, latitude, longitude }))
+            setErrors((prev) => ({ ...prev, location: undefined }))
+          }}
           onAddressFound={(found) => setForm((prev) => (prev.address ? prev : { ...prev, address: found }))}
         />
+        {errors.location && <p className="field-error" role="alert">{errors.location}</p>}
       </div>
     </Modal>
   )

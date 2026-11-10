@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { FiUpload, FiX } from 'react-icons/fi'
 import { createRetailShopProduct, updateRetailShopProduct } from '../../../api/retailShopOwner'
 import { getImageUrl } from '../../../utils/helpers'
 import toast from 'react-hot-toast'
 import { showApiError } from '../../../utils/apiErrors'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const PRODUCT_TYPES = ['Souvenir', 'Local Food Product', 'Handicraft', 'Clothing']
 
@@ -15,9 +17,14 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
   const [productType, setProductType] = useState(item?.product_type || PRODUCT_TYPES[0])
   const [image, setImage] = useState(null)
   const [saving, setSaving] = useState(false)
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({ image: image && image.size > 5 * 1024 * 1024 ? 'Choose a photo of 5 MB or less.' : null }),
+  })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
     const payload = new FormData()
     payload.append('name', name)
     payload.append('description', description)
@@ -31,9 +38,7 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
       toast.success(res.message)
       onSaved()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, 'Failed to save product')
+      if (!form.fromResponse(err)) showApiError(err, 'Failed to save product')
     } finally {
       setSaving(false)
     }
@@ -49,30 +54,33 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="space-y-5">
+          <FormErrorSummary form={form} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Product Name</label>
-            <input
+            <input name="name" maxLength={255}
               className="input-field"
               placeholder="e.g. Pili Nut Brittle, Abaca Woven Bag"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
+            <FieldError form={form} name="name" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Product Type</label>
-            <select className="input-field" value={productType} onChange={(e) => setProductType(e.target.value)} required>
+            <select name="product_type" className="input-field" value={productType} onChange={(e) => setProductType(e.target.value)} required>
               {PRODUCT_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+            <FieldError form={form} name="product_type" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
+            <textarea name="description" maxLength={2000}
               rows={4}
               className="input-field"
               placeholder="Materials used, cultural significance, ingredients..."
@@ -80,11 +88,12 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
               onChange={(e) => setDescription(e.target.value)}
               required
             />
+            <FieldError form={form} name="description" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Price (₱)</label>
-            <input
+            <input name="price"
               type="number"
               step="0.01"
               min="0"
@@ -94,6 +103,7 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
               onChange={(e) => setPrice(e.target.value)}
               required
             />
+            <FieldError form={form} name="price" />
           </div>
 
           <div>
@@ -110,11 +120,13 @@ export default function ProductFormModal({ item, onClose, onSaved }) {
               </span>
               <input
                 type="file"
+                name="image"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => setImage(e.target.files[0] || null)}
                 className="hidden"
               />
             </label>
+            <FieldError form={form} name="image" />
           </div>
 
           {isEdit && item.status !== 'pending' && (

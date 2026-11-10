@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { FiAlertTriangle, FiClock, FiFileText, FiUploadCloud } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { getOwnerApplication, downloadOwnerPermit, resubmitOwnerApplication } from '../../api/business'
 import { getMunicipalities, getBarangays } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { showApiError } from '../../utils/apiErrors'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 /**
  * Shown instead of the dashboard while a Business Owner's registration is not
@@ -16,7 +18,12 @@ export default function ApplicationStatus() {
   const [permit, setPermit] = useState(null)
   const [municipalities, setMunicipalities] = useState([])
   const [barangays, setBarangays] = useState([])
-  const [errors, setErrors] = useState({})
+  const formRef = useRef(null)
+  const fieldErrors = useFormErrors(formRef, {
+    validate: () => ({
+      business_permit_file: permit && permit.size > 10 * 1024 * 1024 ? 'The permit file must be 10 MB or smaller.' : null,
+    }),
+  })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -51,8 +58,8 @@ export default function ApplicationStatus() {
 
   const resubmit = async (e) => {
     e.preventDefault()
+    if (!fieldErrors.check()) return
     setSaving(true)
-    setErrors({})
     try {
       const payload = new FormData()
       Object.entries(form).forEach(([key, value]) => value !== '' && payload.append(key, value))
@@ -61,8 +68,7 @@ export default function ApplicationStatus() {
       toast.success(res.message)
       setData((current) => ({ ...current, application: res.application }))
     } catch (err) {
-      setErrors(err.response?.data?.errors || {})
-      showApiError(err, 'Could not resubmit your application.')
+      if (!fieldErrors.fromResponse(err)) showApiError(err, 'Could not resubmit your application.')
     } finally {
       setSaving(false)
     }
@@ -75,8 +81,8 @@ export default function ApplicationStatus() {
   const field = (name, label, props = {}) => (
     <label className="block">
       <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <input className="input-field" value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} {...props} />
-      {errors[name] && <span className="text-red-600 text-xs mt-1 block">{errors[name][0]}</span>}
+      <input name={name} className="input-field" value={form[name]} onChange={(e) => setForm({ ...form, [name]: e.target.value })} {...props} />
+      <FieldError form={fieldErrors} name={name} />
     </label>
   )
 
@@ -110,35 +116,37 @@ export default function ApplicationStatus() {
       )}
 
       {rejected && form && (
-        <form onSubmit={resubmit} className="space-y-4 border-t border-gray-100 pt-6">
+        <form ref={formRef} noValidate onChange={fieldErrors.onChange} onSubmit={resubmit} className="space-y-4 border-t border-gray-100 pt-6">
+          <FormErrorSummary form={fieldErrors} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {field('business_name', 'Business name', { required: true })}
-            {field('business_permit_number', 'Business permit number', { required: true })}
-            <div className="md:col-span-2">{field('business_address', 'Business address', { required: true })}</div>
+            {field('business_name', 'Business name', { required: true, maxLength: 255 })}
+            {field('business_permit_number', 'Business permit number', { required: true, maxLength: 100 })}
+            <div className="md:col-span-2">{field('business_address', 'Business address', { required: true, maxLength: 500 })}</div>
             <label className="block">
               <span className="block text-sm font-medium text-gray-700 mb-1">Municipality</span>
-              <select className="input-field" value={form.municipality_id} required
+              <select name="municipality_id" className="input-field" value={form.municipality_id} required
                 onChange={(e) => setForm({ ...form, municipality_id: e.target.value, barangay_id: '' })}>
                 <option value="">Select municipality</option>
                 {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+              <FieldError form={fieldErrors} name="municipality_id" />
             </label>
             <label className="block">
               <span className="block text-sm font-medium text-gray-700 mb-1">Barangay</span>
-              <select className="input-field" value={form.barangay_id} onChange={(e) => setForm({ ...form, barangay_id: e.target.value })}>
+              <select name="barangay_id" className="input-field" value={form.barangay_id} onChange={(e) => setForm({ ...form, barangay_id: e.target.value })}>
                 <option value="">Select barangay</option>
                 {barangays.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
-              {errors.barangay_id && <span className="text-red-600 text-xs mt-1 block">{errors.barangay_id[0]}</span>}
+              <FieldError form={fieldErrors} name="barangay_id" />
             </label>
           </div>
           <label className="block">
             <span className="block text-sm font-medium text-gray-700 mb-1">Updated business permit (optional, PDF or Word, max 10 MB)</span>
             <span className="flex items-center gap-2 text-sm text-gray-600">
               <FiUploadCloud aria-hidden="true" />
-              <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setPermit(e.target.files[0] || null)} />
+              <input type="file" name="business_permit_file" accept=".pdf,.doc,.docx" onChange={(e) => setPermit(e.target.files[0] || null)} />
             </span>
-            {errors.business_permit_file && <span className="text-red-600 text-xs mt-1 block">{errors.business_permit_file[0]}</span>}
+            <FieldError form={fieldErrors} name="business_permit_file" />
           </label>
           <button type="submit" disabled={saving} className="btn-primary min-h-11">
             {saving ? 'Resubmitting…' : 'Resubmit for review'}

@@ -277,17 +277,17 @@ function StopDetails({ stop, compact = false }) {
   )
 }
 
-function TimeRangeFields({ slot, onChange }) {
+function TimeRangeFields({ slot, onChange, invalid = false }) {
   const { start, end } = splitSlot(slot)
   return (
     <>
       <label className="block">
         <span className="block text-xs font-medium text-gray-500 mb-1">Start</span>
-        <input type="time" value={start} onChange={(e) => onChange(joinSlot(e.target.value, end))} className={FIELD} />
+        <input type="time" value={start} onChange={(e) => onChange(joinSlot(e.target.value, end))} className={FIELD} aria-invalid={invalid || undefined} />
       </label>
       <label className="block">
         <span className="block text-xs font-medium text-gray-500 mb-1">End</span>
-        <input type="time" value={end} onChange={(e) => onChange(joinSlot(start, e.target.value))} className={FIELD} />
+        <input type="time" value={end} onChange={(e) => onChange(joinSlot(start, e.target.value))} className={FIELD} aria-invalid={invalid || undefined} />
       </label>
     </>
   )
@@ -366,7 +366,7 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
       {!isDeleted && (
         <div className="border-t border-gray-100 bg-gray-50/70 p-4 space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-[auto_auto_1fr] gap-3 items-start">
-            <TimeRangeFields slot={slot} onChange={(value) => change('time_slot', value)} />
+            <TimeRangeFields slot={slot} invalid={!!slotProblem} onChange={(value) => change('time_slot', value)} />
             <label className="block col-span-2 sm:col-span-1">
               <span className="block text-xs font-medium text-gray-500 mb-1">Notes</span>
               <textarea
@@ -379,7 +379,7 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
               />
             </label>
           </div>
-          {slotProblem && <p className="text-xs text-red-500 -mt-2">{slotProblem}</p>}
+          {slotProblem && <p className="field-error -mt-2" role="alert">{slotProblem}</p>}
           {isNew && stop.item_type === 'destination' ? (
             <p className="text-xs text-gray-500 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2.5">
               Its listed activities are added automatically within this time when you save; you can adjust them afterwards.

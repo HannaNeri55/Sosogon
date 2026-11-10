@@ -136,6 +136,18 @@
     }
 }
 
+/* Any field marked invalid (aria-invalid, set by useFormErrors and the sign-in forms) turns
+   red, whatever classes it has. Outside a layer so it wins over border/background utilities. */
+:is(input, select, textarea)[aria-invalid="true"]:not([type="checkbox"], [type="radio"]) {
+    border-color: var(--color-red-500);
+    background-color: color-mix(in oklab, var(--color-red-50) 50%, white);
+}
+:is(input, select, textarea)[aria-invalid="true"]:focus {
+    outline: none;
+    border-color: var(--color-red-500);
+    box-shadow: 0 0 0 2px var(--color-red-500);
+}
+
 @layer components {
     .btn-primary {
         @apply bg-primary-500 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-primary-600 active:bg-primary-700 transition-colors duration-200 inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed;

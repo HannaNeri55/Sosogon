@@ -7,6 +7,8 @@ import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 const EMPTY_FORM = { title: '', subtitle: '', eyebrow: '', sort_order: 0, is_active: true, image: null }
 
@@ -25,6 +27,11 @@ export default function ManageHeroSlides() {
   }, [items, search])
 
   const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      image: formData.image && formData.image.size > 5 * 1024 * 1024 ? 'Choose an image of 5 MB or less.' : null,
+    }),
+  })
 
   const loadData = async () => {
     try {
@@ -53,6 +60,7 @@ export default function ManageHeroSlides() {
   }
 
   const closeForm = () => {
+    form.setErrors({})
     setShowForm(false)
     setEditingId(null)
     setFormData(EMPTY_FORM)
@@ -60,6 +68,7 @@ export default function ManageHeroSlides() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
     const payload = new FormData()
     Object.keys(formData).forEach((key) => {
       if (key === 'image') return
@@ -74,19 +83,13 @@ export default function ManageHeroSlides() {
         await updateHeroSlide(editingId, payload)
         toast.success('Hero slide updated')
       } else {
-        if (!formData.image) {
-          toast.error('A banner image is required')
-          return
-        }
         await createHeroSlide(payload)
         toast.success('Hero slide created')
       }
       closeForm()
       loadData()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, editingId ? 'Failed to update hero slide' : 'Failed to create hero slide')
+      if (!form.fromResponse(err)) showApiError(err, editingId ? 'Failed to update hero slide' : 'Failed to create hero slide')
     }
   }
 
@@ -117,27 +120,43 @@ export default function ManageHeroSlides() {
 
       {showForm && (
         <form
-          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+          ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing hero slide' : 'New hero slide'}</p>
-          <input className="input-field" placeholder="Eyebrow (small label above title)" value={formData.eyebrow} onChange={(e) => setFormData({ ...formData, eyebrow: e.target.value })} />
-          <input className="input-field" placeholder="Title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
-          <textarea className="input-field" rows={3} placeholder="Subtitle / description" value={formData.subtitle} onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} />
+          <FormErrorSummary form={form} />
+          <div>
+            <input name="eyebrow" className="input-field" placeholder="Eyebrow (small label above title)" aria-label="Eyebrow" maxLength={255} value={formData.eyebrow} onChange={(e) => setFormData({ ...formData, eyebrow: e.target.value })} />
+            <FieldError form={form} name="eyebrow" />
+          </div>
+          <div>
+            <input name="title" className="input-field" placeholder="Title" aria-label="Title" maxLength={255} value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
+            <FieldError form={form} name="title" />
+          </div>
+          <div>
+            <textarea name="subtitle" className="input-field" rows={3} placeholder="Subtitle / description" aria-label="Subtitle" value={formData.subtitle} onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })} />
+            <FieldError form={form} name="subtitle" />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <input type="number" min="0" className="input-field" placeholder="Sort order" value={formData.sort_order} onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })} />
+            <div>
+              <input name="sort_order" type="number" min="0" step="1" className="input-field" placeholder="Sort order" aria-label="Sort order" value={formData.sort_order} onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })} />
+              <FieldError form={form} name="sort_order" />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Banner Image {editingId && '(leave empty to keep current image)'}
               </label>
               <input
+                name="image"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
+                required={!editingId}
                 onChange={(e) => setFormData({ ...formData, image: e.target.files[0] || null })}
                 className="input-field"
               />
+              <FieldError form={form} name="image" />
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} />
+            <input type="checkbox" name="is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} />
             Active (visible on the homepage)
           </label>
           <div className="flex gap-3">

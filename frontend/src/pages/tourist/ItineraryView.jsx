@@ -28,6 +28,7 @@ import { transportGuide } from '../../utils/transportGuidance'
 import { refreshOfflineCopy, removeOfflineCopy } from '../../utils/offlineItineraries'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import { focusFirstInvalid } from '../../utils/formErrors'
 
 // The itinerary_items column holding the listing for each kind of stop.
 const LISTING_COLUMNS = {
@@ -159,6 +160,9 @@ export default function ItineraryView() {
   const [loading, setLoading] = useState(true)
   const [editMode, setEditMode] = useState(false)
   const [pendingEdits, setPendingEdits] = useState(emptyPendingEdits())
+  // Why the last Save was refused, kept with the edits it was about: any change hides it.
+  const [saveProblem, setSaveProblem] = useState(null)
+  const shownSaveProblem = saveProblem?.edits === pendingEdits ? saveProblem.message : null
   const [saving, setSaving] = useState(false)
   // null, or what the place picker is for: { kind: 'add', dayNumber } | { kind: 'swap', itemId, itemType, currentName } | { kind: 'stay' }
   const [picker, setPicker] = useState(null)
@@ -369,7 +373,8 @@ export default function ItineraryView() {
         .find(Boolean) ||
       [...touchedDays].map((dayNumber) => overlapProblem(dayStops(dayNumber), dayNumber)).find(Boolean)
     if (problem) {
-      toast.error(problem)
+      setSaveProblem({ message: problem, edits: pendingEdits })
+      focusFirstInvalid()
       return
     }
 
@@ -572,6 +577,7 @@ export default function ItineraryView() {
               <p className="text-sm sm:text-xs text-gray-600 sm:text-gray-500 leading-tight">
                 {changeCount === 0 ? 'No changes yet' : `${changeCount} unsaved change${changeCount !== 1 ? 's' : ''}`}
               </p>
+              {shownSaveProblem && <p className="field-error mt-1 max-w-md" role="alert">{shownSaveProblem}</p>}
             </div>
             <div className="hidden sm:block text-right ml-auto mr-2">
               <p className="text-xs text-gray-500">Estimated budget</p>

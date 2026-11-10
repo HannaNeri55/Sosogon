@@ -21,6 +21,8 @@ import ListingPhotoManager from '../../../components/business/ListingPhotoManage
 import usePhotoArrangement from '../../../components/business/usePhotoArrangement'
 import toast from 'react-hot-toast'
 import { showApiError } from '../../../utils/apiErrors'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -66,6 +68,14 @@ export default function MyEstablishment() {
     name: '',
     description: '',
     website: '',
+  })
+  // Field errors (the listing's values are already called `form`).
+  const formRef = useRef(null)
+  const fieldErrors = useFormErrors(formRef, {
+    validate: () => ({
+      name: !form.name.trim() ? 'Please enter the business name.' : null,
+      description: form.description.trim().length < 50 ? 'The description must contain at least 50 characters.' : null,
+    }),
   })
 
   const statusRef = useRef(null)
@@ -166,20 +176,21 @@ export default function MyEstablishment() {
       'image/png',
       'image/webp',
     ].includes(file.type))) {
-      toast.error('Only JPG, JPEG, PNG, and WebP photos are allowed.')
+      fieldErrors.setErrors({ images: 'Only JPG, JPEG, PNG, and WebP photos are allowed.' })
       return
     }
 
     if (files.some((file) => file.size > MAX_FILE_SIZE)) {
-      toast.error('Each photo must be 5 MB or smaller.')
+      fieldErrors.setErrors({ images: 'Each photo must be 5 MB or smaller.' })
       return
     }
 
     if (totalCount + files.length > MAX_IMAGES) {
-      toast.error('Gallery cannot exceed 100 photos.')
+      fieldErrors.setErrors({ images: 'Gallery cannot exceed 100 photos.' })
       return
     }
 
+    fieldErrors.clear('images')
     setNewImages((current) => [...current, ...files])
   }
 
@@ -204,7 +215,7 @@ export default function MyEstablishment() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (error) {
-      showApiError(error, 'Failed to save the correction.', { allErrors: true })
+      if (!fieldErrors.fromResponse(error)) showApiError(error, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -215,15 +226,10 @@ export default function MyEstablishment() {
 
     if (busy || locked) return
 
-    if (totalCount > MAX_IMAGES || (submit && !canSubmit)) {
-      toast.error('You need 5–100 photos and an editable listing.')
-      return
-    }
-
-    if (form.description.trim().length < 50) {
-      toast.error('Description must have at least 50 characters.')
-      return
-    }
+    const photoProblem = totalCount > MAX_IMAGES || (submit && !canSubmit)
+      ? 'You need 5–100 photos and an editable listing.'
+      : null
+    if (!fieldErrors.check({ images: photoProblem })) return
 
     const payload = new FormData()
     payload.append('name', form.name.trim())
@@ -259,7 +265,7 @@ export default function MyEstablishment() {
       await refresh()
       scrollToStatus()
     } catch (error) {
-      showApiError(error, 'Could not complete Save & Submit for Review.', { allErrors: true })
+      if (!fieldErrors.fromResponse(error)) showApiError(error, 'Could not complete Save & Submit for Review.', { allErrors: true })
 
       // Refresh because saving may have succeeded even if
       // the subsequent submission failed.
@@ -274,14 +280,10 @@ export default function MyEstablishment() {
       throw new Error('Changes are locked while under review.')
     }
 
-    try {
-      const response = await updateMyFoodBeverageLocation(data)
-      await refresh()
-      return response
-    } catch (error) {
-      showApiError(error, 'Failed to update location.', { allErrors: true })
-      throw error
-    }
+    // A failure reaches LocationCard, which shows it under its fields.
+    const response = await updateMyFoodBeverageLocation(data)
+    await refresh()
+    return response
   }
 
   if (loading) return <LoadingSpinner size="lg" />
@@ -450,18 +452,22 @@ export default function MyEstablishment() {
           </div>
 
           <form
+            ref={formRef}
+            noValidate
+            onChange={fieldErrors.onChange}
             onSubmit={handleSaveAndSubmit}
             className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 space-y-6 shadow-(--shadow-card)"
           >
             <h2 className="text-lg font-heading font-semibold text-gray-900">
               Establishment Details
             </h2>
+            <FormErrorSummary form={fieldErrors} />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Business Name
               </label>
-              <input
+              <input name="name" maxLength={255}
                 className="input-field"
                 value={form.name}
                 onChange={(event) =>
@@ -474,13 +480,14 @@ export default function MyEstablishment() {
                 maxLength={255}
                 disabled={locked || busy}
               />
+              <FieldError form={fieldErrors} name="name" />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Description
               </label>
-              <textarea
+              <textarea name="description"
                 rows={6}
                 className="input-field"
                 value={form.description}
@@ -494,6 +501,7 @@ export default function MyEstablishment() {
                 minLength={50}
                 disabled={locked || busy}
               />
+              <FieldError form={fieldErrors} name="description" />
               <p className="text-xs text-gray-500 mt-1">
                 Minimum 50 characters.
               </p>
@@ -503,7 +511,7 @@ export default function MyEstablishment() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Website (optional)
               </label>
-              <input
+              <input name="website" maxLength={500}
                 type="url"
                 className="input-field"
                 placeholder="https://..."
@@ -516,6 +524,7 @@ export default function MyEstablishment() {
                 }
                 disabled={locked || busy}
               />
+              <FieldError form={fieldErrors} name="website" />
             </div>
 
             <div>
@@ -574,12 +583,14 @@ export default function MyEstablishment() {
                     type="file"
                     multiple
                     accept="image/jpeg,image/png,image/webp"
+                    name="images"
                     onChange={handleSelectImages}
                     disabled={locked || busy}
                     className="hidden"
                   />
                 </label>
               )}
+              <FieldError form={fieldErrors} name="images" />
             </div>
 
             {isPublished && (

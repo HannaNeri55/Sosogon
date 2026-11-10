@@ -296,6 +296,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   ]
   const firstProblemStep = problems.findIndex(Boolean)
   const ready = firstProblemStep === -1
+  // Which date box the dates problem is about, once Continue has been pressed on that step.
+  const startDateInvalid = Boolean(attempted[1] && !formData.start_date)
+  const endDateInvalid = Boolean(attempted[1] && formData.start_date && (!formData.end_date || !numDays || tooManyDays))
 
   useEffect(() => {
     getMunicipalities()
@@ -532,6 +535,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   <label htmlFor="start_date" className="block text-xs font-semibold text-gray-600 mb-1.5">Arrival date</label>
                   <input
                     id="start_date"
+                    aria-invalid={startDateInvalid || undefined}
                     type="date"
                     className="input-field"
                     min={todayISO()}
@@ -549,6 +553,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   <label htmlFor="end_date" className="block text-xs font-semibold text-gray-600 mb-1.5">Departure date</label>
                   <input
                     id="end_date"
+                    aria-invalid={endDateInvalid || undefined}
                     type="date"
                     className="input-field"
                     min={formData.start_date || todayISO()}

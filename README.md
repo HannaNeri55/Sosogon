@@ -34,11 +34,12 @@ In `backend/.env`:
 - `ADMIN_SEED_PASSWORD`: the password the seeder gives the local admin account. Set it before running `--seed`.
 - `GEMINI_API_KEY`: needed for itinerary generation (`AI_PROVIDER=gemini`). Claude is also supported (`AI_PROVIDER=claude` with `ANTHROPIC_API_KEY`). Both cost credits, so keep the daily limits (`ITINERARY_DAILY_LIMIT`, `ITINERARY_GUEST_DAILY_LIMIT`) low.
 
-Emails (password reset, status updates) are queued. Locally they only go out while a queue worker runs, and with `MAIL_MAILER=log` they're written to `storage/logs/laravel.log` instead of being sent:
+Emails (password reset, listing status, account notices) are sent right away; no queue worker is needed. To send through Gmail, set these in `backend/.env`:
 
-```bash
-php artisan queue:work
-```
+- `MAIL_USERNAME`: the Gmail address the emails come from.
+- `MAIL_PASSWORD`: a Gmail App Password for that account. You can create one under Google Account → Security → 2-Step Verification → App passwords. It is not the normal Gmail password.
+
+With `MAIL_MAILER=log`, emails are written to `storage/logs/laravel.log` instead of being sent. A failed send is logged there as `Failed to send ... email`, together with the SMTP error.
 
 ### Frontend (http://localhost:5173)
 

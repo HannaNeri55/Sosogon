@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { FiChevronDown, FiTrash2, FiUpload, FiX } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { createRoom, updateRoom, deleteRoomImage } from '../../../api/accommodationOwner'
@@ -8,6 +8,8 @@ import { PRICING_MODES, UNIT_TYPES, isEntireProperty, optionName } from '../../.
 import AmenityPicker from '../../../components/common/AmenityPicker'
 import { showApiError } from '../../../utils/apiErrors'
 import { confirmDialog } from '../../../utils/dialogs'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const textOf = (value) => (value === null || value === undefined ? '' : String(value))
 
@@ -42,6 +44,15 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState(null)
   const [imagesChanged, setImagesChanged] = useState(false)
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      price_max: pricingMode !== 'contact' && price !== '' && priceMax !== '' && Number(priceMax) < Number(price)
+        ? 'The highest rate can\'t be lower than the starting rate.'
+        : null,
+      images: images.length > 10 ? 'Choose up to 10 photos.' : images.some((file) => file.size > 5 * 1024 * 1024) ? 'Each photo must be 5 MB or smaller.' : null,
+    }),
+  })
 
   const isRoom = unitType === 'room'
   const noun = whole ? 'Entire Property' : 'Option'
@@ -68,6 +79,7 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
 
     const payload = new FormData()
     const fields = {
@@ -100,12 +112,7 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
       toast.success(res.message)
       onSaved()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) {
-        Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      } else {
-        showApiError(err, 'Failed to save')
-      }
+      if (!form.fromResponse(err)) showApiError(err, 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -121,19 +128,21 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="space-y-5">
+          <FormErrorSummary form={form} />
           {!whole && (
             <div>
               <label htmlFor="option_type" className="block text-sm font-medium text-gray-700 mb-2">What is it?</label>
-              <select id="option_type" className="input-field" value={unitType} onChange={(e) => setUnitType(e.target.value)}>
+              <select name="unit_type" id="option_type" className="input-field" value={unitType} onChange={(e) => setUnitType(e.target.value)}>
                 {UNIT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
+              <FieldError form={form} name="unit_type" />
             </div>
           )}
 
           <div>
             <label htmlFor="option_name" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-            <input
+            <input name="name"
               id="option_name"
               className="input-field"
               placeholder={isRoom ? 'e.g. Superior Room, Room 101' : 'e.g. Villa 1, Beach Cottage'}
@@ -142,22 +151,25 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
               onChange={(e) => setName(e.target.value)}
               required
             />
+            <FieldError form={form} name="name" />
           </div>
 
           {isRoom && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="option_category" className="block text-sm font-medium text-gray-700 mb-2">Room category (optional)</label>
-                <select id="option_category" className="input-field" value={category} onChange={(e) => setCategory(e.target.value)}>
+                <select name="category" id="option_category" className="input-field" value={category} onChange={(e) => setCategory(e.target.value)}>
                   <option value="">Not specified</option>
                   {/* A category saved earlier stays selectable even if it's no longer on the list. */}
                   {category && !ROOM_CATEGORIES.some((c) => c.value === category) && <option value={category}>{category}</option>}
                   {ROOM_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
+                <FieldError form={form} name="category" />
               </div>
               <div>
                 <label htmlFor="option_count" className="block text-sm font-medium text-gray-700 mb-2">How many rooms like this? (optional)</label>
-                <input id="option_count" type="number" min="1" max="999" className="input-field" value={unitCount} onChange={(e) => setUnitCount(e.target.value)} />
+                <input name="unit_count" id="option_count" type="number" min="1" max="999" className="input-field" value={unitCount} onChange={(e) => setUnitCount(e.target.value)} />
+                <FieldError form={form} name="unit_count" />
                 <p className="text-xs text-gray-500 mt-1">Similar rooms can share one entry. Add a separate option only if a room is different.</p>
               </div>
             </div>
@@ -166,29 +178,34 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="option_guests" className="block text-sm font-medium text-gray-700 mb-2">Maximum guests (optional)</label>
-              <input id="option_guests" type="number" min="1" max="200" className="input-field" value={maxGuests} onChange={(e) => setMaxGuests(e.target.value)} />
+              <input name="max_guests" id="option_guests" type="number" min="1" max="200" className="input-field" value={maxGuests} onChange={(e) => setMaxGuests(e.target.value)} />
+              <FieldError form={form} name="max_guests" />
             </div>
             {!isRoom && (
               <div>
                 <label htmlFor="option_bedrooms" className="block text-sm font-medium text-gray-700 mb-2">Bedrooms (optional)</label>
-                <input id="option_bedrooms" type="number" min="0" max="100" className="input-field" value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} />
+                <input name="bedrooms" id="option_bedrooms" type="number" min="0" max="100" className="input-field" value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} />
+                <FieldError form={form} name="bedrooms" />
               </div>
             )}
             {!whole && !isRoom && (
               <div>
                 <label htmlFor="option_units" className="block text-sm font-medium text-gray-700 mb-2">How many like this? (optional)</label>
-                <input id="option_units" type="number" min="1" max="999" className="input-field" value={unitCount} onChange={(e) => setUnitCount(e.target.value)} />
+                <input name="unit_count" id="option_units" type="number" min="1" max="999" className="input-field" value={unitCount} onChange={(e) => setUnitCount(e.target.value)} />
+                <FieldError form={form} name="unit_count" />
               </div>
             )}
             <div>
               <label htmlFor="option_beds" className="block text-sm font-medium text-gray-700 mb-2">Beds (optional)</label>
-              <input id="option_beds" className="input-field" placeholder="e.g. 1 queen bed" maxLength={255} value={beds} onChange={(e) => setBeds(e.target.value)} />
+              <input name="bed_configuration" id="option_beds" className="input-field" placeholder="e.g. 1 queen bed" maxLength={255} value={beds} onChange={(e) => setBeds(e.target.value)} />
+              <FieldError form={form} name="bed_configuration" />
             </div>
           </div>
 
           <div>
             <label htmlFor="option_description" className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
-            <textarea id="option_description" rows={3} className="input-field" maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea name="description" id="option_description" rows={3} className="input-field" maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <FieldError form={form} name="description" />
           </div>
 
           <fieldset className="border-t border-gray-100 pt-5">
@@ -205,15 +222,18 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="option_price" className="block text-xs font-medium text-gray-600 mb-1">{pricingMode === 'varies' ? 'From (PHP, optional)' : 'Price (PHP)'}</label>
-                  <input id="option_price" type="number" step="0.01" min="0" className="input-field" required={pricingMode === 'indicative'} value={price} onChange={(e) => setPrice(e.target.value)} />
+                  <input name="price" max="999999.99" id="option_price" type="number" step="0.01" min="0" className="input-field" required={pricingMode === 'indicative'} value={price} onChange={(e) => setPrice(e.target.value)} />
+                  <FieldError form={form} name="price" />
                 </div>
                 <div>
                   <label htmlFor="option_price_max" className="block text-xs font-medium text-gray-600 mb-1">Up to (PHP, optional)</label>
-                  <input id="option_price_max" type="number" step="0.01" min="0" className="input-field" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} />
+                  <input name="price_max" max="999999.99" id="option_price_max" type="number" step="0.01" min="0" className="input-field" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} />
+                  <FieldError form={form} name="price_max" />
                 </div>
                 <div>
                   <label htmlFor="option_price_note" className="block text-xs font-medium text-gray-600 mb-1">What it covers (optional)</label>
-                  <input id="option_price_note" className="input-field" placeholder="e.g. Per night, 2 guests" maxLength={255} value={priceNote} onChange={(e) => setPriceNote(e.target.value)} />
+                  <input name="price_note" id="option_price_note" className="input-field" placeholder="e.g. Per night, 2 guests" maxLength={255} value={priceNote} onChange={(e) => setPriceNote(e.target.value)} />
+                  <FieldError form={form} name="price_note" />
                 </div>
               </div>
             )}
@@ -223,6 +243,7 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">Amenities in this {whole ? 'rental' : isRoom ? 'room' : 'unit'}</h3>
             <AmenityPicker scope="unit" value={amenities} onChange={setAmenities} hint="Select only what this one has. Shared facilities belong in your property amenities." />
+            <FieldError form={form} name="room_features" />
           </div>
 
           <div>
@@ -233,11 +254,13 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
               <div className="mt-3 space-y-4">
                 <div>
                   <label htmlFor="option_size" className="block text-sm font-medium text-gray-700 mb-2">Size in square meters (optional)</label>
-                  <input id="option_size" type="number" step="0.01" min="1" className="input-field" value={size} onChange={(e) => setSize(e.target.value)} />
+                  <input name="size_sqm" max="99999" id="option_size" type="number" step="0.01" min="1" className="input-field" value={size} onChange={(e) => setSize(e.target.value)} />
+                  <FieldError form={form} name="size_sqm" />
                 </div>
                 <div>
                   <label htmlFor="option_notes" className="block text-sm font-medium text-gray-700 mb-2">Other notes (optional)</label>
-                  <textarea id="option_notes" rows={2} className="input-field" maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  <textarea name="notes" id="option_notes" rows={2} className="input-field" maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  <FieldError form={form} name="notes" />
                 </div>
               </div>
             )}
@@ -271,8 +294,9 @@ export default function RoomFormModal({ room, entireProperty = false, onClose, o
                 <span className="min-w-0 text-sm text-gray-600 leading-snug wrap-anywhere">
                   {images.length > 0 ? `${images.length} photo(s) selected` : 'Click to add up to 10 photos (JPEG, PNG, WebP)'}
                 </span>
-                <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(e) => setImages(Array.from(e.target.files || []))} className="hidden" />
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(e) => { setImages(Array.from(e.target.files || [])); form.clear('images') }} className="hidden" />
               </label>
+              <FieldError form={form} name="images" />
             </div>
           )}
 
