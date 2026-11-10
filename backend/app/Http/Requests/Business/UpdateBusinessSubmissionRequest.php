@@ -17,7 +17,7 @@ class UpdateBusinessSubmissionRequest extends FormRequest
             'business_name' => 'sometimes|string|max:255',
             'description' => 'sometimes|string|min:50',
             'address' => 'sometimes|string|max:500',
-            'contact_number' => 'sometimes|string|max:20',
+            'contact_number' => 'sometimes|string|max:50',
             'operating_hours' => 'nullable|string|max:255',
         ];
     }

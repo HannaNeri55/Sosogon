@@ -25,7 +25,7 @@ class StoreBusinessSubmissionRequest extends FormRequest
             'barangay_id' => 'nullable|exists:barangays,id',
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
-            'contact_number' => 'required|string|max:20',
+            'contact_number' => 'required|string|max:50',
             'operating_hours' => 'nullable|string|max:255',
             // The permit is collected once, at registration. Only owners who registered
             // before that (no registration permit on file) still upload it here.

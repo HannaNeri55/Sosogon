@@ -486,7 +486,7 @@ export default function ManageDestinations() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             
             <div>
-              <input name="contact_number" aria-label="Contact number" maxLength={20}
+              <input name="contact_number" aria-label="Contact number" maxLength={50}
                 className="input-field"
                 placeholder="Contact number"
                 value={formData.contact_number}
