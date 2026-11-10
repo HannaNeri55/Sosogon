@@ -73,7 +73,7 @@ class AdminDestinationController extends Controller
             'amenities.*.name' => 'required|string|max:255',
             ...$this->activityRules(null),
 
-            'contact_number' => 'nullable|string|max:20',
+            'contact_number' => 'nullable|string|max:50',
             'website' => 'nullable|string|max:500',
             'status' => 'required|in:draft,published',
             'is_featured' => 'boolean',
@@ -232,7 +232,7 @@ class AdminDestinationController extends Controller
             'amenities.*.name' => 'required|string|max:255',
             ...$this->activityRules($id),
 
-            'contact_number' => 'nullable|string|max:20',
+            'contact_number' => 'nullable|string|max:50',
             'website' => 'nullable|string|max:500',
             'status' => 'sometimes|in:draft,published,archived',
             'is_featured' => 'boolean',

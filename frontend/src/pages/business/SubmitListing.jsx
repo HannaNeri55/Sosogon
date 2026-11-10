@@ -294,7 +294,7 @@ export default function SubmitListing({ onSuccess }) {
                 Contact Number
               </label>
 
-              <input name="contact_number" maxLength={20}
+              <input name="contact_number" maxLength={50}
                 className="input-field"
                 value={formData.contact_number}
                 onChange={(e) =>

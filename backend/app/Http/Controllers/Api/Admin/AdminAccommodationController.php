@@ -72,7 +72,7 @@ class AdminAccommodationController extends Controller
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
             'price_range' => 'required|in:budget,moderate,luxury',
-            'contact_number' => 'nullable|string|max:20',
+            'contact_number' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:255',
             'website' => 'nullable|string|max:500',
             'offering_arrangement' => 'sometimes|nullable|in:units,entire_property,both',

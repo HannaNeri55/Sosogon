@@ -134,7 +134,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <input name="contact_number" aria-label="Contact number" maxLength={20}
+                      <input name="contact_number" aria-label="Contact number" maxLength={50}
                         className="input-field"
                         placeholder="Contact number"
                         value={editForm.contact_number}
