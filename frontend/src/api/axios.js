@@ -6,7 +6,7 @@ import { showErrorDialog } from '../utils/dialogs'
 // VITE_API_URL is the backend's address in production (e.g. https://stim-api.onrender.com).
 // Left empty locally, so requests stay relative and go through the Vite dev proxy.
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL ?? ''}/api/v1`,
+  baseURL: `${(import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
