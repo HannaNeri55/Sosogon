@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="May 1–2">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b6680"/>
+      <stop offset="1" stop-color="#0c3946"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <circle cx="1080" cy="600" r="260" fill="#ffffff" opacity="0.05"/>
+  <circle cx="110" cy="640" r="200" fill="#e3a955" opacity="0.07"/>
+  <path d="M-10 26 Q600 62 1210 26" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2" fill="none"/>
+  <path d="M-10 26 L40 26 L15 74 Z" fill="#e3a955" opacity="0.95"/><path d="M50 28 L100 28 L75 76 Z" fill="#4f9370" opacity="0.95"/><path d="M110 31 L160 31 L135 79 Z" fill="#ffffff" opacity="0.85"/><path d="M170 34 L220 34 L195 82 Z" fill="#3b9db5" opacity="0.95"/><path d="M230 36 L280 36 L255 84 Z" fill="#e3a955" opacity="0.95"/><path d="M290 38 L340 38 L315 86 Z" fill="#4f9370" opacity="0.95"/><path d="M350 40 L400 40 L375 88 Z" fill="#ffffff" opacity="0.85"/><path d="M410 42 L460 42 L435 90 Z" fill="#3b9db5" opacity="0.95"/><path d="M470 43 L520 43 L495 91 Z" fill="#e3a955" opacity="0.95"/><path d="M530 44 L580 44 L555 92 Z" fill="#4f9370" opacity="0.95"/><path d="M590 44 L640 44 L615 92 Z" fill="#ffffff" opacity="0.85"/><path d="M650 44 L700 44 L675 92 Z" fill="#3b9db5" opacity="0.95"/><path d="M710 43 L760 43 L735 91 Z" fill="#e3a955" opacity="0.95"/><path d="M770 42 L820 42 L795 90 Z" fill="#4f9370" opacity="0.95"/><path d="M830 41 L880 41 L855 89 Z" fill="#ffffff" opacity="0.85"/><path d="M890 39 L940 39 L915 87 Z" fill="#3b9db5" opacity="0.95"/><path d="M950 37 L1000 37 L975 85 Z" fill="#e3a955" opacity="0.95"/><path d="M1010 35 L1060 35 L1035 83 Z" fill="#4f9370" opacity="0.95"/><path d="M1070 32 L1120 32 L1095 80 Z" fill="#ffffff" opacity="0.85"/><path d="M1130 29 L1180 29 L1155 77 Z" fill="#3b9db5" opacity="0.95"/><path d="M1190 26 L1240 26 L1215 74 Z" fill="#e3a955" opacity="0.95"/>
+  <text x="600" y="262" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="5" fill="#e3a955" text-anchor="middle">BARANGAY FIESTA</text>
+  <text font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="64" font-weight="800" fill="#ffffff" text-anchor="middle"><tspan x="600" y="352">Bliss Barangay Fiesta</tspan></text>
+  <text x="600" y="410" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="26" font-weight="500" fill="#d5eef3" text-anchor="middle">Bulan, Sorsogon</text>
+  <rect x="470" y="444" width="260" height="48" rx="24" fill="#ffffff" opacity="0.14"/>
+  <text x="600" y="476" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">May 1–2</text>
+</svg>
