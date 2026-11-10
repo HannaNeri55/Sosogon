@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Tourist;
 
 use App\Exceptions\AIServiceUnavailableException;
+use App\Exceptions\ItineraryNotPossibleException;
 use App\Http\Controllers\Controller;
 use App\Models\Accommodation;
 use App\Models\AccommodationRoom;
@@ -308,8 +309,8 @@ class ItineraryController extends Controller
 
     /**
      * Runs $generate against a daily quota and turns its outcome into the API response:
-     * 201 with $generate's payload plus the quota, 429 over the limit, 503 when the AI is
-     * busy or out of quota, 500 on any other failure.
+     * 201 with $generate's payload plus the quota, 429 over the limit, 422 when the tourist's
+     * choices rule out a trip, 503 when the AI is busy or out of quota, 500 on any other failure.
      */
     private function withGenerationQuota(string $key, int $limit, string $limitMessage, array $logContext, Closure $generate): JsonResponse
     {
@@ -327,6 +328,7 @@ class ItineraryController extends Controller
         }
 
         $succeeded = false;
+        set_time_limit($this->generationTimeLimit());
 
         try {
             $payload = $generate();
@@ -345,6 +347,11 @@ class ItineraryController extends Controller
                     ? "The AI planner has reached today's AI usage limit. Please try again tomorrow."
                     : 'The AI planner is busy right now — please try again in a minute.',
             ], 503);
+        } catch (ItineraryNotPossibleException $e) {
+            // The tourist's choices, not a fault: tell them what to change, and keep it out of the error log.
+            Log::info('Itinerary not possible with these choices', $logContext + ['reason' => $e->getMessage()]);
+
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             Log::error('Itinerary generation failed', $logContext + ['error' => $e->getMessage()]);
 
@@ -361,6 +368,22 @@ class ItineraryController extends Controller
                 Cache::decrement($key);
             }
         }
+    }
+
+    /**
+     * Seconds a generation request may run. The AI call alone can outlast PHP's usual 120 s
+     * limit (Claude: ANTHROPIC_TIMEOUT per attempt, ANTHROPIC_MAX_RETRIES + 1 attempts), and
+     * hitting that limit kills the request: the tourist gets a bare server error and the quota
+     * slot reserved above is never handed back. A minute on top covers planning and saving.
+     */
+    private function generationTimeLimit(): int
+    {
+        $anthropic = config('services.anthropic');
+        $aiSeconds = config('services.itinerary.ai_provider') === 'claude'
+            ? (float) $anthropic['timeout'] * ((int) $anthropic['max_retries'] + 1)
+            : 300; // Gemini: 90 s per attempt while it works through its fallback models
+
+        return (int) ceil($aiSeconds) + 60;
     }
 
     public function generationQuota(Request $request): JsonResponse

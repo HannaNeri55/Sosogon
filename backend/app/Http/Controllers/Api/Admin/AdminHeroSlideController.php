@@ -12,7 +12,7 @@ class AdminHeroSlideController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
 
         return response()->json(HeroSlide::orderBy('sort_order')->paginate($perPage));
     }

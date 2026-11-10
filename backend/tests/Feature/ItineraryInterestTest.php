@@ -264,13 +264,14 @@ class ItineraryInterestTest extends TestCase
 
     public function test_food_or_shopping_without_any_records_gives_a_clear_message(): void
     {
-        config(['app.debug' => true]);
+        // Shown to the tourist as is (422), also in production where debug details are hidden.
+        config(['app.debug' => false]);
         FoodBeverage::query()->update(['status' => 'draft']);
         RetailShop::query()->update(['status' => 'draft']);
 
         foreach ([['food'], ['shopping'], ['food', 'shopping']] as $interests) {
-            $this->request($interests)->assertStatus(500)
-                ->assertJsonPath('error', 'No destinations, restaurants or souvenir shops in this municipality match your interests. Try adding more interests.');
+            $this->request($interests)->assertStatus(422)
+                ->assertJsonPath('message', 'No destinations, restaurants or souvenir shops in this municipality match your interests. Try adding more interests.');
         }
         $this->assertFalse($this->aiWasAsked());
 

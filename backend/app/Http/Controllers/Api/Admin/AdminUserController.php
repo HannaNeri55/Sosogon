@@ -42,7 +42,7 @@ class AdminUserController extends Controller
             default => null,
         };
 
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
         $users = $query->orderByDesc('created_at')->paginate($perPage);
 
         $users->getCollection()->each(function (User $user) {

@@ -40,7 +40,7 @@ class AdminViolationController extends Controller
                 : $query->whereHas('appeals', fn ($q) => $q->where('status', $request->appeal));
         }
 
-        $perPage = min((int) $request->input('per_page', 25), 100);
+        $perPage = $this->perPage($request, 25, 100);
 
         return response()->json($query->latest('id')->paginate($perPage));
     }
@@ -57,7 +57,7 @@ class AdminViolationController extends Controller
             $query->whereHas('user', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
 
-        $perPage = min((int) $request->input('per_page', 25), 100);
+        $perPage = $this->perPage($request, 25, 100);
 
         // Pending first (oldest waiting longest at the top), then decided ones, newest first.
         return response()->json(
@@ -106,7 +106,7 @@ class AdminViolationController extends Controller
             $query->where('action', $request->action);
         }
 
-        $perPage = min((int) $request->input('per_page', 50), 200);
+        $perPage = $this->perPage($request, 50, 200);
 
         return response()->json($query->latest('id')->paginate($perPage));
     }

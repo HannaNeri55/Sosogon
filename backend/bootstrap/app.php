@@ -41,10 +41,20 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         // findOrFail() misses would otherwise reach the user as "No query results for model
-        // [App\Models\...] 12", naming internal classes. Say it in plain words instead.
+        // [App\Models\...] 12", and unknown URLs as "The route api/v1/... could not be found",
+        // naming internals. Say it in plain words instead.
         $exceptions->render(function (NotFoundHttpException $e, Request $request) {
-            if ($e->getPrevious() instanceof ModelNotFoundException && ($request->is('api/*') || $request->expectsJson())) {
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                return null;
+            }
+
+            if ($e->getPrevious() instanceof ModelNotFoundException) {
                 return response()->json(['message' => 'This item could not be found. It may have been removed.'], 404);
+            }
+
+            // abort(404, '...') messages are written for users; only Laravel's own route miss is replaced.
+            if ($e->getMessage() === '' || str_starts_with($e->getMessage(), 'The route ')) {
+                return response()->json(['message' => 'This page could not be found.'], 404);
             }
         });
     })->create();

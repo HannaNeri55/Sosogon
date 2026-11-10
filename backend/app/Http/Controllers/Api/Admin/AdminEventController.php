@@ -20,7 +20,7 @@ class AdminEventController extends Controller
             $query->where('status', $request->status);
         }
 
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
 
         return response()->json($query->orderByDesc('start_date')->paginate($perPage));
     }

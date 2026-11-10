@@ -12,6 +12,7 @@ use App\Services\GoogleMapsService;
 use App\Services\ItineraryService;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -66,6 +67,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Controllers take these as int, so "/destinations/abc" would crash with a TypeError (500).
+        // Requiring digits makes such URLs a plain 404 instead.
+        Route::patterns(array_fill_keys(['id', 'image', 'imageId', 'index', 'item', 'product', 'rating', 'room'], '[0-9]+'));
+
         // Admins and business owners are logged out after a stretch of inactivity, on top of
         // the token expiration everyone has. Sanctum calls this before it refreshes
         // last_used_at, so the check sees how long the token has actually sat unused.
