@@ -14,7 +14,7 @@ class AnnouncementController extends Controller
         $announcements = Announcement::published()
             ->orderByDesc('is_pinned')
             ->orderByDesc('created_at')
-            ->paginate($request->input('per_page', 10));
+            ->paginate($this->perPage($request, 10, 50));
 
         return response()->json($announcements);
     }

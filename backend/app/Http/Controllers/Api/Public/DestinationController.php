@@ -49,7 +49,7 @@ class DestinationController extends Controller
             $query->orderBy($sortBy, $sortDir === 'desc' ? 'desc' : 'asc');
         }
 
-        $perPage = min($request->input('per_page', 12), 50);
+        $perPage = $this->perPage($request, 12, 50);
         $destinations = $query->paginate($perPage);
 
         return response()->json($destinations);

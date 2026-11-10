@@ -23,7 +23,7 @@ class EventController extends Controller
             $query->orderBy('start_date', 'desc');
         }
 
-        $events = $query->paginate($request->input('per_page', 10));
+        $events = $query->paginate($this->perPage($request, 10, 50));
 
         return response()->json($events);
     }

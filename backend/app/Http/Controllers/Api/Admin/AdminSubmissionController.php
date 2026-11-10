@@ -32,7 +32,7 @@ class AdminSubmissionController extends Controller
             $query->where('status', $request->status);
         }
 
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
 
         $submissions = $query->orderByDesc('created_at')->paginate($perPage);
         $this->attachReviewStats($submissions->getCollection());

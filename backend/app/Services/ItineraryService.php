@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\ItineraryAI;
+use App\Exceptions\ItineraryNotPossibleException;
 use App\Models\Accommodation;
 use App\Models\AccommodationRoom;
 use App\Models\Destination;
@@ -482,7 +483,7 @@ class ItineraryService
                 ? 'destinations, restaurants or souvenir shops'
                 : 'destinations';
 
-            throw new \Exception("No {$what} in {$where} match your interests. Try adding more interests.");
+            throw new ItineraryNotPossibleException("No {$what} in {$where} match your interests. Try adding more interests.");
         }
 
         $numDays = (int) $preferences['num_days'];

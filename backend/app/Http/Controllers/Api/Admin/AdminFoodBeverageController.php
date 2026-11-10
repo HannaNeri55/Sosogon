@@ -49,7 +49,7 @@ class AdminFoodBeverageController extends Controller
 
         $perPage = max(
             1,
-            min((int) $request->input('per_page', 100), 200)
+            $this->perPage($request, 100, 200)
         );
 
         return response()->json(

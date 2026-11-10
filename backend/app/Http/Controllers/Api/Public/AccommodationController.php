@@ -59,7 +59,7 @@ class AccommodationController extends Controller
             });
         }
 
-        $perPage = min($request->input('per_page', 12), 50);
+        $perPage = $this->perPage($request, 12, 50);
 
         return response()->json(
             $query->orderBy('name')->paginate($perPage)

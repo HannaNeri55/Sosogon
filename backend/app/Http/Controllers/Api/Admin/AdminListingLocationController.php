@@ -39,7 +39,7 @@ class AdminListingLocationController extends Controller
             $query->where('name', 'like', '%'.$request->q.'%');
         }
 
-        $perPage = min((int) $request->input('per_page', 50), 200);
+        $perPage = $this->perPage($request, 50, 200);
 
         return response()->json($query->orderBy('name')->paginate($perPage));
     }

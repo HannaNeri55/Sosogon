@@ -36,7 +36,7 @@ class AdminDestinationController extends Controller
             $query->where('name', 'like', "%{$request->q}%");
         }
 
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
 
         return response()->json($query->orderByDesc('created_at')->paginate($perPage));
     }

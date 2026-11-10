@@ -28,7 +28,7 @@ class AdminRetailProductController extends Controller
             $query->where('pending_changes->status', 'pending');
         }
 
-        $perPage = min((int) $request->input('per_page', 100), 200);
+        $perPage = $this->perPage($request, 100, 200);
 
         $page = $query->orderByDesc('created_at')->paginate($perPage);
         $this->withPendingChanges($page->getCollection());
