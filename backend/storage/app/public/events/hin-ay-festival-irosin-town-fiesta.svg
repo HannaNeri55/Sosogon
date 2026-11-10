@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <rect width="800" height="450" fill="#2B7FBF"/>
+  <circle cx="700" cy="60" r="120" fill="#fff" opacity="0.08"/>
+  <circle cx="80" cy="400" r="160" fill="#fff" opacity="0.08"/>
+  <text x="400" y="215" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#fff" text-anchor="middle">Hin-ay Festival &amp; Irosin</text>
+  <text x="400" y="255" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#fff" text-anchor="middle">Town Fiesta</text>
+  <text x="400" y="315" font-family="Arial, sans-serif" font-size="16" fill="#fff" opacity="0.8" text-anchor="middle">Sorsogon Province</text>
+</svg>

@@ -1,2 +1,2 @@
-
-!.gitignore
+# Uploaded images are committed so the Docker image on Render serves them (no cloud storage).
+!*

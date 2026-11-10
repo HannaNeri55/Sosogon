@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="TeaStreet, Bulan, Sorsogon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7a5233"/>
+      <stop offset="1" stop-color="#2e1d12"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <circle cx="1090" cy="590" r="260" fill="#ffffff" opacity="0.05"/>
+  <circle cx="100" cy="80" r="190" fill="#e3a955" opacity="0.08"/>
+  <circle cx="600" cy="150" r="66" fill="#ffffff" opacity="0.12"/>
+  <g transform="translate(600 150)" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M-28 -12 H20 V14 A22 22 0 0 1 -2 36 H-6 A22 22 0 0 1 -28 14 Z"/><path d="M20 -2 H28 A10 10 0 0 1 28 18 H20"/><path d="M-14 -36 Q-8 -28 -14 -20 M0 -36 Q6 -28 0 -20"/></g>
+  <text x="600" y="262" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="5" fill="#e3a955" text-anchor="middle">MILK TEA</text>
+  <text font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="66" font-weight="800" fill="#ffffff" text-anchor="middle"><tspan x="600" y="350">TeaStreet</tspan></text>
+  <text x="600" y="406" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="26" font-weight="500" fill="#f3e9df" text-anchor="middle">Bulan, Sorsogon</text>
+  <rect x="455" y="438" width="290" height="46" rx="23" fill="#ffffff" opacity="0.14"/>
+  <text x="600" y="469" font-family="'Plus Jakarta Sans','Inter','Segoe UI',Arial,sans-serif" font-size="20" font-weight="600" fill="#ffffff" text-anchor="middle">Photos coming soon</text>
+</svg>
