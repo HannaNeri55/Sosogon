@@ -11,7 +11,8 @@ class GoogleMapsService
 
     public function __construct()
     {
-        $this->apiKey = config('services.google_maps.api_key', '');
+        // An unset GOOGLE_MAPS_API_KEY is null; treat it like an empty key (haversine estimates).
+        $this->apiKey = config('services.google_maps.api_key') ?? '';
     }
 
     /**

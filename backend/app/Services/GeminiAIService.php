@@ -41,7 +41,7 @@ class GeminiAIService implements ItineraryAI
 
     public function __construct()
     {
-        $this->apiKey = config('services.gemini.api_key', '');
+        $this->apiKey = config('services.gemini.api_key') ?? '';
         $this->models = array_values(array_unique([
             config('services.gemini.model', 'gemini-3.8-flash'),
             ...config('services.gemini.fallback_models', []),
