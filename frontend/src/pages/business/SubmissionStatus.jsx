@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { FiFileText, FiClock, FiCheckCircle, FiXCircle, FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi'
 import { updateSubmission, deleteSubmission } from '../../api/business'
 import StatCard from '../../components/common/StatCard'
 import toast from 'react-hot-toast'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 const STATUS_STYLES = {
   approved: 'bg-green-100 text-green-700',
@@ -17,6 +19,8 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef)
 
   const counts = useMemo(() => ({
     total: submissions.length,
@@ -26,6 +30,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
   }), [submissions])
 
   const startEdit = (submission) => {
+    form.setErrors({})
     setEditingId(submission.id)
     setEditForm({
       business_name: submission.business_name,
@@ -38,6 +43,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
 
   const handleUpdate = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
     setSaving(true)
     try {
       await updateSubmission(editingId, editForm)
@@ -45,9 +51,7 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
       setEditingId(null)
       onChange?.()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, 'Failed to update submission')
+      if (!form.fromResponse(err)) showApiError(err, 'Failed to update submission')
     } finally {
       setSaving(false)
     }
@@ -95,43 +99,59 @@ export default function SubmissionStatus({ submissions, onChange, onAddNew }) {
           {submissions.map((submission) => (
             <div key={submission.id} className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 shadow-(--shadow-card)">
               {editingId === submission.id ? (
-                <form onSubmit={handleUpdate} className="space-y-4">
-                  <input
-                    className="input-field"
-                    placeholder="Business name"
-                    value={editForm.business_name}
-                    onChange={(e) => setEditForm({ ...editForm, business_name: e.target.value })}
-                    required
-                  />
-                  <textarea
-                    className="input-field"
-                    rows={3}
-                    placeholder="Description"
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    required
-                  />
-                  <input
-                    className="input-field"
-                    placeholder="Address"
-                    value={editForm.address}
-                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                    required
-                  />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input
+                <form ref={formRef} noValidate onChange={form.onChange} onSubmit={handleUpdate} className="space-y-4">
+                  <FormErrorSummary form={form} />
+                  <div>
+                    <input name="business_name" aria-label="Business name" maxLength={255}
                       className="input-field"
-                      placeholder="Contact number"
-                      value={editForm.contact_number}
-                      onChange={(e) => setEditForm({ ...editForm, contact_number: e.target.value })}
+                      placeholder="Business name"
+                      value={editForm.business_name}
+                      onChange={(e) => setEditForm({ ...editForm, business_name: e.target.value })}
                       required
                     />
-                    <input
+                    <FieldError form={form} name="business_name" />
+                  </div>
+                  <div>
+                    <textarea name="description" aria-label="Description" minLength={50}
                       className="input-field"
-                      placeholder="Operating hours"
-                      value={editForm.operating_hours}
-                      onChange={(e) => setEditForm({ ...editForm, operating_hours: e.target.value })}
+                      rows={3}
+                      placeholder="Description"
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      required
                     />
+                    <FieldError form={form} name="description" />
+                  </div>
+                  <div>
+                    <input name="address" aria-label="Address" maxLength={500}
+                      className="input-field"
+                      placeholder="Address"
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                      required
+                    />
+                    <FieldError form={form} name="address" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <input name="contact_number" aria-label="Contact number" maxLength={20}
+                        className="input-field"
+                        placeholder="Contact number"
+                        value={editForm.contact_number}
+                        onChange={(e) => setEditForm({ ...editForm, contact_number: e.target.value })}
+                        required
+                      />
+                      <FieldError form={form} name="contact_number" />
+                    </div>
+                    <div>
+                      <input name="operating_hours" aria-label="Operating hours" maxLength={255}
+                        className="input-field"
+                        placeholder="Operating hours"
+                        value={editForm.operating_hours}
+                        onChange={(e) => setEditForm({ ...editForm, operating_hours: e.target.value })}
+                      />
+                      <FieldError form={form} name="operating_hours" />
+                    </div>
                   </div>
                   <div className="flex gap-3">
                     <button type="submit" className="btn-primary" disabled={saving}>

@@ -1,8 +1,10 @@
 // frontend/src/components/admin/accounts/ReasonActionModal.jsx
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import Modal from '../../common/Modal'
 import { closeUserAccount, reactivateUser } from '../../../api/admin'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const MODES = {
   reactivate: {
@@ -40,12 +42,19 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const emailMatches = mode !== 'close' || confirmEmail.trim().toLowerCase() === user.email.toLowerCase()
-  const canSubmit = reason.trim().length >= config.minReason && emailMatches && !busy
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      reason: reason.trim().length < config.minReason ? `Write at least ${config.minReason} characters.` : null,
+      confirm_email: mode === 'close' && confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()
+        ? "Type the account's email address exactly as shown."
+        : null,
+    }),
+  })
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!canSubmit) return
+    if (busy || !form.check()) return
     setBusy(true)
     setError(null)
     try {
@@ -55,8 +64,7 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
       toast.success(data.message)
       onDone()
     } catch (err) {
-      const messages = err.response?.data?.errors
-      setError(messages ? Object.values(messages).flat()[0] : err.response?.data?.message || 'The action could not be completed.')
+      if (!form.fromResponse(err) && !err.errorDialogShown) setError(err.response?.data?.message || 'The action could not be completed.')
     } finally {
       setBusy(false)
     }
@@ -74,7 +82,7 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
           <button
             type="submit"
             form="reason-action-form"
-            disabled={!canSubmit}
+            disabled={busy}
             className={`inline-flex items-center justify-center px-6 py-2.5 rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${config.buttonClass}`}
           >
             {busy ? 'Working…' : config.button}
@@ -82,7 +90,8 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
         </>
       }
     >
-      <form id="reason-action-form" onSubmit={submit} className="space-y-4">
+      <form id="reason-action-form" ref={formRef} noValidate onChange={form.onChange} onSubmit={submit} className="space-y-4">
+        <FormErrorSummary form={form} />
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800">
           <p className="font-semibold">{config.intro}</p>
           <ul className="mt-2 list-disc space-y-1 pl-4">
@@ -91,7 +100,8 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
         </div>
         <div>
           <label htmlFor="action-reason" className="block text-sm font-semibold text-gray-800 mb-1.5">Reason (recorded in the activity log and sent to the user)</label>
-          <textarea id="action-reason" rows={3} className="input-field" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <textarea id="action-reason" name="reason" rows={3} className="input-field" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <FieldError form={form} name="reason" />
           <p className="mt-1 text-xs text-gray-500">At least {config.minReason} characters.</p>
         </div>
         {mode === 'close' && (
@@ -99,7 +109,8 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
             <label htmlFor="confirm-email" className="block text-sm font-semibold text-gray-800 mb-1.5">
               Type <span className="font-mono text-red-700">{user.email}</span> to confirm
             </label>
-            <input id="confirm-email" className="input-field" autoComplete="off" value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} />
+            <input id="confirm-email" name="confirm_email" className="input-field" autoComplete="off" value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} />
+            <FieldError form={form} name="confirm_email" />
           </div>
         )}
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}

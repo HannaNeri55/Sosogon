@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FiCheck, FiEdit2, FiPlus, FiX } from 'react-icons/fi'
-import toast from 'react-hot-toast'
 import { getAmenitySuggestions } from '../../api/accommodations'
 
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase()
@@ -14,6 +13,9 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
   const [suggestions, setSuggestions] = useState([])
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState(null) // { name, text }
+  // Messages under the add box and under the entry being renamed.
+  const [draftError, setDraftError] = useState('')
+  const [editError, setEditError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -33,7 +35,7 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
     const name = clean(draft)
     if (!name) return
     if (isChosen(name)) {
-      toast.error(`"${name}" is already on the list.`)
+      setDraftError(`"${name}" is already on the list.`)
       return
     }
     onChange([...value, suggestions.find((s) => same(s, name)) || name])
@@ -42,9 +44,12 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
 
   const saveEdit = () => {
     const name = clean(editing.text)
-    if (!name) return
+    if (!name) {
+      setEditError('Enter a name, or remove the amenity instead.')
+      return
+    }
     if (!same(name, editing.name) && isChosen(name)) {
-      toast.error(`"${name}" is already on the list.`)
+      setEditError(`"${name}" is already on the list.`)
       return
     }
     onChange(value.map((v) => (v === editing.name ? name : v)))
@@ -80,27 +85,32 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
             {custom.map((name) => (
               <li key={name}>
                 {editing?.name === name ? (
-                  <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex flex-wrap items-center gap-1">
                     <input
                       className="input-field py-1 text-sm"
                       aria-label={`Edit ${name}`}
+                      aria-invalid={!!editError}
                       maxLength={100}
                       value={editing.text}
                       autoFocus
-                      onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                      onChange={(e) => {
+                        setEditing({ ...editing, text: e.target.value })
+                        setEditError('')
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
                         if (e.key === 'Escape') setEditing(null)
                       }}
                     />
                     <button type="button" onClick={saveEdit} className="p-2 text-primary-600" aria-label="Save amenity"><FiCheck size={15} /></button>
+                    {editError && <span className="field-error basis-full" role="alert">{editError}</span>}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-secondary-50 pl-3 pr-1 py-1 text-sm text-secondary-800">
                     {name}
                     {!disabled && (
                       <>
-                        <button type="button" onClick={() => setEditing({ name, text: name })} className="p-2 hover:text-primary-700" aria-label={`Edit ${name}`}><FiEdit2 size={12} /></button>
+                        <button type="button" onClick={() => { setEditing({ name, text: name }); setEditError('') }} className="p-2 hover:text-primary-700" aria-label={`Edit ${name}`}><FiEdit2 size={12} /></button>
                         <button type="button" onClick={() => toggle(name)} className="p-2 hover:text-red-600" aria-label={`Remove ${name}`}><FiX size={13} /></button>
                       </>
                     )}
@@ -122,7 +132,11 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
               placeholder="Something not listed above"
               maxLength={100}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              aria-invalid={!!draftError}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setDraftError('')
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') { e.preventDefault(); addCustom() }
               }}
@@ -131,6 +145,7 @@ export default function AmenityPicker({ scope, value, onChange, disabled = false
               <FiPlus size={14} aria-hidden="true" /> Add
             </button>
           </div>
+          {draftError && <p className="field-error" role="alert">{draftError}</p>}
         </div>
       )}
     </div>

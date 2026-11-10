@@ -1,5 +1,5 @@
 // frontend/src/pages/account/AccountStatus.jsx
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -17,6 +17,8 @@ import { openPrivateFile } from '../../utils/privateFile'
 import {
   APPEAL_STATUSES, ENFORCEMENT_ACTIONS, VIOLATION_STATUSES, formatDateTime, formatDay,
 } from '../../utils/accountStates'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 const FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 
@@ -54,24 +56,30 @@ function AppealModal({ violation, onClose, onDone }) {
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      explanation: explanation.trim().length < 30 ? 'Please explain your appeal in at least 30 characters.' : null,
+    }),
+  })
 
   const addFiles = (list) => {
     const next = [...files]
+    let problem
     for (const file of list) {
-      if (!FILE_TYPES.includes(file.type)) toast.error(`${file.name}: only JPG, PNG, WebP or PDF files can be attached.`)
-      else if (file.size > 5 * 1024 * 1024) toast.error(`${file.name} is larger than 5 MB.`)
-      else if (next.length >= 3) { toast.error('You can attach up to 3 files.'); break }
+      if (!FILE_TYPES.includes(file.type)) problem = `${file.name}: only JPG, PNG, WebP or PDF files can be attached.`
+      else if (file.size > 5 * 1024 * 1024) problem = `${file.name} is larger than 5 MB.`
+      else if (next.length >= 3) { problem = 'You can attach up to 3 files.'; break }
       else next.push(file)
     }
     setFiles(next)
+    if (problem) form.setErrors({ attachments: problem })
+    else form.clear('attachments')
   }
 
   const submit = async (event) => {
     event.preventDefault()
-    if (explanation.trim().length < 30) {
-      setError('Please explain your appeal in at least 30 characters.')
-      return
-    }
+    if (!form.check()) return
     const payload = new FormData()
     payload.append('explanation', explanation.trim())
     files.forEach((file) => payload.append('attachments[]', file))
@@ -82,8 +90,7 @@ function AppealModal({ violation, onClose, onDone }) {
       toast.success(data.message)
       onDone()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      setError(errors ? Object.values(errors).flat()[0] : err.response?.data?.message || 'Your appeal could not be submitted.')
+      if (!form.fromResponse(err) && !err.errorDialogShown) setError(err.response?.data?.message || 'Your appeal could not be submitted.')
     } finally {
       setBusy(false)
     }
@@ -102,14 +109,16 @@ function AppealModal({ violation, onClose, onDone }) {
         </>
       }
     >
-      <form id="appeal-form" onSubmit={submit} className="space-y-4">
+      <form id="appeal-form" ref={formRef} noValidate onChange={form.onChange} onSubmit={submit} className="space-y-4">
+        <FormErrorSummary form={form} />
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
           <p><span className="font-semibold">Reason given:</span> {violation.reason}</p>
           <p className="mt-2">You can appeal each decision once. An administrator will review your explanation and any files you attach, and you will be notified of the decision.</p>
         </div>
         <div>
           <label htmlFor="appeal-explanation" className="block text-sm font-semibold text-gray-800 mb-1.5">Why do you believe this decision is incorrect?</label>
-          <textarea id="appeal-explanation" rows={6} maxLength={5000} className="input-field" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
+          <textarea id="appeal-explanation" name="explanation" rows={6} maxLength={5000} className="input-field" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
+          <FieldError form={form} name="explanation" />
           <p className="mt-1 text-xs text-gray-500">{explanation.trim().length}/5000 · at least 30 characters</p>
         </div>
         <div>
@@ -117,6 +126,7 @@ function AppealModal({ violation, onClose, onDone }) {
             <FiPaperclip size={15} aria-hidden="true" /> Attach supporting files (optional, up to 3)
             <input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = '' }} />
           </label>
+          <FieldError form={form} name="attachments" />
           <p className="mt-1 text-xs text-gray-500">JPG, PNG, WebP or PDF, up to 5 MB each.</p>
           {files.length > 0 && (
             <ul className="mt-2 space-y-1">

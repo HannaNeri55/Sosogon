@@ -28,6 +28,8 @@ import MapLocationPicker from "../../components/maps/MapLocationPicker";
 import useScrollToForm from "../../hooks/useScrollToForm";
 import { showApiError } from "../../utils/apiErrors";
 import { confirmDialog } from "../../utils/dialogs";
+import useFormErrors from "../../hooks/useFormErrors";
+import FieldError, { FormErrorSummary } from "../../components/common/FieldError";
 
 const EMPTY_FORM = {
   name: "",
@@ -80,6 +82,7 @@ export default function ManageDestinations() {
   }, [items, search]);
 
   const formRef = useScrollToForm(showForm ? editingId ?? "new" : null);
+  const form = useFormErrors(formRef);
 
   const loadData = async () => {
     try {
@@ -185,6 +188,7 @@ export default function ManageDestinations() {
   };
 
   const closeForm = () => {
+    form.setErrors({});
     releaseActivityPreviews(formData.activities);
     setShowForm(false);
     setEditingId(null);
@@ -196,7 +200,9 @@ export default function ManageDestinations() {
   const addPhotos = (files) => {
     const room = MAX_NEW_PHOTOS_PER_SAVE - newPhotos.length;
     if (files.length > room) {
-      toast.error(`You can add up to ${MAX_NEW_PHOTOS_PER_SAVE} new photos per save.`);
+      form.setErrors({ images: `You can add up to ${MAX_NEW_PHOTOS_PER_SAVE} new photos per save.` });
+    } else {
+      form.clear("images");
     }
     const added = files.slice(0, Math.max(0, room)).map((file) => ({
       key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -236,6 +242,7 @@ export default function ManageDestinations() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.check()) return;
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
@@ -316,19 +323,7 @@ export default function ManageDestinations() {
       closeForm();
       loadData();
     } catch (e) {
-      const errors = e.response?.data?.errors;
-      if (errors)
-        Object.entries(errors).forEach(([field, messages]) => {
-          const activity = field.match(/^activities\.(\d+)\.(\w+)$/);
-          messages.forEach((msg) =>
-            toast.error(
-              activity
-                ? `Activity ${Number(activity[1]) + 1}: ${msg.replace(/activities\.\d+\.(\w+)/, "$1").replace(/_/g, " ")}`
-                : msg,
-            ),
-          );
-        });
-      else showApiError(e, editingId ? "Failed to update destination" : "Failed to create destination");
+      if (!form.fromResponse(e)) showApiError(e, editingId ? "Failed to update destination" : "Failed to create destination");
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -369,70 +364,88 @@ export default function ManageDestinations() {
       {showForm && (
         <form
           ref={formRef}
+          noValidate
+          onChange={form.onChange}
           onSubmit={handleSubmit}
           className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5"
         >
           <p className="text-sm font-medium text-gray-500">
             {editingId ? "Editing destination" : "New destination"}
           </p>
+          <FormErrorSummary form={form} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <input
+            <div>
+              <input name="name" aria-label="Destination name" maxLength={255}
+                className="input-field"
+                placeholder="Destination name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                required
+              />
+              <FieldError form={form} name="name" />
+            </div>
+            <div>
+              <select name="category_id" aria-label="Category"
+                className="input-field"
+                value={formData.category_id}
+                onChange={(e) =>
+                  setFormData({ ...formData, category_id: e.target.value })
+                }
+                required
+              >
+                <option value="">Select category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <FieldError form={form} name="category_id" />
+            </div>
+          </div>
+          <div>
+            <textarea name="description" aria-label="Description"
               className="input-field"
-              placeholder="Destination name"
-              value={formData.name}
+              rows={4}
+              placeholder="Description"
+              value={formData.description}
               onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
+                setFormData({ ...formData, description: e.target.value })
               }
               required
             />
-            <select
+            <FieldError form={form} name="description" />
+          </div>
+          <div>
+            <input name="address" aria-label="Address" maxLength={500}
               className="input-field"
-              value={formData.category_id}
+              placeholder="Address"
+              value={formData.address}
               onChange={(e) =>
-                setFormData({ ...formData, category_id: e.target.value })
+                setFormData({ ...formData, address: e.target.value })
               }
               required
+            />
+            <FieldError form={form} name="address" />
+          </div>
+          <div>
+            <select name="municipality_id" aria-label="Municipality" required
+              className="input-field"
+              value={formData.municipality_id}
+              onChange={(e) =>
+                setFormData({ ...formData, municipality_id: e.target.value })
+              }
             >
-              <option value="">Select category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
+              {municipalities.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
                 </option>
               ))}
             </select>
+            <FieldError form={form} name="municipality_id" />
           </div>
-          <textarea
-            className="input-field"
-            rows={4}
-            placeholder="Description"
-            value={formData.description}
-            onChange={(e) =>
-              setFormData({ ...formData, description: e.target.value })
-            }
-            required
-          />
-          <input
-            className="input-field"
-            placeholder="Address"
-            value={formData.address}
-            onChange={(e) =>
-              setFormData({ ...formData, address: e.target.value })
-            }
-            required
-          />
-          <select
-            className="input-field"
-            value={formData.municipality_id}
-            onChange={(e) =>
-              setFormData({ ...formData, municipality_id: e.target.value })
-            }
-          >
-            {municipalities.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
           <fieldset className="rounded-xl border border-gray-200 p-4 sm:p-5">
             <legend className="px-2 text-sm font-semibold text-gray-800">Exact location on the map</legend>
             <MapLocationPicker
@@ -443,15 +456,20 @@ export default function ManageDestinations() {
               onChange={({ latitude, longitude }) => setFormData((prev) => ({ ...prev, latitude, longitude }))}
               onAddressFound={(found) => setFormData((prev) => (prev.address ? prev : { ...prev, address: found }))}
             />
+            <FieldError form={form} name="latitude" />
+            <FieldError form={form} name="longitude" />
           </fieldset>
-          <input
-            className="input-field"
-            placeholder="Operating hours"
-            value={formData.operating_hours}
-            onChange={(e) =>
-              setFormData({ ...formData, operating_hours: e.target.value })
-            }
-          />
+          <div>
+            <input name="operating_hours" aria-label="Operating hours" maxLength={255}
+              className="input-field"
+              placeholder="Operating hours"
+              value={formData.operating_hours}
+              onChange={(e) =>
+                setFormData({ ...formData, operating_hours: e.target.value })
+              }
+            />
+            <FieldError form={form} name="operating_hours" />
+          </div>
           <DestinationPhotoManager
             existingImages={existingImages}
             removedImageIds={removedImageIds}
@@ -464,36 +482,46 @@ export default function ManageDestinations() {
             onRemoveNew={removeNewPhoto}
             onSetCover={setCoverChoice}
           />
+          <FieldError form={form} name="images" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             
-            <input
+            <div>
+              <input name="contact_number" aria-label="Contact number" maxLength={20}
+                className="input-field"
+                placeholder="Contact number"
+                value={formData.contact_number}
+                onChange={(e) =>
+                  setFormData({ ...formData, contact_number: e.target.value })
+                }
+              />
+              <FieldError form={form} name="contact_number" />
+            </div>
+            <div>
+              <select name="status" aria-label="Status"
+                className="input-field"
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData({ ...formData, status: e.target.value })
+                }
+              >
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+              <FieldError form={form} name="status" />
+            </div>
+          </div>
+          <div>
+            <input name="website" aria-label="Website" maxLength={500}
+              type="url"
               className="input-field"
-              placeholder="Contact number"
-              value={formData.contact_number}
+              placeholder="Website (optional)"
+              value={formData.website}
               onChange={(e) =>
-                setFormData({ ...formData, contact_number: e.target.value })
+                setFormData({ ...formData, website: e.target.value })
               }
             />
-            <select
-              className="input-field"
-              value={formData.status}
-              onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value })
-              }
-            >
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-            </select>
+            <FieldError form={form} name="website" />
           </div>
-          <input
-            type="url"
-            className="input-field"
-            placeholder="Website (optional)"
-            value={formData.website}
-            onChange={(e) =>
-              setFormData({ ...formData, website: e.target.value })
-            }
-          />
 
           {/* Entrance Fees */}
           <div className="border border-gray-200 rounded-xl p-5 space-y-4">
@@ -513,37 +541,46 @@ export default function ManageDestinations() {
                 key={index}
                 className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start"
               >
-                <input
-                  className="input-field"
-                  placeholder="Fee name (e.g. Adult)"
-                  value={fee.label}
-                  onChange={(e) =>
-                    updateDetail("fees", index, "label", e.target.value)
-                  }
-                  required
-                />
+                <div>
+                  <input name={`fees.${index}.label`} aria-label="Name" maxLength={255}
+                    className="input-field"
+                    placeholder="Fee name (e.g. Adult)"
+                    value={fee.label}
+                    onChange={(e) =>
+                      updateDetail("fees", index, "label", e.target.value)
+                    }
+                    required
+                  />
+                  <FieldError form={form} name={`fees.${index}.label`} />
+                </div>
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="input-field"
-                  placeholder="Amount (PHP)"
-                  value={fee.amount}
-                  onChange={(e) =>
-                    updateDetail("fees", index, "amount", e.target.value)
-                  }
-                  required
-                />
+                <div>
+                  <input name={`fees.${index}.amount`} aria-label="Amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="input-field"
+                    placeholder="Amount (PHP)"
+                    value={fee.amount}
+                    onChange={(e) =>
+                      updateDetail("fees", index, "amount", e.target.value)
+                    }
+                    required
+                  />
+                  <FieldError form={form} name={`fees.${index}.amount`} />
+                </div>
 
-                <input
-                  className="input-field"
-                  placeholder="Description (optional)"
-                  value={fee.description}
-                  onChange={(e) =>
-                    updateDetail("fees", index, "description", e.target.value)
-                  }
-                />
+                <div>
+                  <input name={`fees.${index}.description`} aria-label="Description" maxLength={255}
+                    className="input-field"
+                    placeholder="Description (optional)"
+                    value={fee.description}
+                    onChange={(e) =>
+                      updateDetail("fees", index, "description", e.target.value)
+                    }
+                  />
+                  <FieldError form={form} name={`fees.${index}.description`} />
+                </div>
 
                 <button
                   type="button"
@@ -582,37 +619,46 @@ export default function ManageDestinations() {
                 key={index}
                 className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start"
               >
-                <input
-                  className="input-field"
-                  placeholder="Rate name (e.g. Cubo Cottage)"
-                  value={rate.label}
-                  onChange={(e) =>
-                    updateDetail("rates", index, "label", e.target.value)
-                  }
-                  required
-                />
+                <div>
+                  <input name={`rates.${index}.label`} aria-label="Name" maxLength={255}
+                    className="input-field"
+                    placeholder="Rate name (e.g. Cubo Cottage)"
+                    value={rate.label}
+                    onChange={(e) =>
+                      updateDetail("rates", index, "label", e.target.value)
+                    }
+                    required
+                  />
+                  <FieldError form={form} name={`rates.${index}.label`} />
+                </div>
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="input-field"
-                  placeholder="Amount (PHP)"
-                  value={rate.amount}
-                  onChange={(e) =>
-                    updateDetail("rates", index, "amount", e.target.value)
-                  }
-                  required
-                />
+                <div>
+                  <input name={`rates.${index}.amount`} aria-label="Amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="input-field"
+                    placeholder="Amount (PHP)"
+                    value={rate.amount}
+                    onChange={(e) =>
+                      updateDetail("rates", index, "amount", e.target.value)
+                    }
+                    required
+                  />
+                  <FieldError form={form} name={`rates.${index}.amount`} />
+                </div>
 
-                <input
-                  className="input-field"
-                  placeholder="Description (optional)"
-                  value={rate.description}
-                  onChange={(e) =>
-                    updateDetail("rates", index, "description", e.target.value)
-                  }
-                />
+                <div>
+                  <input name={`rates.${index}.description`} aria-label="Description" maxLength={255}
+                    className="input-field"
+                    placeholder="Description (optional)"
+                    value={rate.description}
+                    onChange={(e) =>
+                      updateDetail("rates", index, "description", e.target.value)
+                    }
+                  />
+                  <FieldError form={form} name={`rates.${index}.description`} />
+                </div>
 
                 <button
                   type="button"
@@ -646,15 +692,18 @@ export default function ManageDestinations() {
 
             {formData.amenities.map((amenity, index) => (
               <div key={index} className="flex flex-wrap gap-3">
-                <input
-                  className="input-field flex-1"
-                  placeholder="Amenity (e.g. Swimming Pool)"
-                  value={amenity.name}
-                  onChange={(e) =>
-                    updateDetail("amenities", index, "name", e.target.value)
-                  }
-                  required
-                />
+                <div className="flex-1">
+                  <input name={`amenities.${index}.name`} aria-label="Amenity" maxLength={255}
+                    className="input-field"
+                    placeholder="Amenity (e.g. Swimming Pool)"
+                    value={amenity.name}
+                    onChange={(e) =>
+                      updateDetail("amenities", index, "name", e.target.value)
+                    }
+                    required
+                  />
+                  <FieldError form={form} name={`amenities.${index}.name`} />
+                </div>
 
                 <button
                   type="button"
@@ -675,11 +724,13 @@ export default function ManageDestinations() {
           <DestinationActivitiesEditor
             activities={formData.activities}
             onChange={(activities) => setFormData((prev) => ({ ...prev, activities }))}
+            form={form}
           />
 
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
+              name="is_featured"
               checked={formData.is_featured}
               onChange={(e) =>
                 setFormData({ ...formData, is_featured: e.target.checked })

@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   FiInfo,
   FiMapPin,
@@ -16,6 +16,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import MapLocationPicker from '../../components/maps/MapLocationPicker'
 import { showApiError } from '../../utils/apiErrors'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 function SectionLabel({ icon: Icon, children }) {
   return (
@@ -51,6 +53,13 @@ export default function SubmitListing({ onSuccess }) {
 
   // Approved registration: its permit covers this submission, and its details prefill the form.
   const [registration, setRegistration] = useState(null)
+  const formRef = useRef(null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      image: formData.image && formData.image.size > 5 * 1024 * 1024 ? 'Choose a photo of 5 MB or less.' : null,
+      business_permit: formData.business_permit && formData.business_permit.size > 10 * 1024 * 1024 ? 'The permit file must be 10 MB or smaller.' : null,
+    }),
+  })
   const permitOnFile = registration?.status === 'approved' && registration?.has_permit
 
   useEffect(() => {
@@ -71,6 +80,7 @@ export default function SubmitListing({ onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
 
     const payload = new FormData()
 
@@ -89,15 +99,7 @@ export default function SubmitListing({ onSuccess }) {
 
       onSuccess?.()
     } catch (e) {
-      const errors = e.response?.data?.errors
-
-      if (errors) {
-        Object.values(errors)
-          .flat()
-          .forEach((msg) => toast.error(msg))
-      } else {
-        showApiError(e, 'Failed to submit listing')
-      }
+      if (!form.fromResponse(e)) showApiError(e, 'Failed to submit listing')
     } finally {
       setLoading(false)
     }
@@ -122,9 +124,13 @@ export default function SubmitListing({ onSuccess }) {
       )}
 
       <form
+        ref={formRef}
+        noValidate
+        onChange={form.onChange}
         onSubmit={handleSubmit}
         className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-200/70 space-y-8 max-w-4xl shadow-(--shadow-card)"
       >
+        <FormErrorSummary form={form} />
         {/* BUSINESS DETAILS */}
         <div>
           <SectionLabel icon={FiInfo}>
@@ -137,7 +143,7 @@ export default function SubmitListing({ onSuccess }) {
                 Business Name
               </label>
 
-              <input
+              <input name="business_name" maxLength={255}
                 className="input-field"
                 value={formData.business_name}
                 onChange={(e) =>
@@ -148,6 +154,7 @@ export default function SubmitListing({ onSuccess }) {
                 }
                 required
               />
+              <FieldError form={form} name="business_name" />
             </div>
 
             <div>
@@ -155,7 +162,7 @@ export default function SubmitListing({ onSuccess }) {
                 Listing Type
               </label>
 
-              <select
+              <select name="type"
                 className="input-field disabled:bg-gray-50 disabled:text-gray-500"
                 value={formData.type}
                 onChange={(e) =>
@@ -175,6 +182,7 @@ export default function SubmitListing({ onSuccess }) {
                   </option>
                 ))}
               </select>
+              <FieldError form={form} name="type" />
 
               {lockedType && (
                 <p className="text-xs text-gray-400 mt-1.5">
@@ -191,7 +199,7 @@ export default function SubmitListing({ onSuccess }) {
               Description
             </label>
 
-            <textarea
+            <textarea name="description" minLength={50}
               rows={5}
               className="input-field"
               value={formData.description}
@@ -203,6 +211,7 @@ export default function SubmitListing({ onSuccess }) {
               }
               required
             />
+            <FieldError form={form} name="description" />
           </div>
         </div>
 
@@ -217,7 +226,7 @@ export default function SubmitListing({ onSuccess }) {
               Address
             </label>
 
-            <input
+            <input name="address" maxLength={500}
               className="input-field"
               value={formData.address}
               onChange={(e) =>
@@ -228,6 +237,7 @@ export default function SubmitListing({ onSuccess }) {
               }
               required
             />
+            <FieldError form={form} name="address" />
           </div>
 
           <div className="mb-6">
@@ -235,7 +245,7 @@ export default function SubmitListing({ onSuccess }) {
               Municipality
             </label>
 
-            <select
+            <select name="municipality_id"
               className="input-field"
               value={formData.municipality_id}
               onChange={(e) =>
@@ -254,6 +264,7 @@ export default function SubmitListing({ onSuccess }) {
                 </option>
               ))}
             </select>
+            <FieldError form={form} name="municipality_id" />
           </div>
 
           <div>
@@ -266,6 +277,8 @@ export default function SubmitListing({ onSuccess }) {
               onChange={({ latitude, longitude }) => setFormData((prev) => ({ ...prev, latitude, longitude }))}
               onAddressFound={(found) => setFormData((prev) => (prev.address ? prev : { ...prev, address: found }))}
             />
+            <FieldError form={form} name="latitude" />
+            <FieldError form={form} name="longitude" />
           </div>
         </div>
 
@@ -281,7 +294,7 @@ export default function SubmitListing({ onSuccess }) {
                 Contact Number
               </label>
 
-              <input
+              <input name="contact_number" maxLength={20}
                 className="input-field"
                 value={formData.contact_number}
                 onChange={(e) =>
@@ -292,6 +305,7 @@ export default function SubmitListing({ onSuccess }) {
                 }
                 required
               />
+              <FieldError form={form} name="contact_number" />
             </div>
 
             <div>
@@ -299,7 +313,7 @@ export default function SubmitListing({ onSuccess }) {
                 Operating Hours
               </label>
 
-              <input
+              <input name="operating_hours" maxLength={255}
                 className="input-field"
                 value={formData.operating_hours}
                 onChange={(e) =>
@@ -309,6 +323,7 @@ export default function SubmitListing({ onSuccess }) {
                   })
                 }
               />
+              <FieldError form={form} name="operating_hours" />
             </div>
           </div>
 
@@ -346,6 +361,7 @@ export default function SubmitListing({ onSuccess }) {
               </span>
 
               <input
+                name="business_permit"
                 type="file"
                 accept=".pdf,.doc,.docx"
                 onChange={(e) =>
@@ -358,6 +374,7 @@ export default function SubmitListing({ onSuccess }) {
                 required
               />
             </label>
+            <FieldError form={form} name="business_permit" />
           </div>
           )}
         </div>
@@ -389,6 +406,7 @@ export default function SubmitListing({ onSuccess }) {
             </span>
 
             <input
+                name="image"
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) =>
@@ -400,6 +418,7 @@ export default function SubmitListing({ onSuccess }) {
               className="hidden"
             />
           </label>
+          <FieldError form={form} name="image" />
         </div>
 
         {/* SUBMIT BUTTON */}

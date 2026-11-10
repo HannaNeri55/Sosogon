@@ -41,7 +41,8 @@ export default function ActivityEditor({ activities, onChange, disabled = false 
         <ol className="space-y-2">
           {activities.map((activity, index) => {
             const { start, end } = splitSlot(activity.time)
-            const error = slotError(activity.time) || (!activity.name.trim() && 'Name the activity')
+            const timeError = slotError(activity.time)
+            const error = timeError || (!activity.name.trim() && 'Name the activity')
             return (
               <li key={index} className="rounded-lg border border-gray-200 bg-white p-2.5">
                 <div className="flex flex-wrap items-center gap-2">
@@ -51,6 +52,7 @@ export default function ActivityEditor({ activities, onChange, disabled = false 
                     disabled={disabled}
                     onChange={(e) => update(index, { time: joinSlot(e.target.value, end) })}
                     className={TIME_INPUT}
+                    aria-invalid={!!timeError || undefined}
                     aria-label="Activity start"
                   />
                   <span className="text-xs text-gray-400">to</span>
@@ -60,6 +62,7 @@ export default function ActivityEditor({ activities, onChange, disabled = false 
                     disabled={disabled}
                     onChange={(e) => update(index, { time: joinSlot(start, e.target.value) })}
                     className={TIME_INPUT}
+                    aria-invalid={!!timeError || undefined}
                     aria-label="Activity end"
                   />
                   <input
@@ -68,6 +71,8 @@ export default function ActivityEditor({ activities, onChange, disabled = false 
                     disabled={disabled}
                     maxLength={120}
                     onChange={(e) => update(index, { name: e.target.value })}
+                    aria-invalid={!activity.name.trim() || undefined}
+                    aria-label="Activity name"
                     placeholder="What to do"
                     className="flex-1 min-w-40 text-sm text-gray-800 bg-white border border-gray-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
                   />
@@ -101,7 +106,7 @@ export default function ActivityEditor({ activities, onChange, disabled = false 
                     </button>
                   </div>
                 </div>
-                {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
+                {error && <p className="field-error" role="alert">{error}</p>}
               </li>
             )
           })}

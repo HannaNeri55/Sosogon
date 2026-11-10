@@ -2,12 +2,14 @@
 import { FiImage, FiTrash2, FiX } from "react-icons/fi";
 import { getImageUrl } from "../../utils/helpers";
 import { activityDraft } from "../../utils/activityDrafts";
+import FieldError from "../../components/common/FieldError";
 
 /**
  * Optional "Activities" section of the destination form. Changes are kept in
  * the form and only saved together with the destination.
  */
-export default function DestinationActivitiesEditor({ activities, onChange }) {
+// `form` (useFormErrors of the destination form) shows each activity field's errors under it.
+export default function DestinationActivitiesEditor({ activities, onChange, form }) {
   const update = (key, changes) =>
     onChange(activities.map((draft) => (draft.key === key ? { ...draft, ...changes } : draft)));
 
@@ -71,55 +73,67 @@ export default function DestinationActivitiesEditor({ activities, onChange }) {
                     <label htmlFor={fieldId("name")} className="block text-xs font-medium text-gray-600 mb-1">
                       Activity name <span className="text-red-600">*</span>
                     </label>
-                    <input
-                      id={fieldId("name")}
-                      className="input-field"
-                      placeholder="e.g. Kayaking"
-                      value={draft.name}
-                      maxLength={255}
-                      onChange={(e) => update(draft.key, { name: e.target.value })}
-                      required
-                    />
+                    <>
+                      <input name={`activities.${index}.name`}
+                        id={fieldId("name")}
+                        className="input-field"
+                        placeholder="e.g. Kayaking"
+                        value={draft.name}
+                        maxLength={255}
+                        onChange={(e) => update(draft.key, { name: e.target.value })}
+                        required
+                      />
+                      <FieldError form={form} name={`activities.${index}.name`} />
+                    </>
                   </div>
                   <div>
                     <label htmlFor={fieldId("type")} className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-                    <select
-                      id={fieldId("type")}
-                      className="input-field"
-                      value={draft.type}
-                      onChange={(e) => update(draft.key, { type: e.target.value })}
-                    >
-                      <option value="outdoor">Outdoor</option>
-                      <option value="indoor">Indoor</option>
-                    </select>
+                    <>
+                      <select name={`activities.${index}.type`}
+                        id={fieldId("type")}
+                        className="input-field"
+                        value={draft.type}
+                        onChange={(e) => update(draft.key, { type: e.target.value })}
+                      >
+                        <option value="outdoor">Outdoor</option>
+                        <option value="indoor">Indoor</option>
+                      </select>
+                      <FieldError form={form} name={`activities.${index}.type`} />
+                    </>
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor={fieldId("description")} className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                  <textarea
-                    id={fieldId("description")}
-                    className="input-field"
-                    rows={2}
-                    placeholder="What visitors can do"
-                    value={draft.description}
-                    onChange={(e) => update(draft.key, { description: e.target.value })}
-                  />
+                  <>
+                    <textarea name={`activities.${index}.description`} maxLength={5000}
+                      id={fieldId("description")}
+                      className="input-field"
+                      rows={2}
+                      placeholder="What visitors can do"
+                      value={draft.description}
+                      onChange={(e) => update(draft.key, { description: e.target.value })}
+                    />
+                    <FieldError form={form} name={`activities.${index}.description`} />
+                  </>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label htmlFor={fieldId("price")} className="block text-xs font-medium text-gray-600 mb-1">Price (₱)</label>
-                    <input
-                      id={fieldId("price")}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="input-field"
-                      placeholder="Leave blank if unknown"
-                      value={draft.price}
-                      onChange={(e) => update(draft.key, { price: e.target.value })}
-                    />
+                    <>
+                      <input name={`activities.${index}.price`} max="99999999.99"
+                        id={fieldId("price")}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="input-field"
+                        placeholder="Leave blank if unknown"
+                        value={draft.price}
+                        onChange={(e) => update(draft.key, { price: e.target.value })}
+                      />
+                      <FieldError form={form} name={`activities.${index}.price`} />
+                    </>
                   </div>
                   <div>
                     <label htmlFor={fieldId("duration")} className="block text-xs font-medium text-gray-600 mb-1">Duration</label>
@@ -133,6 +147,7 @@ export default function DestinationActivitiesEditor({ activities, onChange }) {
                         placeholder="e.g. 2"
                         value={draft.durationValue}
                         onChange={(e) => update(draft.key, { durationValue: e.target.value })}
+                        name={`activities.${index}.duration_minutes`}
                       />
                       <select
                         aria-label="Duration unit"
@@ -145,19 +160,23 @@ export default function DestinationActivitiesEditor({ activities, onChange }) {
                         <option value="days">days</option>
                       </select>
                     </div>
+                    <FieldError form={form} name={`activities.${index}.duration_minutes`} />
                   </div>
                   <div>
                     <label htmlFor={fieldId("capacity")} className="block text-xs font-medium text-gray-600 mb-1">Capacity (persons)</label>
-                    <input
-                      id={fieldId("capacity")}
-                      type="number"
-                      min="1"
-                      step="1"
-                      className="input-field"
-                      placeholder="Max persons"
-                      value={draft.capacity}
-                      onChange={(e) => update(draft.key, { capacity: e.target.value })}
-                    />
+                    <>
+                      <input name={`activities.${index}.capacity`}
+                        id={fieldId("capacity")}
+                        type="number"
+                        min="1"
+                        step="1"
+                        className="input-field"
+                        placeholder="Max persons"
+                        value={draft.capacity}
+                        onChange={(e) => update(draft.key, { capacity: e.target.value })}
+                      />
+                      <FieldError form={form} name={`activities.${index}.capacity`} />
+                    </>
                   </div>
                 </div>
               </div>

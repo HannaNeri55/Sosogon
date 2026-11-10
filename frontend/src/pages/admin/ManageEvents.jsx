@@ -7,6 +7,8 @@ import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import useFormErrors from '../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
@@ -33,16 +35,26 @@ export default function ManageEvents() {
 
   useEffect(() => () => imagePreview && URL.revokeObjectURL(imagePreview), [imagePreview])
 
+  const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
+  const form = useFormErrors(formRef, {
+    validate: () => ({
+      end_date: formData.end_date && formData.start_date && formData.end_date < formData.start_date
+        ? 'The end date must be on or after the start date.'
+        : null,
+    }),
+  })
+
   const chooseImage = (file) => {
     if (!file) return
     if (!IMAGE_TYPES.includes(file.type)) {
-      toast.error('Please choose a JPG, PNG or WebP image.')
+      form.setErrors({ image: 'Choose a JPG, PNG or WebP image.' })
       return
     }
     if (file.size > IMAGE_MAX_BYTES) {
-      toast.error('The image is larger than 5 MB. Please choose a smaller one.')
+      form.setErrors({ image: 'The image is larger than 5 MB. Choose a smaller one.' })
       return
     }
+    form.clear('image')
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
     setRemoveImage(false)
@@ -60,7 +72,6 @@ export default function ManageEvents() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
-  const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
 
   const loadData = async () => {
     try {
@@ -96,6 +107,7 @@ export default function ManageEvents() {
   }
 
   const closeForm = () => {
+    form.setErrors({})
     setShowForm(false)
     setEditingId(null)
     setFormData(EMPTY_FORM)
@@ -107,6 +119,7 @@ export default function ManageEvents() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.check()) return
     const payload = new FormData()
     payload.append('title', formData.title)
     payload.append('description', formData.description)
@@ -129,9 +142,7 @@ export default function ManageEvents() {
       closeForm()
       loadData()
     } catch (err) {
-      const errors = err.response?.data?.errors
-      if (errors) Object.values(errors).flat().forEach((msg) => toast.error(msg))
-      else showApiError(err, editingId ? 'Failed to update event' : 'Failed to create event')
+      if (!form.fromResponse(err)) showApiError(err, editingId ? 'Failed to update event' : 'Failed to create event')
     }
   }
 
@@ -162,25 +173,40 @@ export default function ManageEvents() {
 
       {showForm && (
         <form
-          ref={formRef} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
+          ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing event' : 'New event'}</p>
-          <input className="input-field" placeholder="Event title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
-          <textarea className="input-field" rows={4} placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
+          <FormErrorSummary form={form} />
+          <div>
+            <input name="title" className="input-field" placeholder="Event title" aria-label="Event title" maxLength={255} value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
+            <FieldError form={form} name="title" />
+          </div>
+          <div>
+            <textarea name="description" className="input-field" rows={4} placeholder="Description" aria-label="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
+            <FieldError form={form} name="description" />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <select className="input-field" value={formData.municipality_id} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
-              <option value="">Province-wide (no specific municipality)</option>
-              {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <input className="input-field" placeholder="Location (optional, mainly for province-wide events)" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
+            <div>
+              <select name="municipality_id" className="input-field" aria-label="Municipality" value={formData.municipality_id} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
+                <option value="">Province-wide (no specific municipality)</option>
+                {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <FieldError form={form} name="municipality_id" />
+            </div>
+            <div>
+              <input name="location" className="input-field" placeholder="Location (optional, mainly for province-wide events)" aria-label="Location" maxLength={500} value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
+              <FieldError form={form} name="location" />
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Start date</label>
-              <input type="date" className="input-field" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required />
+              <input name="start_date" type="date" className="input-field" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required />
+              <FieldError form={form} name="start_date" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">End date</label>
-              <input type="date" className="input-field" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
+              <input name="end_date" type="date" min={formData.start_date || undefined} className="input-field" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
+              <FieldError form={form} name="end_date" />
             </div>
           </div>
           <div>
@@ -217,13 +243,14 @@ export default function ManageEvents() {
                 </label>
               )
             })()}
+            <FieldError form={form} name="image" />
           </div>
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={formData.is_featured} onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })} />
+              <input type="checkbox" name="is_featured" checked={formData.is_featured} onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })} />
               Featured event
             </label>
-            <select className="input-field w-auto" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+            <select name="status" className="input-field w-auto" aria-label="Status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
               <option value="published">Published</option>
               <option value="draft">Draft</option>
             </select>

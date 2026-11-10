@@ -46,6 +46,7 @@ export default function SubmissionReviewModal({
 }) {
   const [mode, setMode] = useState(null)
   const [notes, setNotes] = useState('')
+  const [notesError, setNotesError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const isPending = submission.status === 'pending'
@@ -83,7 +84,7 @@ export default function SubmissionReviewModal({
     if (busy || !mode) return
 
     if (mode === 'reject' && !notes.trim()) {
-      toast.error('Please enter a rejection reason.')
+      setNotesError('Enter a reason for the rejection. It is sent to the owner.')
       return
     }
 
@@ -325,10 +326,13 @@ export default function SubmissionReviewModal({
 
               <textarea
                 id="review-notes"
+                name="notes"
                 value={notes}
-                onChange={(event) =>
+                onChange={(event) => {
                   setNotes(event.target.value)
-                }
+                  setNotesError('')
+                }}
+                aria-invalid={!!notesError}
                 rows={3}
                 autoFocus
                 maxLength={1000}
@@ -343,6 +347,7 @@ export default function SubmissionReviewModal({
                     : 'focus:ring-red-400'
                 }`}
               />
+              {notesError && <p className="field-error" role="alert">{notesError}</p>}
 
               {mode === 'approve' && (
                 <p className="text-xs text-blue-700 mt-2">

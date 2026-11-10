@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   FiUpload,
   FiCheckCircle,
@@ -21,6 +21,8 @@ import usePhotoArrangement from '../../../components/business/usePhotoArrangemen
 import toast from 'react-hot-toast'
 import { showApiError } from '../../../utils/apiErrors'
 import { confirmDialog } from '../../../utils/dialogs'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -56,6 +58,14 @@ export default function MyShop() {
   const [form, setForm] = useState({
     name: '',
     description: '',
+  })
+  // Field errors (the listing's values are already called `form`).
+  const formRef = useRef(null)
+  const fieldErrors = useFormErrors(formRef, {
+    validate: () => ({
+      name: !form.name.trim() ? 'Please enter the business name.' : null,
+      description: form.description.trim().length < 50 ? 'The description must contain at least 50 characters.' : null,
+    }),
   })
 
   const [newImages, setNewImages] = useState([])
@@ -173,7 +183,7 @@ export default function MyShop() {
     )
 
     if (invalidType) {
-      toast.error('Only JPG, JPEG, PNG, and WebP photos are allowed.')
+      fieldErrors.setErrors({ images: 'Only JPG, JPEG, PNG, and WebP photos are allowed.' })
       return
     }
 
@@ -182,17 +192,16 @@ export default function MyShop() {
     )
 
     if (oversized) {
-      toast.error('Each photo must be 5 MB or smaller.')
+      fieldErrors.setErrors({ images: 'Each photo must be 5 MB or smaller.' })
       return
     }
 
     if (totalCount + files.length > MAX_IMAGES) {
-      toast.error(
-        `You can only have up to ${MAX_IMAGES} gallery photos.`
-      )
+      fieldErrors.setErrors({ images: `You can only have up to ${MAX_IMAGES} gallery photos.` })
       return
     }
 
+    fieldErrors.clear('images')
     setNewImages((current) => [...current, ...files])
   }
 
@@ -217,7 +226,7 @@ export default function MyShop() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (error) {
-      showApiError(error, 'Failed to save the correction.', { allErrors: true })
+      if (!fieldErrors.fromResponse(error)) showApiError(error, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -231,10 +240,7 @@ export default function MyShop() {
       return
     }
 
-    if (totalCount > MAX_IMAGES) {
-      toast.error('Gallery cannot exceed 100 photos.')
-      return
-    }
+    if (!fieldErrors.check({ images: totalCount > MAX_IMAGES ? 'Gallery cannot exceed 100 photos.' : null })) return
 
     const payload = new FormData()
 
@@ -256,7 +262,7 @@ export default function MyShop() {
       photos.reset()
       await refresh()
     } catch (error) {
-      showApiError(error, 'Failed to update shop.', { allErrors: true })
+      if (!fieldErrors.fromResponse(error)) showApiError(error, 'Failed to update shop.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -264,36 +270,23 @@ export default function MyShop() {
 
   const handleLocationSave = async (data) => {
     if (isUnderReview) throw new Error('Location is under review.')
-    try {
-      const response = await updateMyRetailShopLocation(data)
+    // A failure reaches LocationCard, which shows it under its fields.
+    const response = await updateMyRetailShopLocation(data)
 
-      if (response.shop) {
-        setShop(response.shop)
-      }
-
-      await refresh()
-
-      return response
-    } catch (error) {
-      showApiError(error, 'Failed to update location.', { allErrors: true })
-      throw error
+    if (response.shop) {
+      setShop(response.shop)
     }
+
+    await refresh()
+
+    return response
   }
 
   const handleSubmitForReview = async () => {
-    if (photos.hasChanges) {
-      toast.error(
-        'Save your photo changes before submitting for review.'
-      )
-      return
-    }
-
-    if (savedCount < MIN_IMAGES) {
-      toast.error(
-        `Upload at least ${MIN_IMAGES} photos before submitting.`
-      )
-      return
-    }
+    const photoProblem = photos.hasChanges
+      ? 'Save your photo changes before submitting for review.'
+      : savedCount < MIN_IMAGES ? `Upload at least ${MIN_IMAGES} photos before submitting.` : null
+    if (!fieldErrors.check({ images: photoProblem })) return
 
     if (
       !(await confirmDialog({ title: 'Submit for review?', message: 'Your saved shop changes go to the Tourism Office for review. A published shop stays visible until they are approved.', confirmLabel: 'Submit for review' }))
@@ -323,7 +316,7 @@ export default function MyShop() {
       await refresh()
     } catch (error) {
       // Checks above throw plain Errors with their own message; request failures use the API's.
-      showApiError(
+      if (!fieldErrors.fromResponse(error)) showApiError(
         error,
         error.isAxiosError ? 'Failed to submit shop for review.' : error.message || 'Failed to submit shop for review.',
         { allErrors: true }
@@ -543,19 +536,23 @@ export default function MyShop() {
           </div>
 
           <form
+            ref={formRef}
+            noValidate
+            onChange={fieldErrors.onChange}
             onSubmit={handleSubmit}
             className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 space-y-6 h-fit shadow-(--shadow-card)"
           >
             <h2 className="text-lg font-heading font-semibold text-gray-900">
               Shop Details
             </h2>
+            <FormErrorSummary form={fieldErrors} />
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Business Name
               </label>
 
-              <input
+              <input name="name" maxLength={255}
                 className="input-field"
                 value={form.name}
                 disabled={isUnderReview}
@@ -567,6 +564,7 @@ export default function MyShop() {
                 }
                 required
               />
+              <FieldError form={fieldErrors} name="name" />
             </div>
 
             <div>
@@ -574,7 +572,7 @@ export default function MyShop() {
                 Description
               </label>
 
-              <textarea
+              <textarea name="description"
                 rows={6}
                 className="input-field"
                 value={form.description}
@@ -588,6 +586,7 @@ export default function MyShop() {
                 required
                 minLength={50}
               />
+              <FieldError form={fieldErrors} name="description" />
             </div>
 
             <div>
@@ -648,6 +647,7 @@ export default function MyShop() {
                     type="file"
                     multiple
                     accept="image/jpeg,image/png,image/webp"
+                    name="images"
                     onChange={handleSelectImages}
                     disabled={saving || submittingReview || isUnderReview}
                     className="hidden"
@@ -658,6 +658,7 @@ export default function MyShop() {
                   Maximum gallery capacity reached (100 photos).
                 </p>
               )}
+              <FieldError form={fieldErrors} name="images" />
 
               <p className="text-xs text-gray-500 mt-3">
                 Your selected photos will be uploaded when you

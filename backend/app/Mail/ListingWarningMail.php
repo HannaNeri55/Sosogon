@@ -10,7 +10,8 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ListingWarningMail extends Mailable implements ShouldQueue
+// Sent right away, not queued: no queue worker runs on the server, and the caller logs any SMTP failure.
+class ListingWarningMail extends Mailable
 {
     use Queueable, SerializesModels;
 

@@ -25,6 +25,8 @@ import AmenityPicker from '../../../components/common/AmenityPicker'
 import { CLASSIFICATIONS, OFFERING_ARRANGEMENTS } from '../../../utils/accommodationOptions'
 import { getErrorMessage, showApiError } from '../../../utils/apiErrors'
 import { confirmDialog } from '../../../utils/dialogs'
+import useFormErrors from '../../../hooks/useFormErrors'
+import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -140,6 +142,17 @@ export default function MyProperty() {
   // Cover, order and removals stay local until the owner saves.
   const photos = usePhotoArrangement(savedImages, newImages)
   const totalCount = photos.items.length
+  // Field errors (the property's values are already called `form`).
+  const formRef = useRef(null)
+  const fieldErrors = useFormErrors(formRef, {
+    validate: () => ({
+      name: !form.name.trim() ? 'Please enter the establishment name.' : null,
+      description: form.description.trim().length < 50 ? 'The description must contain at least 50 characters.' : null,
+      website: form.website.trim() && !/^https?:\/\/\S+\.\S+/i.test(form.website.trim())
+        ? 'Enter a full web address, like https://example.com.'
+        : null,
+    }),
+  })
   const remainingSlots = Math.max(0, MAX_IMAGES - totalCount)
 
   const reviewStatus = getReviewStatus(accommodation)
@@ -219,20 +232,21 @@ export default function MyProperty() {
     ]
 
     if (files.some((file) => !allowedTypes.includes(file.type))) {
-      toast.error('Only JPG, JPEG, PNG, and WebP photos are allowed.')
+      fieldErrors.setErrors({ images: 'Only JPG, JPEG, PNG, and WebP photos are allowed.' })
       return
     }
 
     if (files.some((file) => file.size > MAX_FILE_SIZE)) {
-      toast.error('Each photo must be 5 MB or smaller.')
+      fieldErrors.setErrors({ images: 'Each photo must be 5 MB or smaller.' })
       return
     }
 
     if (totalCount + files.length > MAX_IMAGES) {
-      toast.error(`You can only have up to ${MAX_IMAGES} gallery photos.`)
+      fieldErrors.setErrors({ images: `You can only have up to ${MAX_IMAGES} gallery photos.` })
       return
     }
 
+    fieldErrors.clear('images')
     setNewImages((current) => [...current, ...files])
   }
 
@@ -248,14 +262,10 @@ export default function MyProperty() {
       throw new Error('Property is under review.')
     }
 
-    try {
-      const response = await updateMyAccommodationLocation(data)
-      await refresh()
-      return response
-    } catch (err) {
-      showApiError(err, 'Failed to update location.', { allErrors: true })
-      throw err
-    }
+    // A failure reaches LocationCard, which shows it under its fields.
+    const response = await updateMyAccommodationLocation(data)
+    await refresh()
+    return response
   }
 
   // Published listing only: a declared spelling/formatting fix to the name or
@@ -275,7 +285,7 @@ export default function MyProperty() {
       toast.success(response.message || 'Correction saved.')
       await refresh()
     } catch (err) {
-      showApiError(err, 'Failed to save the correction.', { allErrors: true })
+      if (!fieldErrors.fromResponse(err)) showApiError(err, 'Failed to save the correction.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -284,44 +294,10 @@ export default function MyProperty() {
   const handleSaveAndSubmit = async (submit = true) => {
     if (busy || isSubmitted) return
 
-    if (!form.name.trim()) {
-      toast.error('Please enter the establishment name.')
-      return
-    }
-
-    if (form.description.trim().length < 50) {
-      toast.error('Description must contain at least 50 characters.')
-      return
-    }
-
-    if (form.email.trim()) {
-      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-      if (!validEmail.test(form.email.trim())) {
-        toast.error('Please enter a valid email address.')
-        return
-      }
-    }
-
-    if (form.website.trim()) {
-      try {
-        const url = new URL(form.website.trim())
-
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          throw new Error('Invalid protocol.')
-        }
-      } catch {
-        toast.error('Please enter a valid website URL.')
-        return
-      }
-    }
-
-    if (totalCount > MAX_IMAGES || (submit && totalCount < MIN_IMAGES)) {
-      toast.error(
-        `Please provide between ${MIN_IMAGES} and ${MAX_IMAGES} photos.`
-      )
-      return
-    }
+    const photoProblem = totalCount > MAX_IMAGES || (submit && totalCount < MIN_IMAGES)
+      ? `Please provide between ${MIN_IMAGES} and ${MAX_IMAGES} photos.`
+      : null
+    if (!fieldErrors.check({ images: photoProblem })) return
 
     const confirmationMessage = isPublished
       ? 'Submit your updated property details and photos for Tourism Office approval? Your currently published listing will remain visible until the changes are approved.'
@@ -469,7 +445,7 @@ export default function MyProperty() {
         setSubmittingReview(false)
       }
     } catch (err) {
-      showApiError(err, 'Failed to save property. Nothing was submitted.', { allErrors: true })
+      if (!fieldErrors.fromResponse(err)) showApiError(err, 'Failed to save property. Nothing was submitted.', { allErrors: true })
     } finally {
       setSaving(false)
     }
@@ -674,6 +650,9 @@ export default function MyProperty() {
 
           {/* PROPERTY DETAILS */}
           <form
+            ref={formRef}
+            noValidate
+            onChange={fieldErrors.onChange}
             onSubmit={(event) => event.preventDefault()}
             className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/70 space-y-6 shadow-(--shadow-card)"
           >
@@ -687,6 +666,8 @@ export default function MyProperty() {
               </p>
             </div>
 
+            <FormErrorSummary form={fieldErrors} />
+
             <fieldset
               disabled={isSubmitted || busy}
               className="space-y-5 disabled:opacity-70"
@@ -696,7 +677,7 @@ export default function MyProperty() {
                   Establishment Name
                 </label>
 
-                <input
+                <input name="name"
                   className="input-field"
                   value={form.name}
                   onChange={(event) =>
@@ -705,6 +686,7 @@ export default function MyProperty() {
                   maxLength={255}
                   required
                 />
+                <FieldError form={fieldErrors} name="name" />
               </div>
 
               <div>
@@ -712,7 +694,7 @@ export default function MyProperty() {
                   Description / About
                 </label>
 
-                <textarea
+                <textarea name="description"
                   rows={6}
                   className="input-field"
                   value={form.description}
@@ -722,6 +704,7 @@ export default function MyProperty() {
                   minLength={50}
                   required
                 />
+                <FieldError form={fieldErrors} name="description" />
 
                 <p className="text-xs text-gray-500 mt-1">
                   Minimum 50 characters.
@@ -734,7 +717,7 @@ export default function MyProperty() {
                     Contact Number
                   </label>
 
-                  <input
+                  <input name="contact_number"
                     type="tel"
                     className="input-field"
                     placeholder="e.g. 09XXXXXXXXX"
@@ -744,6 +727,7 @@ export default function MyProperty() {
                     }
                     maxLength={50}
                   />
+                  <FieldError form={fieldErrors} name="contact_number" />
                 </div>
 
                 <div>
@@ -751,7 +735,7 @@ export default function MyProperty() {
                     Email Address
                   </label>
 
-                  <input
+                  <input name="email"
                     type="email"
                     className="input-field"
                     placeholder="business@example.com"
@@ -761,6 +745,7 @@ export default function MyProperty() {
                     }
                     maxLength={255}
                   />
+                  <FieldError form={fieldErrors} name="email" />
                 </div>
               </div>
 
@@ -769,7 +754,7 @@ export default function MyProperty() {
                   Website (optional)
                 </label>
 
-                <input
+                <input name="website"
                   type="url"
                   className="input-field"
                   placeholder="https://example.com"
@@ -779,6 +764,7 @@ export default function MyProperty() {
                   }
                   maxLength={500}
                 />
+                <FieldError form={fieldErrors} name="website" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -787,7 +773,7 @@ export default function MyProperty() {
                     Operating Hours
                   </label>
 
-                  <input
+                  <input name="operating_hours"
                     type="text"
                     className="input-field"
                     placeholder="e.g. Open 24 hours"
@@ -797,6 +783,7 @@ export default function MyProperty() {
                     }
                     maxLength={255}
                   />
+                  <FieldError form={fieldErrors} name="operating_hours" />
                 </div>
 
                 <div>
@@ -804,7 +791,7 @@ export default function MyProperty() {
                     Price Range
                   </label>
 
-                  <select
+                  <select name="price_range"
                     className="input-field"
                     value={form.price_range}
                     onChange={(event) =>
@@ -816,6 +803,7 @@ export default function MyProperty() {
                     <option value="moderate">Moderate</option>
                     <option value="luxury">Luxury</option>
                   </select>
+                  <FieldError form={fieldErrors} name="price_range" />
                 </div>
               </div>
 
@@ -837,6 +825,7 @@ export default function MyProperty() {
                     </label>
                   ))}
                 </div>
+                <FieldError form={fieldErrors} name="offering_arrangement" />
                 <p className="text-xs text-gray-500 mt-2">
                   You describe each room, villa or cottage under Accommodation Options. A property rented only as a whole needs none.
                 </p>
@@ -851,6 +840,7 @@ export default function MyProperty() {
                       <label key={name} className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${selected ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                         <input
                           type="checkbox"
+                          name="classifications"
                           className="sr-only"
                           checked={selected}
                           onChange={() => updateField('classifications', selected ? form.classifications.filter((c) => c !== name) : [...form.classifications, name])}
@@ -860,16 +850,19 @@ export default function MyProperty() {
                     )
                   })}
                 </div>
+                <FieldError form={fieldErrors} name="classifications" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="check_in_time" className="block text-sm font-medium text-gray-700 mb-2">Check-in time (optional)</label>
-                  <input id="check_in_time" className="input-field" placeholder="e.g. 2:00 PM" maxLength={50} value={form.check_in_time} onChange={(event) => updateField('check_in_time', event.target.value)} />
+                  <input name="check_in_time" id="check_in_time" className="input-field" placeholder="e.g. 2:00 PM" maxLength={50} value={form.check_in_time} onChange={(event) => updateField('check_in_time', event.target.value)} />
+                  <FieldError form={fieldErrors} name="check_in_time" />
                 </div>
                 <div>
                   <label htmlFor="check_out_time" className="block text-sm font-medium text-gray-700 mb-2">Check-out time (optional)</label>
-                  <input id="check_out_time" className="input-field" placeholder="e.g. 12:00 PM" maxLength={50} value={form.check_out_time} onChange={(event) => updateField('check_out_time', event.target.value)} />
+                  <input name="check_out_time" id="check_out_time" className="input-field" placeholder="e.g. 12:00 PM" maxLength={50} value={form.check_out_time} onChange={(event) => updateField('check_out_time', event.target.value)} />
+                  <FieldError form={fieldErrors} name="check_out_time" />
                 </div>
               </div>
 
@@ -886,6 +879,7 @@ export default function MyProperty() {
                   disabled={isSubmitted}
                   hint="Facilities shared by the whole property. Each room or villa lists its own under Accommodation Options."
                 />
+                <FieldError form={fieldErrors} name="amenities" />
               </div>
             </fieldset>
 
@@ -949,12 +943,15 @@ export default function MyProperty() {
                     type="file"
                     multiple
                     accept="image/jpeg,image/png,image/webp"
+                    name="images"
                     onChange={handleSelectImages}
                     disabled={busy || isSubmitted}
                     className="hidden"
                   />
                 </label>
               )}
+
+              <FieldError form={fieldErrors} name="images" />
 
               {totalCount >= MAX_IMAGES && (
                 <p className="text-sm text-green-700 bg-green-50 p-3 rounded-lg">

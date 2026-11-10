@@ -33,25 +33,31 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
     review_date: '',
     reported_at: today(),
   })
-  const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
+  // Editing a field clears its error.
+  const set = (field) => (event) => {
+    setForm((prev) => ({ ...prev, [field]: event.target.value }))
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
+  }
   const action = ENFORCEMENT_ACTIONS[form.action]
   const categoryLabel = categories.find((c) => c.value === form.category)?.label
 
   const addFiles = (list) => {
     const next = [...files]
+    let problem
     for (const file of list) {
       if (!FILE_TYPES.includes(file.type)) {
-        toast.error(`${file.name}: only JPG, PNG, WebP or PDF files can be attached.`)
+        problem = `${file.name}: only JPG, PNG, WebP or PDF files can be attached.`
       } else if (file.size > FILE_MAX) {
-        toast.error(`${file.name} is larger than 5 MB.`)
+        problem = `${file.name} is larger than 5 MB.`
       } else if (next.length >= 5) {
-        toast.error('You can attach up to 5 files.')
+        problem = 'You can attach up to 5 files.'
         break
       } else {
         next.push(file)
       }
     }
     setFiles(next)
+    setErrors((prev) => ({ ...prev, evidence_files: problem }))
   }
 
   const validate = () => {
@@ -106,7 +112,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
     }
   }
 
-  const fieldError = (name) => errors[name] && <p className="mt-1 text-xs font-medium text-red-600">{errors[name]}</p>
+  const fieldError = (name) => errors[name] && <p className="field-error" role="alert">{errors[name]}</p>
 
   return (
     <Modal
@@ -166,7 +172,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             <div>
               <label htmlFor="enf-days" className="block text-sm font-semibold text-gray-800 mb-2">Suspension duration (days)</label>
               <div className="flex flex-wrap items-center gap-2">
-                <input id="enf-days" type="number" min="1" max="365" className="input-field w-28" value={form.suspension_days} onChange={set('suspension_days')} />
+                <input id="enf-days" name="suspension_days" aria-invalid={!!errors.suspension_days} type="number" min="1" max="365" className="input-field w-28" value={form.suspension_days} onChange={set('suspension_days')} />
                 {DAY_PRESETS.map((days) => (
                   <button
                     key={days}
@@ -185,7 +191,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="enf-category" className="block text-sm font-semibold text-gray-800 mb-1.5">Violation category</label>
-              <select id="enf-category" className="input-field" value={form.category} onChange={set('category')}>
+              <select id="enf-category" name="category" aria-invalid={!!errors.category} className="input-field" value={form.category} onChange={set('category')}>
                 <option value="">Choose a category…</option>
                 {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
@@ -193,19 +199,20 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="enf-reason" className="block text-sm font-semibold text-gray-800 mb-1.5">Reason (shown to the user)</label>
-              <input id="enf-reason" className="input-field" maxLength={255} placeholder="e.g. Posted misleading prices on the listing" value={form.reason} onChange={set('reason')} />
+              <input id="enf-reason" name="reason" aria-invalid={!!errors.reason} className="input-field" maxLength={255} placeholder="e.g. Posted misleading prices on the listing" value={form.reason} onChange={set('reason')} />
               {fieldError('reason')}
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="enf-details" className="block text-sm font-semibold text-gray-800 mb-1.5">Detailed explanation (shown to the user)</label>
-              <textarea id="enf-details" rows={4} className="input-field" maxLength={5000} placeholder="What happened, when, and which rule it breaks." value={form.details} onChange={set('details')} />
+              <textarea id="enf-details" name="details" aria-invalid={!!errors.details} rows={4} className="input-field" maxLength={5000} placeholder="What happened, when, and which rule it breaks." value={form.details} onChange={set('details')} />
               {fieldError('details')}
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="enf-evidence" className="block text-sm font-semibold text-gray-800 mb-1.5">
                 Supporting evidence <span className="font-normal text-gray-500">(internal, optional)</span>
               </label>
-              <textarea id="enf-evidence" rows={2} className="input-field" maxLength={5000} placeholder="Links, review IDs, report notes…" value={form.evidence_notes} onChange={set('evidence_notes')} />
+              <textarea id="enf-evidence" name="evidence_notes" aria-invalid={!!errors.evidence_notes} rows={2} className="input-field" maxLength={5000} placeholder="Links, review IDs, report notes…" value={form.evidence_notes} onChange={set('evidence_notes')} />
+              {fieldError('evidence_notes')}
               <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:border-primary-400 hover:text-primary-700">
                 <FiPaperclip size={15} aria-hidden="true" /> Attach files (JPG, PNG, WebP or PDF, up to 5 MB, max 5)
                 <input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = '' }} />
@@ -226,14 +233,14 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             </div>
             <div>
               <label htmlFor="enf-reported" className="block text-sm font-semibold text-gray-800 mb-1.5">Date reported</label>
-              <input id="enf-reported" type="date" max={today()} className="input-field" value={form.reported_at} onChange={set('reported_at')} />
+              <input id="enf-reported" name="reported_at" aria-invalid={!!errors.reported_at} type="date" max={today()} className="input-field" value={form.reported_at} onChange={set('reported_at')} />
               {fieldError('reported_at')}
             </div>
             <div>
               <label htmlFor="enf-review" className="block text-sm font-semibold text-gray-800 mb-1.5">
                 Review date <span className="font-normal text-gray-500">(optional)</span>
               </label>
-              <input id="enf-review" type="date" min={today()} className="input-field" value={form.review_date} onChange={set('review_date')} />
+              <input id="enf-review" name="review_date" aria-invalid={!!errors.review_date} type="date" min={today()} className="input-field" value={form.review_date} onChange={set('review_date')} />
               {fieldError('review_date')}
             </div>
           </div>
