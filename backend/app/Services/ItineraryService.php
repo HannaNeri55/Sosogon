@@ -210,6 +210,7 @@ class ItineraryService
         }
 
         $plan = $this->planStays($parsedItinerary, $destinations, $preferences);
+        $parsedItinerary['days'] = $this->skipResortsAtResortStay($parsedItinerary['days'], $plan, $destinations, $preferences);
         [$items, $dayTowns] = $this->buildDayItems($parsedItinerary['days'], $destinations, $plan, $preferences);
         $stays = $this->bookNights($plan['stays'], $dayTowns, $preferences);
 
@@ -1323,6 +1324,88 @@ class ItineraryService
             'shops' => $shops,
             'centers' => $centers,
         ];
+    }
+
+    /**
+     * On days based at a resort that has its own pool or beach, another resort adds nothing, so
+     * resort destinations are left out of those days (unless the tourist asked for them by name).
+     * Each one dropped is replaced by the nearest unused non-resort place in the same town that
+     * fits the day; with none, the day keeps its other stops, or becomes free time at the resort.
+     */
+    private function skipResortsAtResortStay(array $days, array $plan, Collection $destinations, array $preferences): array
+    {
+        $byId = $destinations->keyBy(fn ($d) => (int) $d->id);
+        $asked = $this->preferredIds($preferences);
+
+        foreach ($days as $n => $day) {
+            $ids = $day['destination_ids'];
+            if ($ids === []) {
+                continue;
+            }
+            $town = (int) $byId[$ids[0]]->municipality_id;
+            $stay = $plan['stays'][$town]['accommodation'] ?? null;
+            if (! $stay || ! $this->isResortWithWater($stay)) {
+                continue;
+            }
+
+            $kept = array_values(array_filter($ids, fn ($id) => ! $this->isResortDestination($byId[$id]) || in_array($id, $asked, true)));
+            $dropped = count($ids) - count($kept);
+            if ($dropped === 0) {
+                continue;
+            }
+
+            $days[$n]['destination_ids'] = $kept;
+            $days[$n]['reasons'] = array_intersect_key($day['reasons'] ?? [], array_flip($kept));
+            // A reason that describes a stop by the resort just removed ("5 min from …") is rewritten.
+            $goneNames = array_map(fn ($id) => $byId[$id]->name, array_diff($ids, $kept));
+            foreach ($kept as $i => $id) {
+                $reason = (string) ($days[$n]['reasons'][$id] ?? '');
+                if ($reason !== '' && collect($goneNames)->contains(fn ($name) => str_contains($reason, $name))) {
+                    $days[$n]['reasons'][$id] = $this->addedReason($byId[$id], $i > 0 ? $byId[$kept[$i - 1]] : null);
+                }
+            }
+            // An emptied day still belongs to its town, so its meals and stay are planned there.
+            $days[$n]['town'] = $town;
+
+            $used = array_merge(...array_values(array_column($days, 'destination_ids')));
+            $replacements = $destinations
+                ->filter(fn ($d) => (int) $d->municipality_id === $town && ! in_array((int) $d->id, $used, true) && ! $this->isResortDestination($d))
+                ->sortBy(fn ($d) => $this->km([(float) $stay->latitude, (float) $stay->longitude], $d));
+            foreach ($replacements as $candidate) {
+                if ($dropped === 0) {
+                    break;
+                }
+                if (! $this->fitsDay($days[$n]['destination_ids'], $candidate, $n, $byId, $preferences)) {
+                    continue;
+                }
+                $after = $days[$n]['destination_ids'] === [] ? null : $byId[end($days[$n]['destination_ids'])];
+                $days[$n]['destination_ids'][] = (int) $candidate->id;
+                $days[$n]['reasons'][(int) $candidate->id] = "{$stay->name} already has its own pool or beach, so this day visits something different. ".$this->addedReason($candidate, $after);
+                $dropped--;
+            }
+        }
+
+        return $days;
+    }
+
+    /** A stay listed as a resort that offers a swimming pool or beach access. */
+    private function isResortWithWater(Accommodation $stay): bool
+    {
+        $isResort = strcasecmp((string) $stay->type, 'Resort') === 0
+            || in_array('resort', array_map('strtolower', (array) ($stay->classifications ?? [])), true);
+        if (! $isResort) {
+            return false;
+        }
+        $offers = strtolower(implode(' ', (array) ($stay->amenities ?? [])).' '.$stay->description);
+
+        return (bool) preg_match('/swimming pool|\bpools?\b|beach access|beachfront|private beach|by the beach|on the beach/', $offers);
+    }
+
+    /** A destination that is itself a resort: in the Resort category, or named as one (e.g. a "Beach Resort"). */
+    private function isResortDestination(Destination $destination): bool
+    {
+        return strcasecmp((string) $destination->category?->name, 'Resort') === 0
+            || (bool) preg_match('/\bresorts?\b/i', (string) $destination->name);
     }
 
     /** Whether the tourist wants the planner to suggest a stay (true unless they said they don't need one). */

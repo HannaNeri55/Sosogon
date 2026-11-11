@@ -84,12 +84,15 @@ function TravelLeg({ from, to, transportPreference }) {
   const [showRoute, setShowRoute] = useState(false)
   const leg = legGuidance(from, to, transportPreference)
   if (!leg) {
-    if (!to?.distance_from_prev_km && !to?.travel_time_from_prev) return null
+    // No trip between two stops at the same place (saved as 0.00 km and 0 min).
+    const km = Number(to?.distance_from_prev_km) || 0
+    const minutes = Number(to?.travel_time_from_prev) || 0
+    if (samePlace(from, to) || (km <= 0 && minutes <= 0)) return null
     return (
       <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-2 ml-1">
         <FiNavigation size={11} />
-        {to.distance_from_prev_km && <span>{to.distance_from_prev_km} km</span>}
-        {to.travel_time_from_prev && <span>~{to.travel_time_from_prev} min to next stop</span>}
+        {km > 0 && <span>{to.distance_from_prev_km} km</span>}
+        {minutes > 0 && <span>~{minutes} min to next stop</span>}
       </div>
     )
   }
@@ -146,6 +149,14 @@ function TravelLeg({ from, to, transportPreference }) {
       )}
     </div>
   )
+}
+
+/** Two stops at the same listing (e.g. arriving at the stay, then lunch there). */
+function samePlace(a, b) {
+  if (!a || !b || a.item_type !== b.item_type) return false
+  const first = placeFor(a).listing
+  const second = placeFor(b).listing
+  return Boolean(first?.id) && first.id === second?.id
 }
 
 // A lunch break is its own food stop, but it happens during the visit listed before it.
@@ -236,19 +247,23 @@ function PicksList({ title, options, picks }) {
   )
 }
 
-function StopDetails({ stop, compact = false }) {
+// repeat: the same place as the stop before (lunch or check-in back at the stay), shown without
+// the photo and description it already had. action: a button shown beside the place's name.
+function StopDetails({ stop, compact = false, repeat = false, action = null }) {
   const { listing, link, badge } = placeFor(stop)
 
   return (
     <div className={`flex flex-col sm:flex-row gap-4 ${compact ? '' : 'p-3 sm:p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors'}`}>
-      <div className={`${compact ? 'w-full h-28 sm:w-20 sm:h-20' : 'w-full h-32 sm:w-24 sm:h-24'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
-        <img
-          src={getImageUrl(listing?.images?.[0]?.image_path)}
-          alt={listing?.name || 'Stop'}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
-      </div>
+      {!repeat && (
+        <div className={`${compact ? 'w-full h-28 sm:w-20 sm:h-20' : 'w-full h-32 sm:w-24 sm:h-24'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
+          <img
+            src={getImageUrl(listing?.images?.[0]?.image_path)}
+            alt={listing?.name || 'Stop'}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -258,13 +273,16 @@ function StopDetails({ stop, compact = false }) {
           {badge && <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{badge}</span>}
         </div>
 
-        {link ? (
-          <Link to={link} className="font-heading font-semibold text-gray-900 hover:text-primary-600 transition-colors">
-            {listing.name}
-          </Link>
-        ) : (
-          <p className="font-heading font-semibold text-gray-900">{listing?.name || 'Listing no longer available'}</p>
-        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {link ? (
+            <Link to={link} className="font-heading font-semibold text-gray-900 hover:text-primary-600 transition-colors">
+              {listing.name}
+            </Link>
+          ) : (
+            <p className="font-heading font-semibold text-gray-900">{listing?.name || 'Listing no longer available'}</p>
+          )}
+          {action}
+        </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
           {listing?.average_rating > 0 && <StarDisplay rating={listing.average_rating} size={12} />}
@@ -282,7 +300,7 @@ function StopDetails({ stop, compact = false }) {
           )}
         </div>
 
-        {listing?.description && (
+        {listing?.description && !repeat && (
           <p className={`text-sm text-gray-500 mt-2 leading-relaxed ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>{listing.description}</p>
         )}
 
@@ -559,6 +577,8 @@ export default function ItineraryDayCard({
           const isLast = index === rows.length - 1
           const next = rows[index + 1]?.stop
 
+          const repeat = samePlace(rows[index - 1]?.stop, stop)
+
           return (
             <div key={stop.id ?? index} className="flex gap-3 sm:gap-4">
               <div className="flex flex-col items-center">
@@ -569,18 +589,23 @@ export default function ItineraryDayCard({
               </div>
 
               <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-5'}`}>
-                <StopDetails stop={stop} />
-
-                {roadTravel && stop.id != null && navIndexFor(stop) >= 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setNavigatingTo(navIndexFor(stop))}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
-                    aria-label={`Start navigation to ${placeFor(stop).listing?.name || 'this stop'}`}
-                  >
-                    <FiNavigation size={12} aria-hidden="true" /> Start navigation
-                  </button>
-                )}
+                <StopDetails
+                  stop={stop}
+                  repeat={repeat}
+                  action={
+                    // Directions to this stop, unless the tourist is already there (same place as the stop before).
+                    roadTravel && !repeat && stop.id != null && navIndexFor(stop) >= 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setNavigatingTo(navIndexFor(stop))}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+                        aria-label={`Start navigation to ${placeFor(stop).listing?.name || 'this stop'}`}
+                      >
+                        <FiNavigation size={12} aria-hidden="true" /> Navigate here
+                      </button>
+                    ) : null
+                  }
+                />
 
                 {lunch && (
                   <div className="mt-3 ml-2 sm:ml-6 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 p-3">
