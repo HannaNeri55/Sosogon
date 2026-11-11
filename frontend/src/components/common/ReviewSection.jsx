@@ -6,7 +6,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import { StarDisplay } from './StarRating'
 import ReviewFormModal from './ReviewFormModal'
 import OwnerReply from './OwnerReply'
-import SampleReviewTag from './SampleReviewTag'
 import { formatShortDate, parseReview } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 
@@ -54,15 +53,12 @@ export default function ReviewSection({ item, rateableType, onReviewed }) {
           <p className="text-gray-500">No reviews yet.</p>
         ) : (
           reviews.map((review) => {
-            const { isDemo, comment } = parseReview(review)
+            const { comment } = parseReview(review)
             return (
               <div key={review.id} className="border-b border-gray-100 pb-4 last:border-b-0">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900">
-                      {review.user?.name || 'Guest'}
-                      {isDemo && <SampleReviewTag />}
-                    </p>
+                    <p className="font-medium text-gray-900">{review.user?.name || 'Guest'}</p>
                     {review.created_at && (
                       <p className="text-xs text-gray-500 mt-0.5">{formatShortDate(review.created_at)}</p>
                     )}
