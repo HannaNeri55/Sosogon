@@ -1155,6 +1155,39 @@ class ItineraryService
         return ((int) $m[1] % 12 + (strtolower($m[3]) === 'p' ? 12 : 0)) * 60 + (int) $m[2];
     }
 
+    /**
+     * Where a meal can fall back to when no food place is found: $stay, unless the tourist has
+     * checked out of it today; then tonight's new stay when they're moving on, else nowhere.
+     */
+    private function mealStay(?Accommodation $stay, ?Accommodation $home, ?Accommodation $tonight, bool $checkedOut): ?Accommodation
+    {
+        if (! $stay || ! $checkedOut || ! $home || ! $this->samePlace($stay, $home)) {
+            return $stay;
+        }
+
+        return $tonight && ! $this->samePlace($tonight, $home) ? $tonight : null;
+    }
+
+    /** A stay's listed (or usual, estimated) check-out time in minutes after midnight, else null. */
+    private function checkOutMinutes(Accommodation $stay): ?int
+    {
+        // "11:00 AM" or "12:00 noon"; in the opening hours only after the words "check-out".
+        $texts = [(string) $stay->check_out_time, (string) $stay->estimate('check_out')];
+        if (preg_match('/check[\s-]?out\b([^.;]*)/i', (string) $stay->operating_hours, $listed)) {
+            $texts[] = $listed[1];
+        }
+        foreach ($texts as $text) {
+            if (preg_match('/(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\b/i', $text, $m)) {
+                return ((int) $m[1] % 12 + (strtolower($m[3]) === 'p' ? 12 : 0)) * 60 + (int) ($m[2] ?? 0);
+            }
+            if (preg_match('/\bnoon\b/i', $text)) {
+                return 720;
+            }
+        }
+
+        return null;
+    }
+
     /** Why the planner (not the AI) added a destination to a day. */
     private function addedReason(Destination $place, ?Destination $after): string
     {
@@ -1747,6 +1780,8 @@ class ItineraryService
             $hadMerienda = false;
             $shopped = false;
             $checkedIn = ! $moving;
+            // Set once the tourist checks out of last night's stay today; no meal is planned there after that.
+            $checkedOut = false;
             // On Day 1, the stay's listed check-in time when the tourist arrives before it.
             $checkInAt = null;
             // Lunch starts by about noon; on the arrival day it can wait until 1:30 PM for a
@@ -1844,7 +1879,7 @@ class ItineraryService
             };
             // Lunch near where the tourist is (or on the way to $then), else near the stay, else at
             // the stay; a message when none is possible. Past LATEST_LUNCH there's no lunch at all.
-            $lunch = function ($then) use (&$prev, &$clock, &$hadLunch, &$usedFood, $findMeal, $addFood, $addMealAtStay, $home, $tonight, $lateArrival, $latestLunch, $plan, $foodScore, $mealKm, $date, $preferences, $endsInTime, $dayEnd, $leaveNote): ?string {
+            $lunch = function ($then) use (&$prev, &$clock, &$hadLunch, &$usedFood, &$checkedOut, $findMeal, $addFood, $addMealAtStay, $home, $tonight, $lateArrival, $latestLunch, $plan, $foodScore, $mealKm, $date, $preferences, $endsInTime, $dayEnd, $leaveNote): ?string {
                 $hadLunch = true;
                 $from = $prev ?? $then;
                 if (! $from) {
@@ -1872,7 +1907,7 @@ class ItineraryService
 
                     return null;
                 }
-                $stay = $then ? $home : $tonight;
+                $stay = $this->mealStay($then ? $home : $tonight, $home, $tonight, $checkedOut);
                 // Before settling for the stay, an unused food place near it that's open in time.
                 if ($stay && ! $this->samePlace($from, $stay)) {
                     $at = fn ($f) => max($clock + $this->travelMinutes($from, $f), $earliest);
@@ -2006,6 +2041,7 @@ class ItineraryService
                 $morningNote = 'Breakfast places are still closed this early: bring breakfast from your accommodation to enjoy after sunrise.';
                 if (($lastDay || $moving) && $home) {
                     $morningNote .= " Check out of {$home->name} before you leave.";
+                    $checkedOut = true;
                 }
                 // A day that starts before 5 AM doesn't also run into the night.
                 $plans = array_map(fn ($planned) => array_map(fn ($a) => $a['label'] === 'evening' ? $this->outsideWindow($a) : $a, $planned), $plans);
@@ -2016,37 +2052,64 @@ class ItineraryService
                 $breakfast = $near && $breakfastFits ? $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($near, $f), $mealKm,
                     fn ($f) => $this->isOpen($f, $breakfastAt, $breakfastAt + self::BREAKFAST_MINUTES, $date), $foodScore) : null;
 
-                // Leaving this stay today: check out first, in time to reach breakfast.
-                if (($lastDay || $moving) && $home) {
-                    $checkout = $breakfastAt - self::CHECKOUT_MINUTES - ($breakfast ? $this->travelMinutes($home, $breakfast['place']) : 0);
-                    if ($dayEnd !== null) {
-                        $checkout = max(0, min($checkout, $dayEnd - self::CHECKOUT_MINUTES));
-                    }
-                    $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $checkout, self::CHECKOUT_MINUTES, [
+                $leaving = ($lastDay || $moving) && $home;
+                $listedCheckOut = $leaving ? $this->checkOutMinutes($home) : null;
+                $checkOut = function (int $at) use ($add, $home, $lastDay, $tonight, $dayEnd, $leaveNote, $listedCheckOut, &$checkedOut) {
+                    $checkedOut = true;
+                    $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $at, self::CHECKOUT_MINUTES, [
                         'accommodation_id' => $home->id,
                         'notes' => "Check out of {$home->name}.",
-                        'reason' => $lastDay
+                        'reason' => ($lastDay
                             ? 'Your last morning: settle up before heading out, and ask the front desk whether they can keep your bags if you leave later in the day.'
-                            : "You move on to {$tonight->name} today: settle up and take your bags along.",
+                            : "You move on to {$tonight->name} today: settle up and take your bags along.")
+                            .($listedCheckOut !== null ? " Check-out is by {$this->formatMinutes($listedCheckOut)}." : ''),
                         'preference_note' => match (true) {
                             ! $lastDay => null,
                             $dayEnd !== null => "{$leaveNote}, so today's plan ends by then. Leave yourself time to get to your transport.",
                             default => "We don't know your departure time, so today's plan runs through dinner; skip the later stops if you need to leave earlier.",
                         },
                     ], null);
+                };
+
+                // Leaving this stay today with breakfast at a restaurant: check out first, in time to
+                // reach it, and head out with your bags.
+                if ($leaving && $breakfast) {
+                    $at = $breakfastAt - self::CHECKOUT_MINUTES - $this->travelMinutes($home, $breakfast['place']);
+                    $checkOut($dayEnd !== null ? max(0, min($at, $dayEnd - self::CHECKOUT_MINUTES)) : $at);
                 }
 
-                // Leaving before breakfast would be over: nothing more today.
+                // Leaving before breakfast would be over: nothing more today (said after the check-out).
                 $clock = $breakfastFits ? $breakfastAt + self::BREAKFAST_MINUTES : $dayEnd;
-                if (! $breakfastFits) {
-                    $appendNote("{$leaveNote}, before breakfast would be over, so eat on the way.");
-                }
                 if ($breakfast) {
                     $addFood($breakfast, $breakfastAt, self::BREAKFAST_MINUTES, "Breakfast near {$near->name}.",
                         $this->mealReason($breakfast, $near, 'an easy start before heading out', $preferences), 'breakfast', $near, $prev);
                     $prev = $breakfast['place'];
                 } elseif ($home && $breakfastFits) {
                     $addMealAtStay('breakfast', $breakfastAt, "near {$home->name}", null, $home);
+                }
+
+                // Breakfast at the stay, then check out: right after it when the day has places to
+                // go, else after a free morning there, at the listed check-out time.
+                if ($leaving && ! $checkedOut) {
+                    $at = $breakfastFits ? $clock : max(0, ($dayEnd ?? $clock) - self::CHECKOUT_MINUTES);
+                    $by = $listedCheckOut !== null ? $listedCheckOut - self::CHECKOUT_MINUTES : null;
+                    if ($first === null && $by !== null && $by > $at && $endsInTime($by + self::CHECKOUT_MINUTES)) {
+                        $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $at, $by - $at, [
+                            'accommodation_id' => $home->id,
+                            'notes' => "Free time at {$home->name}: rest or enjoy its amenities before you check out.",
+                            'reason' => 'No more stops today, so there\'s no rush to leave before check-out.',
+                        ], $home);
+                        $at = $by;
+                    }
+                    if ($dayEnd !== null) {
+                        $at = max(0, min($at, $dayEnd - self::CHECKOUT_MINUTES));
+                    }
+                    $checkOut($at);
+                    $clock = max($clock, $at + self::CHECKOUT_MINUTES);
+                    $prev = $home;
+                }
+                if (! $breakfastFits) {
+                    $appendNote("{$leaveNote}, before breakfast would be over, so eat on the way.");
                 }
             }
 
@@ -2284,9 +2347,12 @@ class ItineraryService
                 }
                 if ($dinner) {
                     $addFood($dinner, $dinnerStart($dinner['place']), self::MEAL_MINUTES, "Dinner near {$prev->name}.", $dinnerReason, 'dinner', $prev, $prev);
-                } elseif ($tonight && $endsInTime(max($dinnerTarget, $clock + $this->travelMinutes($prev, $tonight)) + self::MEAL_MINUTES)) {
-                    $addMealAtStay('dinner', max($dinnerTarget, $clock + $this->travelMinutes($prev, $tonight)),
-                        "near {$prev->name}".($prev !== $tonight ? " or on the way to {$tonight->name}" : ''), $prev, $tonight);
+                } elseif (($dinnerStay = $this->mealStay($tonight, $home, $tonight, $checkedOut))
+                    && $endsInTime(max($dinnerTarget, $clock + $this->travelMinutes($prev, $dinnerStay)) + self::MEAL_MINUTES)) {
+                    $addMealAtStay('dinner', max($dinnerTarget, $clock + $this->travelMinutes($prev, $dinnerStay)),
+                        "near {$prev->name}".($prev !== $dinnerStay ? " or on the way to {$dinnerStay->name}" : ''), $prev, $dinnerStay);
+                } elseif ($checkedOut && $lastDay) {
+                    $appendNote("We're sorry — there's no verified food place near {$prev->name} for dinner, and you've checked out of {$home->name}, so eat on the way.");
                 }
             }
 
