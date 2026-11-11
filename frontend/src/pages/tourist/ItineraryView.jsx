@@ -563,6 +563,7 @@ export default function ItineraryView() {
               onSwapStop={handleSwapStop}
               overnight={stays.find((stay) => stay.night_days?.includes(dayNumber))}
               transportPreference={itinerary.transport_preference}
+              backup={itinerary.backup_options?.[dayNumber]}
             />
           ))}
         </div>

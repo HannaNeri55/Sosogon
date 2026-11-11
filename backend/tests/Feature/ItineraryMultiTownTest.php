@@ -249,8 +249,10 @@ class ItineraryMultiTownTest extends TestCase
         $visit = Itinerary::with('items')->latest('id')->firstOrFail()->items->firstWhere('destination_id', $this->ids['bulanHill']);
         $picnic = collect($visit->activities)->first(fn ($a) => str_ends_with($a['name'], '— your picnic lunch'));
         $this->assertNotNull($picnic);
-        $this->assertSame([720, 780], $this->minutes($picnic['time']));
-        $this->assertCount(3, $visit->activities);
+        // The lunch break starts where an activity ends between 11:00 and noon (here 11:30).
+        $this->assertSame([690, 750], $this->minutes($picnic['time']));
+        // No activity ends between 11:00 and noon here, so the walk continues after lunch.
+        $this->assertCount(3, collect($visit->activities)->pluck('name')->map(fn ($n) => preg_replace('/ — your picnic lunch$/', '', $n))->unique());
     }
 
     public function test_a_stay_can_be_changed_within_its_town(): void

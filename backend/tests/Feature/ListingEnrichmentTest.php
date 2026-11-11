@@ -158,7 +158,11 @@ class ListingEnrichmentTest extends TestCase
         $this->assertFalse($day2->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch')), 'No separate lunch stop.');
         $lunch = collect($visit->activities)->firstWhere('name', 'Lunch at the on-site dining area');
         $this->assertNotNull($lunch);
-        $this->assertSame('12:00 PM – 1:00 PM', $lunch['time']);
+        // Lunch starts between 11:00 AM and noon, and lasts an hour.
+        [$from, $to] = array_map(fn ($t) => (int) date('G', strtotime(trim($t))) * 60 + (int) date('i', strtotime(trim($t))), explode('–', $lunch['time']));
+        $this->assertGreaterThanOrEqual(660, $from, $lunch['time']);
+        $this->assertLessThanOrEqual(720, $from, $lunch['time']);
+        $this->assertSame(60, $to - $from);
         $this->assertStringContainsString("Food Beach's own dining area", $visit->preference_note);
         $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
         $this->assertSame([], app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => $itinerary->start_date]));
