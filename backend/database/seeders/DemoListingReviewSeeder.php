@@ -89,11 +89,7 @@ class DemoListingReviewSeeder extends Seeder
 
     /** Snapshot of food & beverage ID => expected name. */
     private const FOOD_BEVERAGES = [
-        1 => 'Una Pizzeria',
-        2 => 'Balay Buhay sa Uma',
-        3 => 'Butanding Bar and Restaurant (Giddy\'s Place)',
-        4 => 'Linda\'s',
-        5 => 'Casa Luna',
+        // IDs 1-5 were removed from the system (2026-11-11).
         6 => 'Prieto Diaz Local Eateries',
         7 => 'Coco Bar',
         8 => 'Test Restaurant - Revision 2',
@@ -101,17 +97,15 @@ class DemoListingReviewSeeder extends Seeder
 
     /** Snapshot of retail shop ID => expected name. */
     private const SHOPS = [
+        // IDs 2, 6 and 7 were removed from the system (2026-11-11).
         1 => 'Barcelona Church Souvenirs',
-        2 => 'Bulan Public Market',
         3 => 'Bulusan Lake Souvenir Stalls',
         4 => 'Whale Shark Center Souvenir Shop',
         5 => 'Juban Local Crafts',
-        6 => 'Matnog Port Public Market',
-        7 => 'PiliNuts Pasalubong Center',
     ];
 
     /** Demo reviewer pool (sosogon.demo.visitor001-120@example.com). */
-    private const REVIEWERS = [
+    public const REVIEWERS = [
         'Imelda Yap', 'Karen Ordoñez', 'Elaine Alcantara', 'Andrea Umali',
         'Zaldy Macaraeg', 'Ursula Jacinto', 'Nathaniel Pangilinan', 'Nathaniel Zamora',
         'Nestor Ordoñez', 'Gemma Hipolito', 'Cristina Regalado', 'Imelda Pacheco',
