@@ -139,6 +139,7 @@ export default function SharedItinerary() {
               startDate={itinerary.start_date}
               overnight={stays.find((stay) => stay.night_days?.includes(dayNumber))}
               transportPreference={itinerary.transport_preference}
+              backup={itinerary.backup_options?.[dayNumber]}
             />
           ))}
         </div>

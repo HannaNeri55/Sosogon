@@ -18,6 +18,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiX,
+  FiCloudRain,
 } from 'react-icons/fi'
 import { StarDisplay } from '../common/StarRating'
 import ActivityEditor from './ActivityEditor'
@@ -146,6 +147,36 @@ function TravelLeg({ from, to, transportPreference }) {
             <RouteMap origin={leg.origin} destination={leg.destination} fromName={fromName} toName={toName} />
           </Suspense>
         </div>
+      )}
+    </div>
+  )
+}
+
+const BACKUP_LINKS = { destination: '/destinations', food_beverage: '/food-beverage' }
+
+// The day's Plan B for rain or delays: nearby indoor places not in the trip, and which outdoor
+// stop is easiest to shorten or skip (worked out by the server from verified listings).
+function PlanB({ backup }) {
+  return (
+    <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+        <FiCloudRain size={15} className="text-primary-600 shrink-0" aria-hidden="true" /> Plan B: rain or delays
+      </p>
+      {backup.flexible && <p className="mt-1.5 text-sm text-gray-600 leading-relaxed">{backup.flexible}</p>}
+      {backup.places?.length > 0 && (
+        <>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Indoor alternatives nearby</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {backup.places.map((place) => (
+              <li key={`${place.type}-${place.id}`} className="text-sm">
+                <Link to={`${BACKUP_LINKS[place.type] || '/destinations'}/${place.id}`} className="font-medium text-primary-700 hover:text-primary-800 hover:underline">
+                  {place.name}
+                </Link>
+                <span className="text-gray-500"> · {place.why}</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   )
@@ -485,6 +516,7 @@ export default function ItineraryDayCard({
   onSwapStop,
   overnight = null,
   transportPreference = null,
+  backup = null,
 }) {
   const stops = day.stops || []
   const rows = groupStops(stops)
@@ -622,6 +654,8 @@ export default function ItineraryDayCard({
           )
         })
       )}
+
+      {!editable && (backup?.places?.length > 0 || backup?.flexible) && <PlanB backup={backup} />}
 
       {navigatingTo != null && (
         <Suspense fallback={null}>

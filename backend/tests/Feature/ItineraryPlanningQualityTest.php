@@ -346,7 +346,7 @@ class ItineraryPlanningQualityTest extends TestCase
         }
     }
 
-    public function test_lunch_is_between_half_eleven_and_half_one(): void
+    public function test_lunch_is_between_eleven_and_noon(): void
     {
         $itinerary = $this->generate();
 
@@ -354,9 +354,27 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertSame([1, 2, 3], $lunches->pluck('day_number')->unique()->sort()->values()->all(), 'Every day has lunch.');
         foreach ($lunches as $lunch) {
             [$start] = $this->minutes($lunch->time_slot);
-            $this->assertGreaterThanOrEqual(690, $start);
-            $this->assertLessThanOrEqual(810, $start);
+            $this->assertGreaterThanOrEqual(660, $start, "Day {$lunch->day_number}: lunch starts at 11:00 AM or later.");
+            // Around noon (12:15 PM at the latest, after a short drive); Day 1 may wait for a late arrival.
+            $this->assertLessThanOrEqual($lunch->day_number === 1 ? 810 : 735, $start, "Day {$lunch->day_number}: lunch starts around noon.");
         }
+    }
+
+    public function test_removing_a_visit_turns_its_lunch_break_into_an_ordinary_lunch(): void
+    {
+        $itinerary = $this->generate();
+        $break = $itinerary->items->first(fn ($i) => str_starts_with((string) $i->notes, 'Lunch break during your visit to '));
+        if (! $break) {
+            $this->markTestSkipped('This plan has no lunch break during a visit.');
+        }
+        $host = $itinerary->items->where('day_number', $break->day_number)->where('item_type', 'destination')
+            ->first(fn ($i) => str_contains($break->notes, $i->destination->name));
+
+        $this->actingAs($this->tourist)->putJson("/api/v1/itineraries/{$itinerary->id}", ['delete_item_ids' => [$host->id]])->assertOk();
+
+        $notes = Itinerary::with('items')->find($itinerary->id)->items->firstWhere('id', $break->id)->notes;
+        $this->assertStringStartsWith('Lunch near ', $notes);
+        $this->assertStringNotContainsString($host->destination->name, $notes, 'It no longer names the removed visit.');
     }
 
     public function test_merienda_comes_in_the_middle_of_the_afternoon(): void

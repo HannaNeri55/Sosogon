@@ -281,10 +281,10 @@ class ItineraryGenerationTest extends TestCase
         $this->assertSame(60, $end - $start);
 
         $relaxed = $this->generate(pace: 'relaxed');
-        // No sunrise on a relaxed pace: the activity is kept, 90 minutes, with a note.
-        [$start, $end] = $this->activityOn($relaxed, 2, 'Sunrise Viewing');
-        $this->assertSame(90, $end - $start);
-        $this->assertGreaterThan(390, $start);
+        // No sunrise on a relaxed pace: sunrise viewing isn't put at mid-morning; the visit stays.
+        $hill = $relaxed->items->first(fn ($i) => $i->day_number === 2 && $i->item_type === 'destination');
+        $this->assertNotNull($hill);
+        $this->assertFalse(collect($hill->activities)->contains(fn ($a) => str_contains($a['name'], 'Sunrise')));
 
         // Snack places by the hotel, where the packed day rests after its sunrise, for the
         // afternoon merienda after lunch there.
@@ -304,8 +304,10 @@ class ItineraryGenerationTest extends TestCase
         $listed = DB::table('activities')->get()->groupBy('destination_id');
         foreach ($itinerary->items->where('item_type', 'destination') as $visit) {
             $names = collect($visit->activities)->pluck('name')->map(fn ($n) => preg_replace('/ — your picnic lunch$/', '', $n))->all();
-            $expected = $listed->get($visit->destination_id)?->pluck('name')->all() ?: ['Explore '.Destination::find($visit->destination_id)->name];
-            $this->assertEqualsCanonicalizing($expected, $names, "Day {$visit->day_number} should list only its destination's activities.");
+            $expected = [...($listed->get($visit->destination_id)?->pluck('name')->all() ?? []), 'Explore '.Destination::find($visit->destination_id)->name];
+            // Only its own activities; one whose time has passed (a midday picnic at a sunset visit) is left out.
+            $this->assertNotEmpty($names);
+            $this->assertSame([], array_values(array_diff($names, $expected)), "Day {$visit->day_number} should list only its destination's activities.");
         }
     }
 

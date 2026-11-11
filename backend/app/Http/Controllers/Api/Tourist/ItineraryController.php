@@ -34,6 +34,12 @@ class ItineraryController extends Controller
      * dishes/souvenirs, and what else can be picked (the stay's rooms, each food place's
      * menu, each shop's products).
      */
+    /** The itinerary with each day's Plan B for rain or delays (backup_options), for showing it. */
+    public function withBackupOptions(Itinerary $itinerary): Itinerary
+    {
+        return $itinerary->setAttribute('backup_options', (object) $this->itineraryService->backupOptions($itinerary));
+    }
+
     public static function relations(): array
     {
         return [
@@ -87,7 +93,7 @@ class ItineraryController extends Controller
             $limit,
             "You've reached today's limit of {$limit} itineraries. You can generate more after midnight (Philippine time).",
             ['user_id' => $user->id],
-            fn () => ['itinerary' => $this->itineraryService->generate($user, $validated)->load($this->relations())]
+            fn () => ['itinerary' => $this->withBackupOptions($this->itineraryService->generate($user, $validated)->load($this->relations()))]
         );
     }
 
@@ -443,7 +449,7 @@ class ItineraryController extends Controller
             ->with($this->relations())
             ->findOrFail($id);
 
-        return response()->json($itinerary);
+        return response()->json($this->withBackupOptions($itinerary));
     }
 
     public function update(Request $request, int $id): JsonResponse
@@ -673,7 +679,7 @@ class ItineraryController extends Controller
 
         return response()->json([
             'message' => 'Itinerary updated.',
-            'itinerary' => $itinerary->fresh($this->relations()),
+            'itinerary' => $this->withBackupOptions($itinerary->fresh($this->relations())),
         ]);
     }
 
