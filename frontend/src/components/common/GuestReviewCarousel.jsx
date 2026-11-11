@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 import { parseReview } from "../../utils/helpers";
-import SampleReviewTag from "./SampleReviewTag";
 
 export default function GuestReviewCarousel({ item, title = "Why Guests Love This Place" }) {
   const scrollRef = useRef(null);
@@ -94,7 +93,7 @@ export default function GuestReviewCarousel({ item, title = "Why Guests Love Thi
           className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {reviews.map((review) => {
-            const { isDemo, comment } = parseReview(review);
+            const { comment } = parseReview(review);
             const reply = review.reply?.body || "";
             const isExpanded = Boolean(expandedReviews[review.id]);
             const isLong = comment.length > 145 || reply.length > 90;
@@ -117,7 +116,6 @@ export default function GuestReviewCarousel({ item, title = "Why Guests Love Thi
                 <div className="mb-4 min-h-[48px]">
                   <p className="text-sm font-semibold text-gray-900">
                     {review.user?.name || "Guest"}
-                    {isDemo && <SampleReviewTag />}
                   </p>
                   {dateLabel && (
                     <p className="text-xs text-gray-500 mt-1">{dateLabel}</p>
