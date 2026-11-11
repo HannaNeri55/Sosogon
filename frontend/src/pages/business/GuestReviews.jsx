@@ -4,6 +4,7 @@ import { FiStar, FiMessageSquare, FiClock } from 'react-icons/fi'
 import { getOwnerReviews } from '../../api/ratings'
 import { formatShortDate, parseReview } from '../../utils/helpers'
 import StatCard from '../../components/common/StatCard'
+import SampleReviewTag from '../../components/common/SampleReviewTag'
 import Pagination from '../../components/common/Pagination'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { StarDisplay } from '../../components/common/StarRating'
@@ -123,12 +124,15 @@ export default function GuestReviews({ portalLabel }) {
         <>
           <ul className="space-y-4">
             {reviews.map((review) => {
-              const { comment } = parseReview(review)
+              const { isDemo, comment } = parseReview(review)
               return (
                 <li key={review.id} className="bg-white rounded-2xl border border-gray-200/70 p-5 sm:p-6 shadow-(--shadow-card)">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900">{review.user?.name || 'Guest'}</p>
+                      <p className="font-medium text-gray-900">
+                        {review.user?.name || 'Guest'}
+                        {isDemo && <SampleReviewTag />}
+                      </p>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {formatShortDate(review.created_at)}
                         {showListing && review.rateable?.name && <> · {review.rateable.name}</>}
