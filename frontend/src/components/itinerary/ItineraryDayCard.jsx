@@ -1,3 +1,4 @@
+import { Suspense, lazy, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { placeFor } from '../../utils/itineraryStops'
 import { addDays, format, parseISO } from 'date-fns'
@@ -14,6 +15,9 @@ import {
   FiCoffee,
   FiMoon,
   FiExternalLink,
+  FiChevronDown,
+  FiChevronUp,
+  FiX,
 } from 'react-icons/fi'
 import { StarDisplay } from '../common/StarRating'
 import ActivityEditor from './ActivityEditor'
@@ -21,7 +25,11 @@ import SelectionEditor from './SelectionEditor'
 import { getImageUrl, toDateOnly, formatPeso, formatPesoRange } from '../../utils/helpers'
 import { splitSlot, joinSlot, slotError } from '../../utils/timeSlots'
 import { dishOptions, souvenirOptions, picksFrom } from '../../utils/selections'
-import { legGuidance } from '../../utils/transportGuidance'
+import { legGuidance, stopCoordinates, transportGuide } from '../../utils/transportGuidance'
+
+// The maps pull in Leaflet, so they load only when a tourist opens directions or navigation.
+const RouteMap = lazy(() => import('../maps/RouteMap'))
+const NavigationView = lazy(() => import('../maps/NavigationView'))
 
 function dayDateLabel(startDate, dayNumber) {
   const dateOnly = toDateOnly(startDate)
@@ -68,10 +76,12 @@ function visitNotes(stop, listing) {
   return repeated ? notes.slice(repeated.length).trim() : notes
 }
 
-// The trip from one stop to the next: Google Maps directions for how the tourist gets around,
-// and the saved distance and time, labelled as measured or estimated. Without usable map
-// locations, just the saved distance and time, as before.
+// The trip from one stop to the next: directions for how the tourist gets around (a driving
+// route map shown right here, or Google Maps for public transport), and the saved distance and
+// time, labelled as measured or estimated. Without usable map locations, just the saved
+// distance and time, as before.
 function TravelLeg({ from, to, transportPreference }) {
+  const [showRoute, setShowRoute] = useState(false)
   const leg = legGuidance(from, to, transportPreference)
   if (!leg) {
     if (!to?.distance_from_prev_km && !to?.travel_time_from_prev) return null
@@ -83,20 +93,57 @@ function TravelLeg({ from, to, transportPreference }) {
       </div>
     )
   }
+  const fromName = placeFor(from).listing?.name || 'this stop'
   const toName = placeFor(to).listing?.name || 'the next stop'
+  const panelId = `route-${from.id ?? fromName}-${to.id ?? toName}`.replace(/\s+/g, '-')
   return (
-    <div className="mt-2 ml-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-      <FiNavigation size={11} className="text-primary-500 shrink-0" aria-hidden="true" />
-      {leg.facts.map((fact) => <span key={fact}>{fact}</span>)}
-      <a
-        href={leg.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 py-1 font-medium text-primary-600 hover:text-primary-700 hover:underline"
-        aria-label={`${leg.linkLabel} to ${toName} (opens Google Maps)`}
-      >
-        {leg.linkLabel} <FiExternalLink size={11} aria-hidden="true" />
-      </a>
+    <div className="mt-2 ml-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+        <FiNavigation size={11} className="text-primary-500 shrink-0" aria-hidden="true" />
+        {leg.facts.map((fact) => <span key={fact}>{fact}</span>)}
+        {leg.inSiteRoute ? (
+          <button
+            type="button"
+            onClick={() => setShowRoute((open) => !open)}
+            aria-expanded={showRoute}
+            aria-controls={panelId}
+            className="inline-flex items-center gap-1 py-1 font-medium text-primary-600 hover:text-primary-700 hover:underline"
+          >
+            {showRoute ? <>Hide directions <FiChevronUp size={12} aria-hidden="true" /></> : <>{leg.linkLabel} <FiChevronDown size={12} aria-hidden="true" /></>}
+          </button>
+        ) : (
+          <a
+            href={leg.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 py-1 font-medium text-primary-600 hover:text-primary-700 hover:underline"
+            aria-label={`${leg.linkLabel} to ${toName} (opens Google Maps)`}
+          >
+            {leg.linkLabel} <FiExternalLink size={11} aria-hidden="true" />
+          </a>
+        )}
+      </div>
+
+      {leg.inSiteRoute && showRoute && (
+        <div id={panelId} className="mt-2 rounded-xl border border-gray-200 bg-white p-3">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <p className="text-sm font-medium text-gray-800">
+              {fromName} <span className="text-gray-400">→</span> {toName}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowRoute(false)}
+              className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Close directions"
+            >
+              <FiX size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <Suspense fallback={<div className="h-80 rounded-xl bg-gray-100" aria-label="Loading map" />}>
+            <RouteMap origin={leg.origin} destination={leg.destination} fromName={fromName} toName={toName} />
+          </Suspense>
+        </div>
+      )}
     </div>
   )
 }
@@ -424,6 +471,13 @@ export default function ItineraryDayCard({
   const stops = day.stops || []
   const rows = groupStops(stops)
   const dateLabel = dayDateLabel(startDate, dayNumber)
+  // Live navigation follows the day's stops in order; only stops with a saved map location count.
+  const [navigatingTo, setNavigatingTo] = useState(null)
+  const roadTravel = transportGuide(transportPreference).inSiteRoute
+  const navStops = rows
+    .map(({ stop }) => ({ id: stop.id, name: placeFor(stop).listing?.name || 'This stop', point: stopCoordinates(stop) }))
+    .filter((place) => place.point)
+  const navIndexFor = (stop) => navStops.findIndex((place) => place.id === stop.id)
   const newItemsForDay = (pendingEdits?.newItems || []).filter((item) => Number(item.day_number) === Number(dayNumber))
   // While editing, stops (saved and new) follow their pending times, as they will after saving.
   const editRows = byTime([
@@ -517,6 +571,17 @@ export default function ItineraryDayCard({
               <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-5'}`}>
                 <StopDetails stop={stop} />
 
+                {roadTravel && stop.id != null && navIndexFor(stop) >= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setNavigatingTo(navIndexFor(stop))}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+                    aria-label={`Start navigation to ${placeFor(stop).listing?.name || 'this stop'}`}
+                  >
+                    <FiNavigation size={12} aria-hidden="true" /> Start navigation
+                  </button>
+                )}
+
                 {lunch && (
                   <div className="mt-3 ml-2 sm:ml-6 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 p-3">
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-600 mb-2">
@@ -531,6 +596,12 @@ export default function ItineraryDayCard({
             </div>
           )
         })
+      )}
+
+      {navigatingTo != null && (
+        <Suspense fallback={null}>
+          <NavigationView stops={navStops} startIndex={navigatingTo} onClose={() => setNavigatingTo(null)} />
+        </Suspense>
       )}
 
       {overnight?.accommodation && (

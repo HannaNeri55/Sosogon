@@ -1,8 +1,10 @@
 // Directions between consecutive itinerary stops, matched to how the tourist said they'd get
-// around (the itinerary's transport_preference). Links are public Google Maps directions
-// between each place's saved coordinates. SOSOGON has no transport data of its own, so this
-// never names a route, operator, fare or schedule; distances and times come from the saved
-// itinerary and say whether Google Maps measured them or they're estimates.
+// around (the itinerary's transport_preference). Road travel opens a driving route map inside
+// SOSOGON (OpenStreetMap roads, see drivingRoute.js); public transport, which that routing
+// can't cover, links to Google Maps' transit directions. Both use each place's saved
+// coordinates. SOSOGON has no transport data of its own, so this never names a route,
+// operator, fare or schedule; distances and times from the saved itinerary say whether Google
+// Maps measured them or they're estimates.
 import { toCoordinates, googleMapsRouteUrl } from '../components/maps/mapsConfig'
 import { placeFor } from './itineraryStops'
 
@@ -10,29 +12,33 @@ export const TRANSPORT_GUIDES = {
   private_car: {
     label: 'Private Car',
     travelmode: 'driving',
+    inSiteRoute: true,
     linkLabel: 'Driving directions',
     time: 'drive',
-    overview: "Each link opens Google Maps' driving route between two stops, from their saved map locations.",
+    overview: 'Tap Driving directions between two stops to see the driving route on a map here, from their saved map locations.',
   },
   rented_vehicle: {
     label: 'Rented Vehicle',
     travelmode: 'driving',
+    inSiteRoute: true,
     linkLabel: 'Driving directions',
     time: 'drive',
     overview:
-      "Each link opens Google Maps' driving route between two stops, from their saved map locations. SOSOGON doesn't list rental providers or rates, so arrange your rental with a provider you trust.",
+      "Tap Driving directions between two stops to see the driving route on a map here, from their saved map locations. SOSOGON doesn't list rental providers or rates, so arrange your rental with a provider you trust.",
   },
   motorcycle: {
     label: 'Motorcycle',
     travelmode: 'driving',
+    inSiteRoute: true,
     linkLabel: 'Road directions',
     time: 'by road (car estimate)',
     overview:
-      "Each link opens Google Maps' driving route, the closest it offers. It isn't a motorcycle-specific route, so check road conditions and local rules.",
+      "Tap Road directions between two stops to see the road route on a map here. It's a car route, not a motorcycle-specific one, so check road conditions and local rules.",
   },
   public_transport: {
     label: 'Public Transportation',
     travelmode: 'transit',
+    inSiteRoute: false,
     linkLabel: 'Public transport in Google Maps',
     time: null,
     overview:
@@ -41,10 +47,11 @@ export const TRANSPORT_GUIDES = {
   no_preference: {
     label: 'No Preference',
     travelmode: '',
-    linkLabel: 'Directions in Google Maps',
+    inSiteRoute: true,
+    linkLabel: 'Road directions',
     time: 'by car (estimate)',
     overview:
-      "Each link opens Google Maps, where you can compare driving, walking and public transport. SOSOGON doesn't recommend a vehicle or list fares; confirm local transport options before you go.",
+      "Tap Road directions between two stops to see the road route on a map here. SOSOGON doesn't recommend a vehicle or list fares; confirm local transport options before you go.",
   },
 }
 
@@ -60,11 +67,11 @@ export function stopCoordinates(stop) {
 }
 
 /**
- * Guidance for the trip from stop $from to stop $to: the directions link and what the saved
- * itinerary says about the leg. Null when either place has no usable coordinates (no link is
- * better than a wrong one) or both are the same spot.
+ * Guidance for the trip from stop $from to stop $to: the two saved map points, how to show the
+ * way between them, and what the saved itinerary says about the leg. Null when either place has
+ * no usable coordinates (no route is better than a wrong one) or both are the same spot.
  *
- * @returns {{ url: string, linkLabel: string, facts: string[] } | null}
+ * @returns {{ origin, destination, inSiteRoute: boolean, url: string|null, linkLabel: string, facts: string[] } | null}
  */
 export function legGuidance(from, to, preference) {
   const origin = stopCoordinates(from)
@@ -82,5 +89,12 @@ export function legGuidance(from, to, preference) {
     facts.push(measured && guide.time === 'drive' ? `~${minutes} min drive (Google Maps)` : `~${minutes} min ${guide.time === 'drive' ? 'drive (estimate)' : guide.time}`)
   }
 
-  return { url: googleMapsRouteUrl(origin, destination, guide.travelmode), linkLabel: guide.linkLabel, facts }
+  return {
+    origin,
+    destination,
+    inSiteRoute: guide.inSiteRoute,
+    url: guide.inSiteRoute ? null : googleMapsRouteUrl(origin, destination, guide.travelmode),
+    linkLabel: guide.linkLabel,
+    facts,
+  }
 }
