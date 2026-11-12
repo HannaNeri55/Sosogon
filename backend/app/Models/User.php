@@ -131,6 +131,11 @@ class User extends Authenticatable
         return $this->hasMany(BusinessSubmission::class);
     }
 
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
     public function ownerApplication(): HasOne
     {
         return $this->hasOne(BusinessOwnerApplication::class);

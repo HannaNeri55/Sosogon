@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\Business\OwnerApplicationController;
 use App\Http\Controllers\Api\Business\RatingReplyController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopOwnerController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopProductController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Public\AccommodationController;
 use App\Http\Controllers\Api\Public\ActivityController;
 use App\Http\Controllers\Api\Public\AmenitySuggestionController;
@@ -116,6 +117,14 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
     Route::post('/account/notifications/read', [AccountStatusController::class, 'markNotificationsRead']);
     Route::post('/account/violations/{id}/appeal', [AccountStatusController::class, 'appeal'])->middleware('throttle:10,1');
     Route::get('/account/appeals/{id}/attachments/{index}', [AccountStatusController::class, 'appealAttachment']);
+
+    // ---------- NOTIFICATION BELL (any signed-in user) ----------
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read']);
+    Route::get('/notifications/push-key', [NotificationController::class, 'pushKey']);
+    Route::post('/notifications/push-subscription', [NotificationController::class, 'subscribe'])->middleware('throttle:20,1');
+    Route::delete('/notifications/push-subscription', [NotificationController::class, 'unsubscribe']);
 
     // ---------- TOURIST ROUTES ----------
     Route::middleware('role:tourist')->group(function () {

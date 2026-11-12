@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import NotificationBell from '../notifications/NotificationBell'
 import { FiChevronDown, FiGrid, FiLogOut, FiMenu, FiSearch, FiShield, FiX } from 'react-icons/fi'
 
 const publicLinks = [
@@ -124,6 +125,7 @@ export default function Navbar() {
             >
               {searchOpen ? <FiX size={18} /> : <FiSearch size={18} />}
             </button>
+            {isAuthenticated && <NotificationBell />}
             {isAuthenticated ? (
               <div className="relative">
                 <button
@@ -168,6 +170,12 @@ export default function Navbar() {
               </>
             )}
           </div>
+
+          {isAuthenticated && (
+            <div className="lg:hidden ml-auto mr-1">
+              <NotificationBell />
+            </div>
+          )}
 
           {/* Mobile toggle */}
           <button

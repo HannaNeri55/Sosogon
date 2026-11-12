@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Channels\WebPushChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 /**
  * Tells a user what happened to their account (warning, suspension, deactivation,
  * reactivation, closure, appeal decision): what, why, and what they can do next.
- * Stored in-app (Account Health page) and emailed.
+ * Stored in-app (Account Health page and the notification bell), emailed and pushed to the browser.
  */
 class AccountStatusNotification extends Notification
 {
@@ -30,7 +31,7 @@ class AccountStatusNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return ['database', 'mail', WebPushChannel::class];
     }
 
     public function toArray(object $notifiable): array
@@ -43,7 +44,13 @@ class AccountStatusNotification extends Notification
             'next_steps' => $this->nextSteps,
             'violation_id' => $this->violationId,
             'ends_at' => $this->endsAt,
+            'link' => '/account/status',
         ];
+    }
+
+    public function toWebPush(object $notifiable): array
+    {
+        return ['id' => $this->id, 'title' => $this->title, 'body' => $this->message, 'url' => '/account/status'];
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -10,6 +10,7 @@ use App\Services\ClaudeAIService;
 use App\Services\GeminiAIService;
 use App\Services\GoogleMapsService;
 use App\Services\ItineraryService;
+use App\Support\ActivityNotifier;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
@@ -70,6 +71,9 @@ class AppServiceProvider extends ServiceProvider
         // Controllers take these as int, so "/destinations/abc" would crash with a TypeError (500).
         // Requiring digits makes such URLs a plain 404 instead.
         Route::patterns(array_fill_keys(['id', 'image', 'imageId', 'index', 'item', 'product', 'rating', 'room'], '[0-9]+'));
+
+        // Notifications for registrations, submissions, decisions, reviews and replies.
+        ActivityNotifier::register();
 
         // Admins and business owners are logged out after a stretch of inactivity, on top of
         // the token expiration everyone has. Sanctum calls this before it refreshes

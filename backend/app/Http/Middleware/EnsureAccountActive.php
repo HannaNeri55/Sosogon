@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureAccountActive
 {
     /** Route names/paths a restricted (suspended or deactivated) account can still use. */
-    private const RESTRICTED_ALLOWED = ['api/v1/logout', 'api/v1/user', 'api/v1/account/*'];
+    private const RESTRICTED_ALLOWED = ['api/v1/logout', 'api/v1/user', 'api/v1/account/*', 'api/v1/notifications', 'api/v1/notifications/*'];
 
     public function handle(Request $request, Closure $next): Response
     {
