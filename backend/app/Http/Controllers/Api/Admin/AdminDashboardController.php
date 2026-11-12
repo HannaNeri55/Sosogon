@@ -10,9 +10,9 @@ use App\Models\BusinessSubmission;
 use App\Models\Destination;
 use App\Models\Event;
 use App\Models\FoodBeverage;
+use App\Models\PageView;
 use App\Models\RetailProduct;
 use App\Models\User;
-use App\Models\VisitorStatistic;
 use Illuminate\Http\JsonResponse;
 
 class AdminDashboardController extends Controller
@@ -28,7 +28,8 @@ class AdminDashboardController extends Controller
             'total_activities' => Activity::count(),
             'pending_submissions' => BusinessSubmission::pending()->count(),
             'total_users' => User::count(),
-            'monthly_views' => VisitorStatistic::where('date', '>=', now()->startOfMonth()->toDateString())->sum('page_views'),
+            // Page views of the public site this month (Sorsogon calendar); see PageViewController.
+            'monthly_views' => PageView::totalSince(now(config('app.local_timezone'))->startOfMonth()->toDateString()),
         ];
 
         $pendingSubmissions = BusinessSubmission::pending()
@@ -42,12 +43,8 @@ class AdminDashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $visitorTrend = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = now()->subDays($i)->toDateString();
-            $views = VisitorStatistic::where('date', $date)->sum('page_views');
-            $visitorTrend[] = ['date' => $date, 'views' => $views];
-        }
+        // Seven days ending today, oldest first, each a whole number (0 when nobody visited).
+        $visitorTrend = PageView::daily(7);
 
         return response()->json([
             'stats' => $stats,
