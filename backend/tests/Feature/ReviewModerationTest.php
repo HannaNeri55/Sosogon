@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Accommodation;
 use App\Models\Destination;
 use App\Models\FoodBeverage;
 use App\Models\Rating;
@@ -86,10 +87,82 @@ class ReviewModerationTest extends TestCase
         $this->assertSame(1, $get('type=food_beverage&filter=unreplied')->json('total'));
         $this->assertSame(0, $get('type=food_beverage&filter=unreplied&rating=1')->json('total'));
         $get('type=food_beverage')->assertJsonPath('summary.total', 2)->assertJsonPath('summary.average', 3);
-        $get('rating=5')->assertJsonPath('summary.total', 3); // The summary describes the selection before rating/response.
+        // The summary follows every filter; the rating chips follow every filter but the rating.
+        $get('rating=5')->assertJsonPath('summary.total', 1)->assertJsonPath('summary.average', 5)
+            ->assertJsonPath('summary.by_rating.5', 1)->assertJsonPath('summary.by_rating.1', 1);
+        $get('filter=unreplied')->assertJsonPath('summary.total', 2)->assertJsonPath('summary.by_rating.1', 0);
         $get('search=Sea%20Grill&filter=replied')->assertJsonPath('data.0.reply.body', 'Sorry, we have added staff.');
 
-        $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?from=2026-11-10&to=2026-11-01')->assertUnprocessable();
+        $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?from=2026-11-10&to=2026-11-01')
+            ->assertUnprocessable()->assertJsonPath('errors.to.0', 'The end date must be on or after the start date.');
+        $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?from=11/01/2026')->assertUnprocessable();
+    }
+
+    public function test_each_rating_shows_only_that_rating_on_every_page_with_matching_counts(): void
+    {
+        $reviewers = collect(range(1, 40))->map(fn ($i) => User::create(['role_id' => $this->ana->role_id, 'name' => "Guest {$i}",
+            'email' => "guest{$i}@example.com", 'password' => bcrypt('password')]));
+        foreach ($reviewers as $i => $guest) {
+            $this->review($guest, $i % 2 ? $this->grill : $this->beach, $i % 5 + 1, "Visit number {$i}.");
+        }
+
+        foreach (range(1, 5) as $score) {
+            $first = $this->actingAs($this->admin)->getJson("/api/v1/admin/guest-reviews?rating={$score}")->assertOk();
+            $this->assertSame(8, $first->json('total'));
+            $this->assertSame(8, $first->json('summary.total'));
+            $this->assertSame([$score], collect($first->json('data'))->pluck('score')->unique()->values()->all());
+        }
+
+        // 16 five-star reviews over two pages: page 2 holds the last one, still five stars.
+        foreach ($reviewers->take(8) as $i => $guest) {
+            $this->review($guest, $i % 2 ? $this->beach : $this->grill, 5, "Second visit {$i}.");
+        }
+        $page2 = $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?rating=5&page=2')->assertOk();
+        $this->assertSame(16, $page2->json('total'));
+        $this->assertSame([5], collect($page2->json('data'))->pluck('score')->unique()->values()->all());
+        $this->assertCount(1, $page2->json('data'));
+
+        $this->assertSame(48, $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews')->json('total'), 'No filters lists every review.');
+        $this->assertSame(48, Rating::count(), 'Filtering changes nothing.');
+    }
+
+    public function test_combined_filters_from_the_brief(): void
+    {
+        $inn = Accommodation::create(['name' => 'Hilltop Inn', 'description' => 'An inn.', 'type' => 'Inn', 'municipality_id' => $this->grill->municipality_id,
+            'address' => 'Bulan', 'latitude' => 12.67, 'longitude' => 123.87, 'price_range' => 'budget', 'status' => 'approved']);
+        $this->review($this->ana, $inn, 5, 'Clean and quiet.', '2026-11-02 03:00');
+        $this->review($this->ben, $inn, 4, 'Good value.', '2026-11-03 03:00');
+        $three = $this->review($this->ana, $this->grill, 3, 'Average food.', '2026-11-04 03:00');
+        $replied = $this->review($this->ben, $this->grill, 3, 'Slow but tasty.', '2026-11-06 03:00');
+        $this->actingAs($this->owner)->postJson("/api/v1/business/reviews/{$replied->id}/reply", ['body' => 'Thank you!'])->assertCreated();
+        $get = fn (string $query) => collect($this->actingAs($this->admin)->getJson("/api/v1/admin/guest-reviews?{$query}")->assertOk()->json('data'))->pluck('id')->all();
+
+        $this->assertCount(1, $get('rating=5&type=accommodation'), 'A: 5 stars + accommodations.');
+        $this->assertSame([$three->id], $get('rating=3&type=food_beverage&filter=unreplied'), 'B: 3 stars + restaurants + not replied.');
+        $this->assertCount(1, $get('search=hilltop&rating=5'), 'C: a listing + 5 stars.');
+        $this->assertSame([$replied->id], $get('from=2026-11-05&to=2026-11-30&filter=replied'), 'D: dates + replied.');
+        $this->assertCount(4, $get(''), 'E: no filters again lists everything.');
+    }
+
+    public function test_dates_are_calendar_days_in_sorsogon(): void
+    {
+        // 2026-11-04 17:30 UTC is 1:30 AM on 5 November in the Philippines.
+        $early = $this->review($this->ana, $this->grill, 4, 'Early breakfast.', '2026-11-04 17:30:00');
+        $this->review($this->ben, $this->grill, 4, 'Late dinner.', '2026-11-05 16:30:00'); // 12:30 AM on 6 November
+
+        $ids = fn (string $query) => collect($this->actingAs($this->admin)->getJson("/api/v1/admin/guest-reviews?{$query}")->json('data'))->pluck('id')->all();
+        $this->assertSame([$early->id], $ids('from=2026-11-05&to=2026-11-05'));
+        $this->assertSame([], $ids('from=2026-11-04&to=2026-11-04'));
+    }
+
+    public function test_reported_reviews_lists_only_reviews_with_a_report(): void
+    {
+        $this->review($this->ben, $this->grill, 1, 'Terrible, never again.');
+        $reported = $this->review($this->ana, $this->grill, 4, 'Visit www.example.com for cheap rooms.');
+        $this->actingAs($this->owner)->postJson("/api/v1/business/reviews/{$reported->id}/report", ['reason' => 'spam', 'details' => 'Advertising a website.'])->assertCreated();
+
+        $reports = $this->actingAs($this->admin)->getJson('/api/v1/admin/review-reports?status=all')->assertOk();
+        $this->assertSame([$reported->id], collect($reports->json('data'))->pluck('rating_id')->all(), 'A 1-star review is not reported by itself.');
     }
 
     public function test_an_owner_reports_a_review_with_evidence_and_only_on_their_own_listing(): void
