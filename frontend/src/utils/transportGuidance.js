@@ -1,8 +1,8 @@
 // Directions between consecutive itinerary stops, matched to how the tourist said they'd get
-// around (the itinerary's transport_preference). Road travel opens a driving route map inside
-// SOSOGON (OpenStreetMap roads, see drivingRoute.js); public transport, which that routing
-// can't cover, links to Google Maps' transit directions. Both use each place's saved
-// coordinates. SOSOGON has no transport data of its own, so this never names a route,
+// around (the itinerary's transport_preference). Every mode opens a road route map inside
+// SOSOGON (OpenStreetMap roads, see drivingRoute.js); for public transport that is the road a
+// jeepney or tricycle takes, without the routes or fares the routing can't know. All use each
+// place's saved coordinates. SOSOGON has no transport data of its own, so this never names a route,
 // operator, fare or schedule; distances and times from the saved itinerary say whether Google
 // Maps measured them or they're estimates.
 import { toCoordinates, googleMapsRouteUrl } from '../components/maps/mapsConfig'
@@ -35,14 +35,16 @@ export const TRANSPORT_GUIDES = {
     overview:
       "Tap Road directions between two stops to see the road route on a map here. It's a car route, not a motorcycle-specific one, so check road conditions and local rules.",
   },
+  // Jeepneys, tricycles, buses and vans use the same roads, so the road route and live navigation
+  // are shown here too; the routing has no transit data, so routes, fares and schedules aren't.
   public_transport: {
     label: 'Public Transportation',
     travelmode: 'transit',
-    inSiteRoute: false,
-    linkLabel: 'Public transport in Google Maps',
+    inSiteRoute: true,
+    linkLabel: 'Road directions',
     time: null,
     overview:
-      "Each link opens Google Maps' public transport directions. Local jeepney, tricycle, bus and van routes in Sorsogon may not be listed there, and SOSOGON doesn't list routes, fares or schedules: ask your accommodation, the municipal tourism office or locals, and confirm the fare before you ride.",
+      "Tap Road directions between two stops to see the road route on a map here, or Navigate here to follow it live. Jeepneys, tricycles, buses and vans use these roads, but SOSOGON doesn't list their routes, fares or schedules: ask your accommodation, the municipal tourism office or locals, and confirm the fare before you ride.",
   },
   no_preference: {
     label: 'No Preference',
