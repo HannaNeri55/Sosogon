@@ -3,7 +3,6 @@ import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { getAccommodations } from '../../api/accommodations'
 import ListingCard from '../../components/cards/ListingCard'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import ListingLayout from '../../components/listing/ListingLayout'
 import FilterChips from '../../components/listing/FilterChips'
 import useUrlFilters from '../../hooks/useUrlFilters'
@@ -65,8 +64,6 @@ export default function Accommodations() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <HeroSlideshow />
-
       <ListingLayout
         eyebrow="Where to stay"
         title="Accommodations"

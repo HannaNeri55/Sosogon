@@ -9,7 +9,6 @@ import SkeletonGrid from '../../components/common/SkeletonCard'
 import EventCalendar from '../../components/calendar/EventCalendar'
 import EventCard from '../../components/events/EventCard'
 import AnnouncementBoard from '../../components/events/AnnouncementBoard'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import { eventCoversDate, formatDateKey } from '../../utils/helpers'
 import useUrlFilters from '../../hooks/useUrlFilters'
 import useListingScroll from '../../hooks/useListingScroll'
@@ -88,13 +87,11 @@ export default function Events() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <HeroSlideshow />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-14">
         <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary-500 mb-2">Happenings</p>
-            <h2 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Events &amp; Announcements</h2>
+            <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">Events &amp; Announcements</h1>
             <p className="mt-3 text-gray-600 leading-relaxed">
               Festivals, fiestas and community activities across Sorsogon, plus the latest news from the tourism office.
             </p>

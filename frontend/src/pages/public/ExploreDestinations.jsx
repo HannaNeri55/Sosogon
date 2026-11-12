@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { getDestinations } from '../../api/destinations'
 import { getCategories } from '../../api/admin'
 import DestinationCard from '../../components/cards/DestinationCard'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import ListingLayout from '../../components/listing/ListingLayout'
 import FilterChips from '../../components/listing/FilterChips'
 import useUrlFilters from '../../hooks/useUrlFilters'
@@ -62,8 +61,6 @@ export default function ExploreDestinations() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <HeroSlideshow />
-
       <ListingLayout
         eyebrow="Explore"
         title="Destinations"

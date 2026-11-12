@@ -39,7 +39,7 @@ export default function ListingLayout({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-14">
       <header className="mb-8 max-w-3xl">
         {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary-500 mb-2">{eyebrow}</p>}
-        <h2 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">{title}</h2>
+        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">{title}</h1>
         {intro && <p className="mt-3 text-gray-600 leading-relaxed">{intro}</p>}
       </header>
 

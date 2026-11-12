@@ -2,7 +2,6 @@ import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { getRetailShops } from '../../api/retailShops'
 import ListingCard from '../../components/cards/ListingCard'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import ListingLayout from '../../components/listing/ListingLayout'
 import useUrlFilters from '../../hooks/useUrlFilters'
 import useListingScroll from '../../hooks/useListingScroll'
@@ -53,8 +52,6 @@ export default function RetailShops() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <HeroSlideshow />
-
       <ListingLayout
         eyebrow="Shop local"
         title="Pasalubong Shops"
