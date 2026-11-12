@@ -82,7 +82,7 @@ export default function Navbar() {
     setAccountOpen(false)
     setMobileOpen(false)
     await logout()
-    navigate('/')
+    navigate('/login', { replace: true })
   }
 
   const initial = user?.name?.charAt(0)?.toUpperCase() || '?'

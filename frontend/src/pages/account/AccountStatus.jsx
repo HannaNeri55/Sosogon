@@ -251,7 +251,7 @@ export default function AccountStatus() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/')
+    navigate('/login', { replace: true })
   }
 
   if (error) return <div className="p-8 text-center text-gray-600">Your account status could not be loaded. Please refresh the page.</div>

@@ -17,7 +17,7 @@ export default function OwnerPortalLayout({ portalLabel, homePath, navLinks }) {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/')
+    navigate('/login', { replace: true })
   }
 
   return (
