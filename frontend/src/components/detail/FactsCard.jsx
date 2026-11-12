@@ -1,17 +1,23 @@
 // frontend/src/components/detail/FactsCard.jsx
+import { lazy, Suspense, useState } from "react";
 import { FiGlobe, FiNavigation } from "react-icons/fi";
 import { normalizeUrl } from "../../utils/helpers";
-import { googleMapsDirectionsUrl, toCoordinates } from "../maps/mapsConfig";
+import { toCoordinates } from "../maps/mapsConfig";
+
+// The navigation map pulls in Leaflet, so it loads only when someone asks for directions.
+const NavigationView = lazy(() => import("../maps/NavigationView"));
 
 /**
  * "Plan your visit" card: the place's key facts (address, contact, hours,
  * price, …) plus Get Directions / Visit Website. Facts with no value are
- * skipped; `children` adds page-specific actions below.
+ * skipped; `children` adds page-specific actions below. Get Directions opens
+ * live turn-by-turn navigation on the site (the same as on itinerary stops),
+ * from the visitor's GPS position to `name` at the listing's saved point.
  */
-export default function FactsCard({ title = "Plan your visit", facts = [], latitude, longitude, website, children }) {
+export default function FactsCard({ title = "Plan your visit", facts = [], name, latitude, longitude, website, children }) {
   // Directions go to this listing's own saved coordinates; no button without a valid point.
   const point = toCoordinates(latitude, longitude);
-  const directionsUrl = point ? googleMapsDirectionsUrl(point) : null;
+  const [navigating, setNavigating] = useState(false);
   const websiteUrl = normalizeUrl(website);
   const shown = facts.filter((fact) => fact.value !== null && fact.value !== undefined && fact.value !== "");
 
@@ -37,12 +43,12 @@ export default function FactsCard({ title = "Plan your visit", facts = [], latit
         </dl>
       )}
 
-      {(directionsUrl || websiteUrl || children) && (
+      {(point || websiteUrl || children) && (
         <div className="mt-5 flex flex-col gap-2.5">
-          {directionsUrl && (
-            <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="btn-primary w-full">
+          {point && (
+            <button type="button" onClick={() => setNavigating(true)} className="btn-primary w-full">
               <FiNavigation size={16} aria-hidden="true" /> Get Directions
-            </a>
+            </button>
           )}
           {websiteUrl && (
             <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full">
@@ -51,6 +57,12 @@ export default function FactsCard({ title = "Plan your visit", facts = [], latit
           )}
           {children}
         </div>
+      )}
+
+      {navigating && (
+        <Suspense fallback={null}>
+          <NavigationView stops={[{ name: name || "this place", point }]} startIndex={0} onClose={() => setNavigating(false)} />
+        </Suspense>
       )}
     </div>
   );
