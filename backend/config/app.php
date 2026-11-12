@@ -84,6 +84,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Times are stored in UTC; this is the calendar people in Sorsogon use, for filters by date.
+    'local_timezone' => env('APP_LOCAL_TIMEZONE', 'Asia/Manila'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

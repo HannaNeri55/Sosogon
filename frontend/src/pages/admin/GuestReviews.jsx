@@ -1,5 +1,5 @@
 // frontend/src/pages/admin/GuestReviews.jsx
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FiAlertTriangle, FiEyeOff, FiFlag, FiMessageSquare, FiSearch, FiStar, FiX } from 'react-icons/fi'
 import { getAdminGuestReviews, getReviewReports } from '../../api/admin'
@@ -56,21 +56,27 @@ export default function GuestReviews() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [pendingReports, setPendingReports] = useState(0)
+  // Only the newest request may show its results: an older one that answers late (filters
+  // changed in the meantime) is ignored instead of replacing the list with stale reviews.
+  const latestRequest = useRef(0)
+  const dateError = from && to && from > to ? 'The end date must be on or after the start date.' : null
 
-  const load = useCallback(
-    () =>
-      getAdminGuestReviews({
-        type: type || undefined, rating: rating || undefined, filter, search: search || undefined,
-        from: from || undefined, to: to || undefined, page,
+  const load = useCallback(() => {
+    const request = ++latestRequest.current
+    // An impossible range isn't sent; the page explains it instead (and any older request is ignored).
+    if (dateError) return
+    getAdminGuestReviews({
+      type: type || undefined, rating: rating || undefined, filter, search: search || undefined,
+      from: from || undefined, to: to || undefined, page,
+    })
+      .then((result) => {
+        if (request !== latestRequest.current) return
+        setData(result)
+        setError(false)
       })
-        .then((result) => {
-          setData(result)
-          setError(false)
-        })
-        .catch(() => setError(true))
-        .finally(() => setLoading(false)),
-    [type, rating, filter, search, from, to, page]
-  )
+      .catch(() => request === latestRequest.current && setError(true))
+      .finally(() => request === latestRequest.current && setLoading(false))
+  }, [type, rating, filter, search, from, to, page, dateError])
 
   const loadPending = useCallback(() => {
     getReviewReports({ status: 'pending' }).then((result) => setPendingReports(result.counts?.pending ?? 0)).catch(() => {})
@@ -165,7 +171,7 @@ export default function GuestReviews() {
                 <StatCard icon={FiMessageSquare} label="Without an owner response" value={summary.unreplied.toLocaleString()} note={percent(summary.unreplied)} tone="sky" />
               </div>
               <p className="mt-2 mb-5 text-xs text-gray-400">
-                Figures cover the selected listing type, search and dates{filtered ? '' : ' (all reviews)'}.
+                {filtered ? 'Figures match all the filters below.' : 'Figures cover all reviews.'}
               </p>
             </>
           )}
@@ -227,8 +233,9 @@ export default function GuestReviews() {
                 <span className="flex items-center gap-2">
                   <input type="date" value={from} max={to || undefined} onChange={(e) => update(setFrom)(e.target.value)} className="input-field min-w-0" aria-label="From date" />
                   <span className="text-gray-400">–</span>
-                  <input type="date" value={to} min={from || undefined} onChange={(e) => update(setTo)(e.target.value)} className="input-field min-w-0" aria-label="To date" />
+                  <input type="date" value={to} min={from || undefined} onChange={(e) => update(setTo)(e.target.value)} className="input-field min-w-0" aria-label="To date" aria-invalid={!!dateError} />
                 </span>
+                {dateError && <span className="mt-1 block text-xs text-red-600" role="alert">{dateError}</span>}
               </label>
             </div>
 
@@ -239,7 +246,11 @@ export default function GuestReviews() {
             )}
           </div>
 
-          {loading ? (
+          {dateError ? (
+            <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-8 text-center text-gray-500">
+              Choose an end date on or after the start date to see reviews.
+            </div>
+          ) : loading ? (
             <LoadingSpinner size="lg" />
           ) : error ? (
             <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-8 text-center">
