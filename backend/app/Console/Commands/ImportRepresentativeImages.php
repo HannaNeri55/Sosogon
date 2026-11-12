@@ -13,13 +13,17 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Gives activities and room types without an image one from database/seeders/data/
- * representative_images.php: either a photo from the destination's own gallery (copied, so
- * removing it from the gallery never breaks the activity), or an openly licensed Wikimedia
- * Commons photo that represents the activity or room category, downloaded and optimized like
- * any upload. Commons photos are credited "Representative photo: author / Wikimedia Commons,
- * licence" with their source page. Records that already have an image are never changed, so
- * running it again only fills what's still missing.
+ * Gives activities, room types and accommodation options (rooms) without an image one from
+ * database/seeders/data/representative_images.php: either a photo from the destination's own
+ * gallery (copied, so removing it from the gallery never breaks the activity), or an openly
+ * licensed Wikimedia Commons photo that represents the activity or room category, downloaded and
+ * optimized like any upload. Commons photos are credited "Representative photo: author / Wikimedia
+ * Commons, licence" with their source page. Records that already have an image are never changed,
+ * so running it again only fills what's still missing.
+ *
+ * Options are found by listing and option name and stored in a folder named after them. A Commons
+ * photo already in a record's folder is reused, so the same files serve another database (e.g.
+ * the live one) without downloading them again.
  */
 class ImportRepresentativeImages extends Command
 {
@@ -27,7 +31,7 @@ class ImportRepresentativeImages extends Command
         {--dry-run : List what would be stored without downloading or writing}
         {--data= : Mapping file to use instead of database/seeders/data/representative_images.php}';
 
-    protected $description = 'Fill missing activity and room type images (destination photos or credited representative Commons photos)';
+    protected $description = 'Fill missing activity, room type and accommodation option images (destination photos or credited representative Commons photos)';
 
     private const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 
@@ -41,8 +45,9 @@ class ImportRepresentativeImages extends Command
     {
         $data = require $this->option('data') ?: database_path('seeders/data/representative_images.php');
         $dry = (bool) $this->option('dry-run');
-        $stats = ['copied' => 0, 'downloaded' => 0, 'kept' => 0, 'skipped' => 0];
-        $this->lookUpCommons(collect($data['activities'])->merge($data['room_types'])->pluck('commons')->filter()->unique()->values()->all());
+        $stats = ['copied' => 0, 'downloaded' => 0, 'kept' => 0, 'skipped' => 0, 'reused' => 0];
+        $this->lookUpCommons(collect($data['activities'])->merge($data['room_types'])->merge($data['rooms'] ?? [])
+            ->pluck('commons')->filter()->unique()->values()->all());
 
         foreach ($data['activities'] as $id => $entry) {
             $activity = DB::table('activities')->where('id', $id)->first();
@@ -57,7 +62,7 @@ class ImportRepresentativeImages extends Command
 
                 continue;
             }
-            $stored = $this->store($entry, "activities/{$id}", (int) $activity->destination_id, $images, $dry);
+            $stored = $this->storedIn("activities/{$id}", $entry) ?? $this->store($entry, "activities/{$id}", (int) $activity->destination_id, $images, $dry);
             if ($stored === null) {
                 $stats['skipped']++;
 
@@ -84,7 +89,7 @@ class ImportRepresentativeImages extends Command
 
                 continue;
             }
-            $stored = $this->store($entry, "accommodation-room-types/{$type->id}", null, $images, $dry);
+            $stored = $this->storedIn("accommodation-room-types/{$type->id}", $entry) ?? $this->store($entry, "accommodation-room-types/{$type->id}", null, $images, $dry);
             if ($stored === null) {
                 $stats['skipped']++;
 
@@ -102,9 +107,60 @@ class ImportRepresentativeImages extends Command
             $this->line("Room type {$key}: {$stored['kind']} ".($stored['image_path'] ?? ''));
         }
 
+        foreach ($data['rooms'] ?? [] as $key => $entry) {
+            [$listing, $name] = explode('|', $key, 2);
+            $roomId = DB::table('accommodation_rooms')
+                ->join('accommodations', 'accommodations.id', '=', 'accommodation_rooms.accommodation_id')
+                ->where('accommodations.name', $listing)->where('accommodation_rooms.name', $name)
+                ->value('accommodation_rooms.id');
+            if (! $roomId) {
+                $this->warn("Option {$key}: not found or renamed, skipped.");
+                $stats['skipped']++;
+
+                continue;
+            }
+            if (DB::table('accommodation_room_images')->where('room_id', $roomId)->exists()) {
+                $stats['kept']++;
+
+                continue;
+            }
+            $directory = 'accommodation-rooms/representative/'.Str::slug("{$listing} {$name}");
+            $stored = $this->storedIn($directory, $entry) ?? $this->store($entry, $directory, null, $images, $dry);
+            if ($stored === null) {
+                $stats['skipped']++;
+
+                continue;
+            }
+            $stats[$stored['kind']]++;
+            if (! $dry) {
+                DB::table('accommodation_room_images')->insert(['room_id' => $roomId, 'is_primary' => true, 'sort_order' => 0, 'created_at' => now(), 'updated_at' => now()]
+                    + Arr::only($stored, ['image_path', 'thumbnail_path', 'image_credit', 'image_source_url']));
+            }
+            $this->line("Option {$key}: {$stored['kind']} ".($stored['image_path'] ?? ''));
+        }
+
         $this->info(collect($stats)->map(fn ($n, $k) => "{$n} {$k}")->implode(', '));
 
         return self::SUCCESS;
+    }
+
+    /** A Commons photo already stored in the record's folder (by a run against another database), with its credit. */
+    private function storedIn(string $directory, array $entry): ?array
+    {
+        $disk = Storage::disk('public');
+        $image = collect($disk->files($directory))->first(fn ($path) => str_ends_with($path, '.webp'));
+        $file = $this->commons[$entry['commons'] ?? ''] ?? null;
+        if (! $image || ! $file || ! $disk->exists("{$directory}/thumbnails/".basename($image))) {
+            return null;
+        }
+
+        return ['kind' => 'reused', 'image_path' => $image, 'thumbnail_path' => "{$directory}/thumbnails/".basename($image),
+            'image_credit' => $this->credit($file), 'image_source_url' => $file['page']];
+    }
+
+    private function credit(array $file): string
+    {
+        return 'Representative photo: '.($file['author'] !== '' ? $file['author'] : 'Unknown author')." / Wikimedia Commons, {$file['licence']}";
     }
 
     /** Stores the entry's image under $directory; null when it can't (reason already printed). */
@@ -146,7 +202,7 @@ class ImportRepresentativeImages extends Command
 
             return null;
         }
-        $credit = 'Representative photo: '.($file['author'] !== '' ? $file['author'] : 'Unknown author')." / Wikimedia Commons, {$file['licence']}";
+        $credit = $this->credit($file);
         if ($dry) {
             return ['kind' => 'downloaded', 'image_path' => "{$directory}/…", 'image_credit' => $credit, 'image_source_url' => $file['page']];
         }
@@ -174,7 +230,7 @@ class ImportRepresentativeImages extends Command
     }
 
     /**
-     * Looks up each Commons file's 1600 px download URL, page, author and licence (50 titles per
+     * Looks up each Commons file's 1280 px download URL, page, author and licence (50 titles per
      * request). Files without an open licence (CC0, public domain, CC BY, CC BY-SA) are left out.
      */
     private function lookUpCommons(array $titles): void
@@ -183,7 +239,7 @@ class ImportRepresentativeImages extends Command
         foreach (array_chunk($titles, 50) as $chunk) {
             $response = $this->commonsRequest()->timeout(30)->get(self::COMMONS_API, [
                 'action' => 'query', 'titles' => implode('|', $chunk), 'prop' => 'imageinfo', 'iiprop' => 'url|size|extmetadata',
-                'iiurlwidth' => 1600, 'format' => 'json', 'formatversion' => 2,
+                'iiurlwidth' => 1280, 'format' => 'json', 'formatversion' => 2,
             ]);
             if (! $response->successful()) {
                 $this->warn('Commons lookup failed (HTTP '.$response->status().'); those files are skipped.');
@@ -209,8 +265,9 @@ class ImportRepresentativeImages extends Command
     }
 
     /**
-     * The 1600 px thumbnail, or, when the original is no wider than that (Commons then hands back
-     * the original, whose downloads it throttles), the largest standard thumbnail step below it.
+     * The 1280 px thumbnail (a standard size: Commons throttles odd sizes it must render first), or,
+     * when the original is no wider than that (Commons then hands back the original, whose downloads
+     * it throttles), the largest standard thumbnail step below it.
      */
     private function thumbnailUrl(array $info): string
     {
@@ -219,7 +276,7 @@ class ImportRepresentativeImages extends Command
             return $url;
         }
         $original = strtok($info['url'], '?');
-        $step = collect([1280, 960, 500])->first(fn ($width) => $width < ($info['width'] ?? 0));
+        $step = collect([960, 500])->first(fn ($width) => $width < ($info['width'] ?? 0));
         if ($step === null || ! str_contains($original, '/wikipedia/commons/')) {
             return $original;
         }
