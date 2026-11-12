@@ -145,6 +145,40 @@ class RepresentativeImageImportTest extends TestCase
         $this->getJson('/api/v1/activities/2')->assertOk()->assertJsonPath('image_credit', $kayak->image_credit);
     }
 
+    public function test_options_without_a_photo_get_one_found_by_name_and_reused_by_another_database(): void
+    {
+        $room = fn (string $name) => DB::table('accommodation_rooms')->insertGetId(['accommodation_id' => 7, 'name' => $name, 'room_number' => $name,
+            'status' => 'approved', 'created_at' => now(), 'updated_at' => now()]);
+        $garden = $room('Garden Room');
+        $suite = $room('Suite');
+        DB::table('accommodation_room_images')->insert(['room_id' => $suite, 'image_path' => 'accommodation-rooms/own.webp', 'thumbnail_path' => 'accommodation-rooms/thumbnails/own.webp', 'is_primary' => true,
+            'sort_order' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        file_put_contents($this->dataFile, '<?php return '.var_export(['activities' => [], 'room_types' => [], 'rooms' => [
+            'Test Inn|Garden Room' => ['commons' => 'File:Garden room.jpg'],
+            'Test Inn|Suite' => ['commons' => 'File:Suite.jpg'],
+            'Test Inn|Renamed Room' => ['commons' => 'File:Other.jpg'],
+        ]], true).';');
+
+        $this->artisan('images:representative', ['--data' => $this->dataFile])
+            ->expectsOutputToContain('0 copied, 1 downloaded, 1 kept, 1 skipped, 0 reused')
+            ->assertSuccessful();
+
+        $image = DB::table('accommodation_room_images')->where('room_id', $garden)->first();
+        $this->assertStringStartsWith('accommodation-rooms/representative/test-inn-garden-room/', $image->image_path);
+        $this->assertSame('Representative photo: Jane Doe / Wikimedia Commons, CC BY-SA 4.0', $image->image_credit);
+        $this->assertTrue((bool) $image->is_primary);
+        Storage::disk('public')->assertExists([$image->image_path, $image->thumbnail_path]);
+        $this->assertSame(['accommodation-rooms/own.webp'], DB::table('accommodation_room_images')->where('room_id', $suite)->pluck('image_path')->all());
+
+        // Another database (the live one) with the files already on disk: nothing is downloaded again.
+        DB::table('accommodation_room_images')->where('room_id', $garden)->delete();
+        $this->artisan('images:representative', ['--data' => $this->dataFile])
+            ->expectsOutputToContain('0 copied, 0 downloaded, 1 kept, 1 skipped, 1 reused')
+            ->assertSuccessful();
+        $this->assertSame($image->image_path, DB::table('accommodation_room_images')->where('room_id', $garden)->value('image_path'));
+        Http::assertSentCount(3);
+    }
+
     public function test_running_again_changes_nothing_and_dry_run_writes_nothing(): void
     {
         $this->artisan('images:representative', ['--data' => $this->dataFile, '--dry-run' => true])->assertSuccessful();

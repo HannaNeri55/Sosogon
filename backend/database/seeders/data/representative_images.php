@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Images for activities and room types that had none, used by `php artisan images:representative`.
+ * Images for activities, room types and accommodation options that had none, used by
+ * `php artisan images:representative`.
  *
  * - 'destination_image' => a destination_images id: a photo from the place's own gallery that shows
  *   this activity (copied, keeping its credit). 'destination' names the gallery when the photo
@@ -134,5 +135,67 @@ return [
         '31|Cabana' => ['commons' => 'File:Koh Lipe Thailand. Koh Lipe Beach Resort, Koh Lipe Island 02.jpg'],
         '27|Balay Galak' => ['commons' => 'File:Gabaldon,NuevaEcijajf9342 14.JPG'],
         '33|Air-conditioned Casita' => ['commons' => 'File:Iririki Island Resort, Vanuatu (28658919924).jpg'],
+    ],
+    // Accommodation options (rooms) without a photo, by 'listing name|option name': a photo that
+    // represents the kind of room, not the room itself (credited "Representative photo: …").
+    'rooms' => [
+        'Arthur’s Resort|Standard Room' => ['commons' => 'File:Elegant hotel room with dining setup and cozy ambiance near the city center in the early morning.jpg'],
+        'Arthur’s Resort|Family Cottage' => ['commons' => 'File:Summerville Beach Resort - Porto de Galinhas, Pernambuco, Brasil.jpg'],
+        'BANTI AquaGrove|Harmony Hut' => ['commons' => 'File:A Hut with Bamboos and Woods - Sir Charles Beach, Winneba.jpg'],
+        'BANTI AquaGrove|Seabreeze Terrace' => ['commons' => 'File:Guest Room of Wyndham Sun Moon Lake 03 20260209.jpg'],
+        'BANTI AquaGrove|Bauy\'s Tranquility Attic' => ['commons' => 'File:SRMPS - Hostel Room.jpg'],
+        'BANTI AquaGrove|Dancalan Tree House' => ['commons' => 'File:Riemer\'s Classic A-Frame cabin Sunset View Beach.jpg'],
+        'Birbeck Lodge|Standard Room' => ['commons' => 'File:Guest Room of Wyndham Sun Moon Lake 01 20260209.jpg'],
+        'Birbeck Lodge|Group Room' => ['commons' => 'File:BC - Cabin 7 Bedroom (5857339143).jpg'],
+        'Blue Tupaz Inn & Restobar|Standard Room' => ['commons' => 'File:Guest Room of Wyndham Sun Moon Lake 02 20260209.jpg'],
+        'Blue Tupaz Inn & Restobar|Twin Room' => ['commons' => 'File:Two single beds in a room with a window and simple decor ready for guests at a hotel.jpg'],
+        'Bulusan Tourist Inn|Double Room with Balcony' => ['commons' => 'File:Hotel-suite-bedroom.jpg'],
+        'Bulusan Tourist Inn|Family Room' => ['commons' => 'File:Family Room.jpg'],
+        'Bulusan Tourist Inn|Bunk and Bed Room' => ['commons' => 'File:Bedroom of Muttseehütte.jpg'],
+        'Bulusan Tourist Inn|Bunk Room' => ['commons' => 'File:Typical dorm room.jpg'],
+        'Burabod Seaside resort|Seaside Room' => ['commons' => 'File:Hotel Makár, Pécs, Double room -central-superior - panoramio.jpg'],
+        'Burabod Seaside resort|Family Cottage' => ['commons' => 'File:Sajek Valley 20161205.jpg'],
+        'Casa Issabella Airbnb, Transient & Apartment Rental|Room for 2 guests' => ['commons' => 'File:Bed at Tianhe Hotel in Shenzhen.jpg'],
+        'Cozynest Sorsogon|Left Cabin' => ['commons' => 'File:FLSP FL- Cabin 3 (25258528703).jpg'],
+        'Cozynest Sorsogon|Right Cabin' => ['commons' => 'File:FLSP FL - Cabin 3 (25861334916).jpg'],
+        'Cozynest Sorsogon|Group Cabin' => ['commons' => 'File:FLSP FL - Cabin 3 (25861331166).jpg'],
+        'Cristina\'s Resort & Hotel|Bali Villa 1' => ['commons' => 'File:Le Meridien Nirwana Bali One bedroom villa (3031923188) (2).jpg'],
+        'Cristina\'s Resort & Hotel|Bali Villa 2' => ['commons' => 'File:The Reserve Garden Villa at Paradisus by Meliá Bali.jpg'],
+        'Gabz\'K Hotel & Resort|Double Room' => ['commons' => 'File:Millennium Mitsui Garden Hotel Tokyo Superior Double bedroom 20170318-001.jpg'],
+        'Gabz\'K Hotel & Resort|Twin Room' => ['commons' => 'File:Bed at Omenahotelli Tampere.jpg'],
+        'Gabz\'K Hotel & Resort|Triple Room' => ['commons' => 'File:Bridal Tea House Hotel - Modern Family Room.jpg'],
+        'Gabz\'K Hotel & Resort|Family Room' => ['commons' => 'File:Bunk beds (panoramio (1297)).jpg'],
+        'Gipsy Adovis Hotel|A/C Triple Sharing' => ['commons' => 'File:Hotel Room San Francisco California June 1987 - 02.jpg'],
+        'Gipsy Adovis Hotel|A/C Standard' => ['commons' => 'File:Burlington Hotel Bed (3171851812).jpg'],
+        'Gipsy Adovis Hotel|A/C Family Room' => ['commons' => 'File:1981 - Room - Two Double Beds - Allentown Hilton - Allentown PA.jpg'],
+        'Gipsy Adovis Hotel|Open Cottage' => ['commons' => 'File:Nipa hut from Mabini shrine.JPG'],
+        'IM Inn Sorsogon - Iconic Mardini Inn|Standard Twin / Double' => ['commons' => 'File:Japanese & Western-style Room (21917594071).jpg'],
+        'IM Inn Sorsogon - Iconic Mardini Inn|Deluxe Twin' => ['commons' => 'File:Twin guest room Hilton Kota Kinabalu 20251207 182012.jpg'],
+        'IM Inn Sorsogon - Iconic Mardini Inn|Deluxe Double' => ['commons' => 'File:Mitsui Garden Hotel Kanazawa Moderate Double bedroom 20200103-001.jpg'],
+        'IM Inn Sorsogon - Iconic Mardini Inn|Quads' => ['commons' => 'File:Japanese & Western-style Room (21720066938).jpg'],
+        'JALU Vacation House|Whole house' => ['commons' => 'File:Modern living room with stylish furniture and a view of the outdoors in a cozy apartment setting.jpg'],
+        'JV Transient House Sorsogon|Whole house' => ['commons' => 'File:Ovolo 2AR living room.jpg'],
+        'La Bella Luna Hotel|Double Room' => ['commons' => 'File:Nagoya Kanko Hotel Deluxe Double bedroom 20150607-001.jpg'],
+        'La Bella Luna Hotel|Twin Room' => ['commons' => 'File:Guest Room of Mandarin Oriental, Taipei 01.jpg'],
+        'Melad Hotel|Standard Quad Room' => ['commons' => 'File:Kalyani PWD Inspection Bungalow near Kalyani Lake, Nadia 07.jpg'],
+        'Melad Hotel|Family Room' => ['commons' => 'File:Güzel İzmir Oteli triple room 2013.jpg'],
+        'Ohana Hometel|Deluxe Room' => ['commons' => 'File:The Thousand Kyoto the thousand double bedroom 20200411-001.jpg'],
+        'Peaks&Pedals Transient|Third-floor unit' => ['commons' => 'File:Living room in apartment of Condomínio do Edifício Zaher, Le Blond, Rio de Janeiro, Brazil.jpg'],
+        'Severosa Resort|Garden Room' => ['commons' => 'File:Hotel Star, Appartment No. 13, Parents bed room - panoramio.jpg'],
+        'Severosa Resort|Family Room' => ['commons' => 'File:Bridal Tea House Hotel - Classic Family Room.jpg'],
+        'Siama Surf Resort|Beachfront Room' => ['commons' => 'File:Le Meridien Nirwana Bali One bedroom villa (3031082811).jpg'],
+        'Siama Surf Resort|Family Room' => ['commons' => 'File:Restored Shashi Kapoor Room.jpg'],
+        'Sibol|Solo package' => ['commons' => 'File:Nipa hut.JPG'],
+        'Sibol|Couple package' => ['commons' => 'File:Nipa huts 01.jpg'],
+        'Sibol|Small group package' => ['commons' => 'File:Nipa Hut taken at Magdalena Laguna Philippines on 2011 April photo 1.jpg'],
+        'Sibol|Barkada package' => ['commons' => 'File:Gabaldon,NuevaEcijajf9366 04.JPG'],
+        'Sibol|Family package' => ['commons' => 'File:Le Meridien Nirwana Bali Villa private pavilion (3031083451).jpg'],
+        'Sorsogon NBS Transient and Tours|Twin Room' => ['commons' => 'File:Twin guest room Hilton Kota Kinabalu 20251207 182020.jpg'],
+        'Sorsogon NBS Transient and Tours|Double Room' => ['commons' => 'File:Richmond Hotel Premier Asakusa International Standard Room One-Bed 20160502-001.jpg'],
+        'Tanayad Campsite|A-Frame Cabin' => ['commons' => 'File:A-Frame Cabin Tye Haus (Unsplash).jpg'],
+        'Twin\'s Heart Transient House|Studio room' => ['commons' => 'File:The former residence of marquis Maeda bed room.jpg'],
+        'Vivencia Hometel|Single Room' => ['commons' => 'File:500 West Hotel single room 1.JPG'],
+        'Vivencia Hometel|Double Room' => ['commons' => 'File:Mandarin Oriental, Miami, January 2011 - Hotel room beds.jpg'],
+        'Vivencia Hometel|Double Room with Sink' => ['commons' => 'File:Interiors of Heritage Bungalow no 12 at Takdah or Tukdah in Darjeeling district 15.jpg'],
     ],
 ];
