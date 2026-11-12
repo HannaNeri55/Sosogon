@@ -83,6 +83,13 @@ return [
 
     // Wikimedia Commons (images:representative). Their User-Agent policy asks automated clients to
     // include a way to reach them (a project URL or email); add one here to avoid being throttled.
+    // Browser push notifications. Generate the pair once with Minishlink\WebPush\VAPID::createVapidKeys().
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:'.env('MAIL_FROM_ADDRESS', 'admin@sosogon.local')),
+    ],
+
     'wikimedia' => [
         'user_agent' => env('WIKIMEDIA_USER_AGENT', 'SOSOGON-tourism-system/1.0 (image import)'),
     ],

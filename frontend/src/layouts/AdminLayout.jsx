@@ -25,6 +25,7 @@ import {
   FiClipboard,
 } from 'react-icons/fi'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
+import NotificationBell from '../components/notifications/NotificationBell'
 
 const linkClass = ({ isActive }) =>
   `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -296,6 +297,10 @@ export default function AdminLayout() {
           <span className="font-heading font-bold">
             STIM Admin
           </span>
+
+          <div className="ml-auto">
+            <NotificationBell tone="dark" />
+          </div>
         </header>
 
         {/* Desktop header */}
@@ -312,6 +317,7 @@ export default function AdminLayout() {
             >
               <FiExternalLink size={14} aria-hidden="true" /> View site
             </a>
+            <NotificationBell />
             <span className="h-5 w-px bg-gray-200" aria-hidden="true" />
             <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 font-semibold">

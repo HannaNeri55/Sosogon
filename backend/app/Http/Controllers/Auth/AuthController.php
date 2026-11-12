@@ -7,6 +7,7 @@ use App\Http\Requests\Business\OwnerApplicationRules;
 use App\Models\BusinessOwnerApplication;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Notify;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +74,14 @@ class AuthController extends Controller
             }
 
             throw $e;
+        }
+
+        if ($isOwner) {
+            Notify::admins('owner_registered', 'New business owner registration',
+                "{$user->name} registered {$validated['business_name']} (".Notify::typeLabel($user->business_type).') and is waiting for approval.',
+                '/admin/owner-registrations');
+        } else {
+            Notify::admins('tourist_registered', 'New tourist account', "{$user->name} ({$user->email}) created a tourist account.", '/admin/users');
         }
 
         // If business owner, don't return a token (they can't log in yet)

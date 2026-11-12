@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Admin\AdminAccountEnforcementController;
 use App\Http\Controllers\Controller;
 use App\Models\AccountViolation;
+use App\Notifications\AccountStatusNotification;
 use App\Services\AccountEnforcementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,14 +57,14 @@ class AccountStatusController extends Controller
             'suspended_until' => $user->suspended_until?->toIso8601String(),
             'role' => $user->role?->name,
             'violations' => $violations,
-            'notifications' => $user->notifications()->latest()->limit(30)->get(['id', 'data', 'read_at', 'created_at']),
-            'unread_notifications' => $user->unreadNotifications()->count(),
+            'notifications' => $user->notifications()->where('type', AccountStatusNotification::class)->latest()->limit(30)->get(['id', 'data', 'read_at', 'created_at']),
+            'unread_notifications' => $user->unreadNotifications()->where('type', AccountStatusNotification::class)->count(),
         ]);
     }
 
     public function markNotificationsRead(Request $request): JsonResponse
     {
-        $request->user()->unreadNotifications()->update(['read_at' => now()]);
+        $request->user()->unreadNotifications()->where('type', AccountStatusNotification::class)->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Notifications marked as read.']);
     }

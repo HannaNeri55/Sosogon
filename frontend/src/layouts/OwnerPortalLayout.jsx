@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ListingWarningBanner from '../components/business/ListingWarningBanner'
+import NotificationBell from '../components/notifications/NotificationBell'
 import { FiUser, FiLogOut, FiChevronDown, FiExternalLink, FiShield } from 'react-icons/fi'
 
 /**
@@ -49,57 +50,60 @@ export default function OwnerPortalLayout({ portalLabel, homePath, navLinks }) {
             ))}
           </nav>
 
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Account menu"
-              aria-expanded={menuOpen}
-              className="flex items-center gap-2 px-1 sm:px-2 py-1.5 rounded-full text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <span className="w-8 h-8 rounded-full bg-accent-400 text-gray-900 flex items-center justify-center font-bold">
-                {user?.name?.[0]?.toUpperCase() || <FiUser size={14} />}
-              </span>
-              <span className="hidden xl:inline font-medium">{user?.name}</span>
-              <FiChevronDown size={14} className="hidden sm:block text-gray-400" aria-hidden="true" />
-            </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <NotificationBell />
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Account menu"
+                aria-expanded={menuOpen}
+                className="flex items-center gap-2 px-1 sm:px-2 py-1.5 rounded-full text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <span className="w-8 h-8 rounded-full bg-accent-400 text-gray-900 flex items-center justify-center font-bold">
+                  {user?.name?.[0]?.toUpperCase() || <FiUser size={14} />}
+                </span>
+                <span className="hidden xl:inline font-medium">{user?.name}</span>
+                <FiChevronDown size={14} className="hidden sm:block text-gray-400" aria-hidden="true" />
+              </button>
 
-            {menuOpen && (
-              <>
-                <button
-                  className="fixed inset-0 z-10 cursor-default"
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Close menu"
-                />
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-gray-200/70 shadow-(--shadow-card-hover) py-1.5 z-20">
-                  <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
-                    <p className="text-xs text-gray-500">{portalLabel}</p>
-                  </div>
-                  <Link
-                    to="/account/status"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <FiShield size={14} aria-hidden="true" /> Account Health
-                    {user?.account_state === 'warning' && <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Warning</span>}
-                  </Link>
-                  <a
-                    href="/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <FiExternalLink size={14} aria-hidden="true" /> View public site
-                  </a>
+              {menuOpen && (
+                <>
                   <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <FiLogOut size={14} aria-hidden="true" /> Logout
-                  </button>
-                </div>
-              </>
-            )}
+                    className="fixed inset-0 z-10 cursor-default"
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="Close menu"
+                  />
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-gray-200/70 shadow-(--shadow-card-hover) py-1.5 z-20">
+                    <div className="px-4 py-2 border-b border-gray-100 mb-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+                      <p className="text-xs text-gray-500">{portalLabel}</p>
+                    </div>
+                    <Link
+                      to="/account/status"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FiShield size={14} aria-hidden="true" /> Account Health
+                      {user?.account_state === 'warning' && <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Warning</span>}
+                    </Link>
+                    <a
+                      href="/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <FiExternalLink size={14} aria-hidden="true" /> View public site
+                    </a>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                    >
+                      <FiLogOut size={14} aria-hidden="true" /> Logout
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>

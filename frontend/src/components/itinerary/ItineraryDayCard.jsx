@@ -278,23 +278,20 @@ function PicksList({ title, options, picks }) {
   )
 }
 
-// repeat: the same place as the stop before (lunch or check-in back at the stay), shown without
-// the photo and description it already had. action: a button shown beside the place's name.
-function StopDetails({ stop, compact = false, repeat = false, action = null }) {
+// action: a button shown beside the place's name.
+function StopDetails({ stop, compact = false, action = null }) {
   const { listing, link, badge } = placeFor(stop)
 
   return (
     <div className={`flex flex-col sm:flex-row gap-4 ${compact ? '' : 'p-3 sm:p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors'}`}>
-      {!repeat && (
-        <div className={`${compact ? 'w-full h-28 sm:w-20 sm:h-20' : 'w-full h-32 sm:w-24 sm:h-24'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
-          <img
-            src={getImageUrl(listing?.images?.[0]?.image_path)}
-            alt={listing?.name || 'Stop'}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      )}
+      <div className={`${compact ? 'w-full h-28 sm:w-20 sm:h-20' : 'w-full h-32 sm:w-24 sm:h-24'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
+        <img
+          src={getImageUrl(listing?.images?.[0]?.image_path)}
+          alt={listing?.name || 'Stop'}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -331,7 +328,7 @@ function StopDetails({ stop, compact = false, repeat = false, action = null }) {
           )}
         </div>
 
-        {listing?.description && !repeat && (
+        {listing?.description && (
           <p className={`text-sm text-gray-500 mt-2 leading-relaxed ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>{listing.description}</p>
         )}
 
@@ -609,7 +606,8 @@ export default function ItineraryDayCard({
           const isLast = index === rows.length - 1
           const next = rows[index + 1]?.stop
 
-          const repeat = samePlace(rows[index - 1]?.stop, stop)
+          // Already there when it's the same place as the stop before: no directions to it.
+          const alreadyThere = samePlace(rows[index - 1]?.stop, stop)
 
           return (
             <div key={stop.id ?? index} className="flex gap-3 sm:gap-4">
@@ -623,10 +621,8 @@ export default function ItineraryDayCard({
               <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-5'}`}>
                 <StopDetails
                   stop={stop}
-                  repeat={repeat}
                   action={
-                    // Directions to this stop, unless the tourist is already there (same place as the stop before).
-                    roadTravel && !repeat && stop.id != null && navIndexFor(stop) >= 0 ? (
+                    roadTravel && !alreadyThere && stop.id != null && navIndexFor(stop) >= 0 ? (
                       <button
                         type="button"
                         onClick={() => setNavigatingTo(navIndexFor(stop))}

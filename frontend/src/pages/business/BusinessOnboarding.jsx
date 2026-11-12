@@ -4,6 +4,7 @@ import { FiLogOut } from 'react-icons/fi'
 import { getBusinessDashboard, getBusinessSubmissions } from '../../api/business'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import NotificationBell from '../../components/notifications/NotificationBell'
 import SubmitListing from './SubmitListing'
 import SubmissionStatus from './SubmissionStatus'
 import ApplicationStatus from './ApplicationStatus'
@@ -43,9 +44,12 @@ export default function BusinessOnboarding() {
             <Link to="/" className="flex items-center gap-2">
               <img src="/images/Logo.png" alt="Sorsogon" className="h-9 w-auto" />
             </Link>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-              <FiLogOut size={16} /> Logout
-            </button>
+            <div className="flex items-center gap-3">
+              <NotificationBell />
+              <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+                <FiLogOut size={16} /> Logout
+              </button>
+            </div>
           </div>
         </header>
         <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
@@ -72,9 +76,12 @@ export default function BusinessOnboarding() {
           <Link to="/" className="flex items-center gap-2">
             <img src="/images/Logo.png" alt="Sorsogon" className="h-9 w-auto" />
           </Link>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-            <FiLogOut size={16} /> Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+              <FiLogOut size={16} /> Logout
+            </button>
+          </div>
         </div>
       </header>
 

@@ -4,12 +4,15 @@ import { loginUser, registerUser, logoutUser, getUser } from '../api/auth'
 import useIdleLogout from '../hooks/useIdleLogout'
 import { expiredLoginPathFor } from '../utils/session'
 import { clearOfflineCopies } from '../utils/offlineItineraries'
+import { stopPushForThisBrowser } from '../utils/pushNotifications'
 import toast from 'react-hot-toast'
 
 const AuthContext = createContext(null)
 
 // Revokes the token on the server (best effort) and forgets it in this tab.
 async function endSession() {
+  // While still signed in: this browser stops getting this account's alerts.
+  await stopPushForThisBrowser().catch(() => {})
   try {
     await logoutUser()
   } catch {
