@@ -2,8 +2,9 @@
 
 /**
  * Wikimedia Commons photos for the demo accommodations in demo_accommodations.php, by listing slug:
- * 'gallery' (public domain or CC0, first is the cover) and 'rooms' by room name (first is the room's
- * cover; credited on the room photo). Representative photos, not of these places; each is used once.
+ * 'gallery' (public domain or CC0; the first is the cover and shows the building or a bedroom, never
+ * just the sea) and 'rooms' by room name (first is the room's cover; credited on the room photo).
+ * Representative photos, not of these places; each is used once.
  */
 return [
     'pantalan-bay-hotel' => [
@@ -52,10 +53,10 @@ return [
     ],
     'lola-pacing-homestay' => [
         'gallery' => [
+            'File:Bed in hotel room 6.jpg',
             'File:6979Damortis, Rosario Santo Tomas 09.jpg',
             'File:6979Damortis, Rosario Santo Tomas 16.jpg',
             'File:Restaurant interior Licq-Atherey.jpg',
-            'File:Bed in hotel room 6.jpg',
             'File:00397jfRiver Life Resort Restaurant Pulilan Bulacanfvf 07.JPG',
         ],
         'rooms' => [
@@ -82,10 +83,10 @@ return [
     ],
     'villareal-surfside-lodge' => [
         'gallery' => [
+            'File:Interior of a room of Travelodge Bath City Centre 2025-07-22.jpg',
             'File:On the beach Philippines. (22429530845).jpg',
             'File:Beach in Camarines Norte, Philippines, facing Pacific Ocean.jpg',
             'File:6979Damortis, Rosario Santo Tomas 19.jpg',
-            'File:Interior of a room of Travelodge Bath City Centre 2025-07-22.jpg',
             'File:Beach Fishing in the Philippines.jpg',
         ],
         'rooms' => [
@@ -97,9 +98,9 @@ return [
     ],
     'haraya-hot-spring-resort' => [
         'gallery' => [
+            'File:Lebanon hotel swimming pool.jpg',
             'File:4330Turumba Springs Resort 13.jpg',
             'File:4330Turumba Springs Resort 21.jpg',
-            'File:Lebanon hotel swimming pool.jpg',
             'File:6979Damortis, Rosario Santo Tomas 20.jpg',
             'File:JP Okinawa Hewitt Resort Naha Okinawa Hotel breakfast buffet restaurant February 2026 N13P 02.jpg',
         ],
@@ -112,9 +113,9 @@ return [
     ],
     'tablac-port-transient-house' => [
         'gallery' => [
+            'File:Hotel Room (32259665218).jpg',
             'File:Currimao, Ilocos Norte. Philippines. (22807262443).jpg',
             'File:6979Damortis, Rosario Santo Tomas 24.jpg',
-            'File:Hotel Room (32259665218).jpg',
             'File:Hotel bedroom windows (Unsplash).jpg',
             'File:Beach fishermen Philippines. (40464197344).jpg',
         ],
@@ -126,9 +127,9 @@ return [
     ],
     'dancalan-whaleside-beach-resort' => [
         'gallery' => [
+            'File:GX-219 - White modern home with lush tropical plants and palm trees surrounding a paved courtyard under bright sunlight.jpg',
             'File:Beach in Initao, Misamis Oriental, Philippines 1.jpg',
             'File:Beach in Initao, Misamis Oriental, Philippines 2.jpg',
-            'File:Duka Bay Resort, Duka Beach, Medina, Misamis Oriental, Philippines 07.jpg',
             'File:6979Damortis, Rosario Santo Tomas 17.jpg',
             'File:00397jfRiver Life Resort Restaurant Pulilan Bulacanfvf 08.JPG',
         ],
@@ -141,9 +142,9 @@ return [
     ],
     'casa-dapdap-guesthouse' => [
         'gallery' => [
+            'File:Hotel Gillow Room.jpg',
             'File:6979Damortis, Rosario Santo Tomas 05.jpg',
             'File:Lobby, Mampei Hotel - Karuizawa, Japan - DSC02094.JPG',
-            'File:Hotel Gillow Room.jpg',
             'File:6979Damortis, Rosario Santo Tomas 10.jpg',
             'File:00397jfRiver Life Resort Restaurant Pulilan Bulacanfvf 09.JPG',
         ],
@@ -156,10 +157,10 @@ return [
     ],
     'perlas-mangrove-homestay' => [
         'gallery' => [
+            'File:Interior of a room of The Market House, Reading 2025-05-03.jpg',
             'File:Taboc Beach (Opol Beach), Opol, Misamis Oriental, Philippines 01.jpg',
             'File:Fishing boat. (Banca) Philippines (15351613644).jpg',
             'File:6979Damortis, Rosario Santo Tomas 23.jpg',
-            'File:Interior of a room of The Market House, Reading 2025-05-03.jpg',
             'File:00397jfRiver Life Resort Restaurant Pulilan Bulacanfvf 17.JPG',
         ],
         'rooms' => [
@@ -170,11 +171,11 @@ return [
     ],
     'casa-vieja-heritage-inn' => [
         'gallery' => [
+            'File:09327jfLuneta Hotel Philippines Ermita Manilafvf 03.jpg',
             'File:09327jfLuneta Hotel Philippines Ermita Manilafvf 11.jpg',
             'File:09342jfLuneta Hotel Philippines Ermita Manilafvf 09.jpg',
             'File:Lobby, Mampei Hotel - Karuizawa, Japan - DSC02097.JPG',
             'File:Lobby, Mampei Hotel - Karuizawa, Japan - DSC02103.JPG',
-            'File:09327jfLuneta Hotel Philippines Ermita Manilafvf 03.jpg',
         ],
         'rooms' => [
             'Heritage Double Room' => ['File:Living room (5798988763).jpg', 'File:Living room of the largest presidential suite on one floor.jpg'],

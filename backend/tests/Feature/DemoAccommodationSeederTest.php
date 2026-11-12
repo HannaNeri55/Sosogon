@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Accommodation;
+use App\Models\AccommodationImage;
 use Database\Seeders\DemoAccommodationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -119,6 +120,32 @@ class DemoAccommodationSeederTest extends TestCase
         $this->assertSame(2, DB::table('accommodation_room_images')->where('room_id', $missing->room_id)->count());
         $this->assertSame(1, DB::table('accommodation_room_images')->where('room_id', $missing->room_id)->where('is_primary', true)->count());
         $this->assertSame(88, DB::table('accommodation_room_images')->count());
+    }
+
+    public function test_running_it_again_brings_an_existing_gallery_in_line_with_the_data_file(): void
+    {
+        $this->seed(DemoAccommodationSeeder::class);
+        $listing = Accommodation::where('name', 'Dancalan Whaleside Beach Resort')->firstOrFail();
+        $cover = $listing->images()->where('is_primary', true)->value('image_path');
+        // As if it was seeded before the cover changed: another photo first, an old photo still there,
+        // and a photo an admin added later.
+        $listing->images()->update(['is_primary' => false]);
+        $listing->images()->where('sort_order', 4)->update(['is_primary' => true]);
+        $old = AccommodationImage::create(['accommodation_id' => $listing->id, 'image_path' => 'accommodations/demo-dancalan-whaleside-beach-resort/old-sea.webp',
+            'thumbnail_path' => 'accommodations/demo-dancalan-whaleside-beach-resort/thumbnails/old-sea.webp', 'sort_order' => 5]);
+        $admin = AccommodationImage::create(['accommodation_id' => $listing->id, 'image_path' => 'accommodations/30123/admin-upload.webp',
+            'thumbnail_path' => 'accommodations/30123/thumbnails/admin-upload.webp', 'sort_order' => 6]);
+        $this->downloads = 0;
+
+        $this->seed(DemoAccommodationSeeder::class);
+
+        $images = $listing->images()->orderByDesc('is_primary')->orderBy('sort_order')->get();
+        $this->assertSame($cover, $images->first()->image_path);
+        $this->assertSame(1, $images->where('is_primary', true)->count());
+        $this->assertModelMissing($old);
+        $this->assertModelExists($admin);
+        $this->assertSame([0, 1, 2, 3, 4], $images->where('id', '!=', $admin->id)->pluck('sort_order')->map(fn ($n) => (int) $n)->values()->all());
+        $this->assertSame(0, $this->downloads);
     }
 
     public function test_photos_already_on_disk_are_reused_for_another_database(): void
