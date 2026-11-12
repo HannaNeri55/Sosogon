@@ -197,7 +197,7 @@ export default function GuestReviews() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-              <label className="text-sm lg:col-span-4">
+              <label className="text-sm sm:col-span-2 lg:col-span-6">
                 <span className="block font-medium text-gray-700 mb-1">Search</span>
                 <span className="relative block">
                   <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
@@ -220,7 +220,7 @@ export default function GuestReviews() {
                   ))}
                 </select>
               </label>
-              <label className="text-sm lg:col-span-2">
+              <label className="text-sm lg:col-span-3">
                 <span className="block font-medium text-gray-700 mb-1">Owner response</span>
                 <select value={filter} onChange={(e) => update(setFilter)(e.target.value)} className="input-field">
                   <option value="all">Any</option>
@@ -228,15 +228,16 @@ export default function GuestReviews() {
                   <option value="unreplied">Not replied</option>
                 </select>
               </label>
-              <label className="text-sm lg:col-span-3">
+              {/* Its own wide row, so both full dates (mm/dd/yyyy) always fit. */}
+              <div className="text-sm sm:col-span-2 lg:col-span-6">
                 <span className="block font-medium text-gray-700 mb-1">Submitted</span>
-                <span className="flex items-center gap-2">
-                  <input type="date" value={from} max={to || undefined} onChange={(e) => update(setFrom)(e.target.value)} className="input-field min-w-0" aria-label="From date" />
-                  <span className="text-gray-400">–</span>
-                  <input type="date" value={to} min={from || undefined} onChange={(e) => update(setTo)(e.target.value)} className="input-field min-w-0" aria-label="To date" aria-invalid={!!dateError} />
+                <span className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <input type="date" value={from} max={to || undefined} onChange={(e) => update(setFrom)(e.target.value)} className="input-field w-full min-w-0" aria-label="From date" />
+                  <span className="text-gray-400">to</span>
+                  <input type="date" value={to} min={from || undefined} onChange={(e) => update(setTo)(e.target.value)} className="input-field w-full min-w-0" aria-label="To date" aria-invalid={!!dateError} />
                 </span>
                 {dateError && <span className="mt-1 block text-xs text-red-600" role="alert">{dateError}</span>}
-              </label>
+              </div>
             </div>
 
             {filtered && (
@@ -275,11 +276,7 @@ export default function GuestReviews() {
                         review={review}
                         aside={
                           <>
-                            {review.reply ? (
-                              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Replied</Badge>
-                            ) : (
-                              <Badge className="border-amber-200 bg-amber-50 text-amber-800">Awaiting owner response</Badge>
-                            )}
+                            {review.reply && <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Replied</Badge>}
                             {report && (
                               <button type="button" onClick={() => showTab('reports')} className="inline-flex" title="Open reported reviews">
                                 <Badge className={REPORT_STATUS[report.status]?.className}>
