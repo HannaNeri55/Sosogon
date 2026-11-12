@@ -6,7 +6,6 @@ import { FiTarget, FiMapPin, FiUsers, FiHome, FiCoffee, FiShoppingBag, FiArrowRi
 import { getDestinations } from '../../api/destinations'
 import { getAccommodations } from '../../api/accommodations'
 import { getFoodBeverages } from '../../api/foodBeverages'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import Reveal from '../../components/common/Reveal'
 import SectionHeader from '../../components/common/SectionHeader'
 
@@ -58,7 +57,14 @@ export default function About() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <HeroSlideshow />
+      {/* The big photo hero is only on the home page; here a plain page heading. */}
+      <header className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 lg:pt-14 pb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary-500 mb-2">About</p>
+        <h1 className="text-3xl sm:text-4xl font-heading font-bold text-gray-900">About Sorsogon Tourism</h1>
+        <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+          The province at a glance, what this platform is for, and who keeps its information accurate.
+        </p>
+      </header>
 
       {/* ==================== AT A GLANCE ==================== */}
       <section className="bg-white border-b border-gray-100">

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { FiSearch } from 'react-icons/fi'
 import { getFoodBeverages } from '../../api/foodBeverages'
 import ListingCard from '../../components/cards/ListingCard'
-import HeroSlideshow from '../../components/common/HeroSlideshow'
 import ListingLayout from '../../components/listing/ListingLayout'
 import FilterChips from '../../components/listing/FilterChips'
 import useUrlFilters from '../../hooks/useUrlFilters'
@@ -64,8 +63,6 @@ export default function FoodBeverage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <HeroSlideshow />
-
       <ListingLayout
         eyebrow="Taste"
         title="Food & Beverage"
