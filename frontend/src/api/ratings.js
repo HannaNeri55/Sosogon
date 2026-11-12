@@ -34,3 +34,9 @@ export const updateRatingReply = async (ratingId, body) => {
   const response = await api.put(`/business/reviews/${ratingId}/reply`, { body })
   return response.data
 }
+
+// Report a review on the owner's own listing to the Tourism Office. formData: reason, details, evidence (optional file)
+export const reportRating = async (ratingId, formData) => {
+  const response = await api.post(`/business/reviews/${ratingId}/report`, formData, { headers: { 'Content-Type': undefined } })
+  return response.data
+}

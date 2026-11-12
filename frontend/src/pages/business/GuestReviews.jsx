@@ -8,6 +8,7 @@ import Pagination from '../../components/common/Pagination'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { StarDisplay } from '../../components/common/StarRating'
 import OwnerReply from '../../components/common/OwnerReply'
+import ReportReviewButton from '../../components/business/ReportReviewButton'
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -139,6 +140,10 @@ export default function GuestReviews({ portalLabel }) {
                       {!review.reply && (
                         <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Needs reply</span>
                       )}
+                      {review.hidden_at && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Hidden by the Tourism Office</span>
+                      )}
+                      <ReportReviewButton review={review} onReported={load} />
                     </div>
                   </div>
                   <p className="text-sm text-gray-700">{comment || <span className="italic text-gray-400">No written comment.</span>}</p>

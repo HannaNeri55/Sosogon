@@ -9,12 +9,14 @@ use App\Models\FoodBeverage;
 use App\Models\Rating;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Read-only overview of reviews and owner replies across every listing type.
- * There are no moderation rules yet, so this deliberately offers no edits.
+ * Every guest review and owner response across all listing types, with filters and a summary of
+ * the reviews the filters select. Reviews are never edited here; reported reviews are decided in
+ * AdminReviewReportController.
  */
 class AdminReviewController extends Controller
 {
@@ -26,32 +28,38 @@ class AdminReviewController extends Controller
         'retail_product' => RetailProduct::class,
     ];
 
+    /** The listing type key (accommodation, destination, …) for a rateable class. */
+    public static function typeKey(?string $class): ?string
+    {
+        return array_flip(self::TYPES)[$class] ?? null;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'type' => 'nullable|in:'.implode(',', array_keys(self::TYPES)),
             'filter' => 'nullable|in:all,replied,unreplied',
-            'source' => 'nullable|in:all,demo,genuine',
+            'rating' => 'nullable|integer|between:1,5',
+            'search' => 'nullable|string|max:100',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date|after_or_equal:from',
         ]);
 
-        $reviews = Rating::query()
-            ->when($validated['type'] ?? null, fn ($query, $type) => $query->where('rateable_type', self::TYPES[$type]))
+        // Listing type, search and dates choose the reviews the summary describes; rating and
+        // owner response narrow the list below it.
+        $selected = $this->selected($validated);
+
+        $reviews = (clone $selected)
+            ->when($validated['rating'] ?? null, fn ($query, $score) => $query->where('score', $score))
             ->when(($validated['filter'] ?? null) === 'replied', fn ($query) => $query->has('reply'))
             ->when(($validated['filter'] ?? null) === 'unreplied', fn ($query) => $query->doesntHave('reply'))
-            // Seeded sample reviews carry the "Demo Review:" comment prefix.
-            ->when(($validated['source'] ?? null) === 'demo', fn ($query) => $query->where('comment', 'like', 'Demo Review:%'))
-            ->when(($validated['source'] ?? null) === 'genuine', fn ($query) => $query->where(
-                fn ($q) => $q->whereNull('comment')->orWhere('comment', 'not like', 'Demo Review:%')
-            ))
-            ->with(['user:id,name', 'reply.user:id,name', 'rateable:id,name'])
+            ->with(['user:id,name', 'reply.user:id,name', 'rateable:id,name', 'latestReport'])
+            ->withCount('reports')
             ->latest()
             ->orderByDesc('id')
             ->paginate(15);
 
-        $typeKeys = array_flip(self::TYPES);
-        $reviews->getCollection()->each(
-            fn (Rating $rating) => $rating->setAttribute('listing_type', $typeKeys[$rating->rateable_type] ?? null)
-        );
+        $reviews->getCollection()->each(fn (Rating $rating) => $rating->setAttribute('listing_type', self::typeKey($rating->rateable_type)));
 
         $counts = Rating::selectRaw('rateable_type, count(*) as total')
             ->groupBy('rateable_type')
@@ -59,6 +67,28 @@ class AdminReviewController extends Controller
 
         return response()->json($reviews->toArray() + [
             'counts' => collect(self::TYPES)->map(fn ($class) => (int) ($counts[$class] ?? 0)),
+            'summary' => [
+                'total' => (clone $selected)->count(),
+                'average' => round((float) (clone $selected)->avg('score'), 1),
+                'negative' => (clone $selected)->where('score', '<=', 2)->count(),
+                'unreplied' => (clone $selected)->doesntHave('reply')->count(),
+                'by_rating' => collect(range(5, 1))->mapWithKeys(fn ($score) => [$score => (clone $selected)->where('score', $score)->count()]),
+            ],
         ]);
+    }
+
+    private function selected(array $validated): Builder
+    {
+        $search = trim((string) ($validated['search'] ?? ''));
+        $like = '%'.addcslashes($search, '%_\\').'%';
+
+        return Rating::query()
+            ->when($validated['type'] ?? null, fn ($query, $type) => $query->where('rateable_type', self::TYPES[$type]))
+            ->when($validated['from'] ?? null, fn ($query, $from) => $query->whereDate('created_at', '>=', $from))
+            ->when($validated['to'] ?? null, fn ($query, $to) => $query->whereDate('created_at', '<=', $to))
+            ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q
+                ->where('comment', 'like', $like)
+                ->orWhereHas('user', fn ($user) => $user->where('name', 'like', $like))
+                ->orWhereHasMorph('rateable', array_values(self::TYPES), fn ($listing) => $listing->where('name', 'like', $like))));
     }
 }

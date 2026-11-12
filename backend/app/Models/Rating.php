@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
@@ -15,12 +16,17 @@ class Rating extends Model
 
     protected function casts(): array
     {
-        return ['is_demo' => 'boolean'];
+        return ['is_demo' => 'boolean', 'hidden_at' => 'datetime'];
     }
 
-    /** Reviews the public may see and that count toward public averages. */
+    /**
+     * Reviews the public may see and that count toward public averages: not hidden by the Tourism
+     * Office after a report (see ReviewReport).
+     */
     public function scopeVisible(Builder $query): Builder
     {
+        $query->whereNull($query->qualifyColumn('hidden_at'));
+
         return config('reviews.show_demo') ? $query : $query->where('is_demo', false);
     }
 
@@ -38,5 +44,16 @@ class Rating extends Model
     public function reply(): HasOne
     {
         return $this->hasOne(RatingReply::class);
+    }
+
+    /** Owners' reports about this review, and the Tourism Office's decisions. */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(ReviewReport::class);
+    }
+
+    public function latestReport(): HasOne
+    {
+        return $this->hasOne(ReviewReport::class)->latestOfMany();
     }
 }

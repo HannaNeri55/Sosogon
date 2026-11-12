@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
 use App\Http\Controllers\Api\Admin\AdminRetailProductController;
 use App\Http\Controllers\Api\Admin\AdminRetailShopController;
 use App\Http\Controllers\Api\Admin\AdminReviewController;
+use App\Http\Controllers\Api\Admin\AdminReviewReportController;
 use App\Http\Controllers\Api\Admin\AdminSubmissionController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminViolationController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Api\Business\OwnerApplicationController;
 use App\Http\Controllers\Api\Business\RatingReplyController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopOwnerController;
 use App\Http\Controllers\Api\Business\RetailShop\RetailShopProductController;
+use App\Http\Controllers\Api\Business\ReviewReportController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Public\AccommodationController;
 use App\Http\Controllers\Api\Public\ActivityController;
@@ -174,6 +176,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
             Route::get('/reviews', [RatingReplyController::class, 'index']);
             Route::post('/reviews/{rating}/reply', [RatingReplyController::class, 'store'])->whereNumber('rating');
             Route::put('/reviews/{rating}/reply', [RatingReplyController::class, 'update'])->whereNumber('rating');
+            Route::post('/reviews/{rating}/report', [ReviewReportController::class, 'store'])->whereNumber('rating')->middleware('throttle:10,1');
 
             Route::prefix('accommodation')->middleware('business.type:accommodation')->group(function () {
                 Route::get('/', [AccommodationOwnerController::class, 'show']);
@@ -236,6 +239,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
 
         // Read-only overview of guest reviews and owner replies across all listing types
         Route::get('/guest-reviews', [AdminReviewController::class, 'index']);
+        // Reviews reported by listing owners, and the Tourism Office's decisions
+        Route::get('/review-reports', [AdminReviewReportController::class, 'index']);
+        Route::put('/review-reports/{id}', [AdminReviewReportController::class, 'update']);
+        Route::get('/review-reports/{id}/evidence', [AdminReviewReportController::class, 'evidence']);
 
         // Content CRUD — explicitly named to avoid colliding with the public "show" route
         // names of the same resources (e.g. public `destinations.show` vs this `destinations.show`).

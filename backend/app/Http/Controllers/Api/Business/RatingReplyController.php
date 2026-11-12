@@ -40,7 +40,7 @@ class RatingReplyController extends Controller
         $reviews = (clone $owned)
             ->when($request->filter === 'unreplied', fn ($query) => $query->doesntHave('reply'))
             ->when($request->filter === 'replied', fn ($query) => $query->has('reply'))
-            ->with(['user:id,name', 'reply', 'rateable:id,name'])
+            ->with(['user:id,name', 'reply', 'rateable:id,name', 'latestReport'])
             ->latest()
             ->orderByDesc('id')
             ->paginate(10);

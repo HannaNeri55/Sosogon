@@ -791,9 +791,27 @@ export const requestFoodBeverageRevisionChanges = async (id, notes) => {
    return response.data
  }
 
-// ==================== GUEST REVIEWS (read-only) ====================
+// ==================== GUEST REVIEWS ====================
 
+// params: type, rating, filter (replied/unreplied), search, from, to, page
 export const getAdminGuestReviews = async (params = {}) => {
   const response = await api.get('/admin/guest-reviews', { params })
+  return response.data
+}
+
+// Reviews reported by listing owners. params: status (pending, reviewed, action_taken, dismissed, all), page
+export const getReviewReports = async (params = {}) => {
+  const response = await api.get('/admin/review-reports', { params })
+  return response.data
+}
+
+// payload: { status: reviewed | action_taken | dismissed, decision_note }
+export const decideReviewReport = async (id, payload) => {
+  const response = await api.put(`/admin/review-reports/${id}`, payload)
+  return response.data
+}
+
+export const downloadReviewReportEvidence = async (id) => {
+  const response = await api.get(`/admin/review-reports/${id}/evidence`, { responseType: 'blob' })
   return response.data
 }
