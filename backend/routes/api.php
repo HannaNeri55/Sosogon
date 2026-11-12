@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\Public\EventController;
 use App\Http\Controllers\Api\Public\FoodBeverageController;
 use App\Http\Controllers\Api\Public\HeroSlideController;
 use App\Http\Controllers\Api\Public\LocationController;
+use App\Http\Controllers\Api\Public\PageViewController;
 use App\Http\Controllers\Api\Public\PhotoCreditController;
 use App\Http\Controllers\Api\Public\RetailProductController;
 use App\Http\Controllers\Api\Public\RetailShopController;
@@ -66,17 +67,20 @@ Route::prefix('v1')->group(function () {
         Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     });
 
+    // A visitor opened a page of the public website (sent once per navigation; see PageViewController)
+    Route::post('/page-views', [PageViewController::class, 'store'])->middleware('throttle:60,1');
+
     // Public listings
     Route::get('/destinations', [DestinationController::class, 'index']);
-    Route::get('/destinations/{id}', [DestinationController::class, 'show'])->name('destinations.show')->middleware('track.visitor');
+    Route::get('/destinations/{id}', [DestinationController::class, 'show'])->name('destinations.show');
     Route::get('/accommodations', [AccommodationController::class, 'index']);
-    Route::get('/accommodations/{id}', [AccommodationController::class, 'show'])->name('accommodations.show')->middleware('track.visitor');
+    Route::get('/accommodations/{id}', [AccommodationController::class, 'show'])->name('accommodations.show');
     Route::get('/food-beverages', [FoodBeverageController::class, 'index']);
-    Route::get('/food-beverages/{id}', [FoodBeverageController::class, 'show'])->name('food-beverages.show')->middleware('track.visitor');
+    Route::get('/food-beverages/{id}', [FoodBeverageController::class, 'show'])->name('food-beverages.show');
     Route::get('/retail-products', [RetailProductController::class, 'index']);
-    Route::get('/retail-products/{id}', [RetailProductController::class, 'show'])->name('retail-products.show')->middleware('track.visitor');
+    Route::get('/retail-products/{id}', [RetailProductController::class, 'show'])->name('retail-products.show');
     Route::get('/retail-shops', [RetailShopController::class, 'index']);
-    Route::get('/retail-shops/{id}', [RetailShopController::class, 'show'])->name('retail-shops.show')->middleware('track.visitor');
+    Route::get('/retail-shops/{id}', [RetailShopController::class, 'show'])->name('retail-shops.show');
     Route::get('/activities/{id}', [ActivityController::class, 'show']);
     Route::get('/amenity-suggestions', [AmenitySuggestionController::class, 'index']);
     Route::get('/photo-credits', [PhotoCreditController::class, 'index']);

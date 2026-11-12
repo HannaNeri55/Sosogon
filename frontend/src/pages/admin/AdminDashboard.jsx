@@ -22,16 +22,18 @@ import StatCard from '../../components/common/StatCard'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 function VisitorTrendChart({ data }) {
-  const max = Math.max(...data.map((d) => d.views), 1)
-  const total = data.reduce((sum, d) => sum + d.views, 0)
+  // Daily page views as numbers: the bars, the labels and the weekly total all come from these.
+  const days = data.map((d) => ({ ...d, views: Number(d.views) || 0 }))
+  const max = Math.max(...days.map((d) => d.views), 1)
+  const total = days.reduce((sum, d) => sum + d.views, 0)
 
   return (
     <div>
       <p className="mb-5 text-sm text-gray-500">
-        <span className="font-heading text-2xl font-bold text-gray-900 tabular-nums">{total}</span> page views this week
+        <span className="font-heading text-2xl font-bold text-gray-900 tabular-nums">{total.toLocaleString()}</span> page views in the last 7 days
       </p>
       <div className="flex items-end justify-between gap-2 sm:gap-4 h-40 border-b border-gray-100">
-        {data.map((d) => (
+        {days.map((d) => (
           <div key={d.date} className="group flex-1 flex flex-col items-center justify-end h-full gap-1.5">
             <span className="text-xs font-semibold text-gray-700 tabular-nums [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
               {d.views}
@@ -45,9 +47,9 @@ function VisitorTrendChart({ data }) {
         ))}
       </div>
       <div className="mt-2 flex justify-between gap-2 sm:gap-4">
-        {data.map((d) => (
+        {days.map((d) => (
           <span key={d.date} className="flex-1 text-center text-xs font-medium text-gray-500">
-            {new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })}
+            {new Date(`${d.date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' })}
           </span>
         ))}
       </div>

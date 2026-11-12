@@ -3,7 +3,6 @@
 use App\Http\Middleware\EnsureBusinessType;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\SecurityHeadersMiddleware;
-use App\Http\Middleware\TrackVisitorMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -24,7 +23,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'business.type' => EnsureBusinessType::class,
             'owner.approved' => \App\Http\Middleware\EnsureOwnerApproved::class,
             'account.active' => \App\Http\Middleware\EnsureAccountActive::class,
-            'track.visitor' => TrackVisitorMiddleware::class,
         ]);
 
         // Hosts like Render terminate HTTPS at their proxy; trusting it lets Laravel see the

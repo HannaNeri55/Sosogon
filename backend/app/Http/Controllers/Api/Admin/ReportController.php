@@ -4,18 +4,18 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Destination;
+use App\Models\PageView;
 use App\Models\SearchLog;
-use App\Models\VisitorStatistic;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
 {
     public function overview(): JsonResponse
     {
-        $totalViews = VisitorStatistic::where('date', '>=', now()->subDays(30)->toDateString())->sum('page_views');
+        $totalViews = PageView::daily(30)->sum('views');
         $totalSearches = SearchLog::where('created_at', '>=', now()->subDays(30))->count();
 
         return response()->json([
@@ -26,16 +26,9 @@ class ReportController extends Controller
 
     public function visitors(Request $request): JsonResponse
     {
-        $days = $request->input('days', 30);
-        $startDate = now()->subDays($days)->toDateString();
+        $days = max(1, min(366, (int) $request->input('days', 30)));
 
-        $data = VisitorStatistic::where('date', '>=', $startDate)
-            ->select(DB::raw('date, SUM(page_views) as total_views'))
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        return response()->json($data);
+        return response()->json($this->dailyViews($days));
     }
 
     public function popular(Request $request): JsonResponse
@@ -67,9 +60,7 @@ class ReportController extends Controller
     public function export(Request $request)
     {
         $days = 30;
-        $visitors = VisitorStatistic::where('date', '>=', now()->subDays($days)->toDateString())
-            ->select(DB::raw('date, SUM(page_views) as total_views'))
-            ->groupBy('date')->orderBy('date')->get();
+        $visitors = $this->dailyViews($days);
 
         $pdf = Pdf::loadView('reports.analytics', [
             'generatedAt' => now(),
@@ -86,5 +77,11 @@ class ReportController extends Controller
         ])->setPaper('a4');
 
         return $pdf->download('reports-analytics-'.now()->format('Y-m-d').'.pdf');
+    }
+
+    /** Page views of the public site per day (Sorsogon calendar), oldest first, with 0 for quiet days. */
+    private function dailyViews(int $days)
+    {
+        return PageView::daily($days)->map(fn ($day) => (object) ['date' => $day['date'], 'total_views' => $day['views']]);
     }
 }
