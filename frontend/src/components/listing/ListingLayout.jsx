@@ -35,6 +35,13 @@ export default function ListingLayout({
   const count = pagination?.total ?? items.length;
   const refreshing = loading && items.length > 0;
 
+  // The sidebar stays in view while scrolling the results, so a new municipality is often picked
+  // far down the page: go back up to the heading, filters and new result count.
+  const selectMunicipality = (municipalityId) => {
+    updateFilters({ municipality_id: municipalityId });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-14">
       <header className="mb-8 max-w-3xl">
@@ -61,8 +68,8 @@ export default function ListingLayout({
         >
           <LocationFilterSidebar
             municipalityId={filters.municipality_id}
-            onSelectMunicipality={(id) => updateFilters({ municipality_id: id })}
-            onClearLocation={() => updateFilters({ municipality_id: "" })}
+            onSelectMunicipality={selectMunicipality}
+            onClearLocation={() => selectMunicipality("")}
             search={filters.q}
             onSearchChange={(q) => updateFilters({ q })}
             sort={filters.sort}
