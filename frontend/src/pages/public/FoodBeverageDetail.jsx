@@ -110,6 +110,7 @@ export default function FoodBeverageDetail() {
                 ),
               },
             ]}
+            name={item.name}
             latitude={item.latitude}
             longitude={item.longitude}
             website={item.website}

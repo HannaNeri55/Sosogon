@@ -91,6 +91,7 @@ export default function EventDetail() {
                 ),
               },
             ]}
+            name={event.title}
             latitude={event.latitude}
             longitude={event.longitude}
           />

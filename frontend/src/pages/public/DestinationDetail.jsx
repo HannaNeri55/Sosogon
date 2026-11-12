@@ -106,6 +106,7 @@ export default function DestinationDetail() {
                       : entranceFeeLabel(destination.entrance_fee),
                   }]),
             ]}
+            name={destination.name}
             latitude={destination.latitude}
             longitude={destination.longitude}
             website={destination.website}

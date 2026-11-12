@@ -105,6 +105,7 @@ export default function RetailShopDetail() {
                 ? [{ icon: FiShoppingBag, label: 'Typical Souvenir Spend', value: approxRange(estimateOf(shop, 'item_price'), ' per person') }]
                 : []),
             ]}
+            name={shop.name}
             latitude={shop.latitude}
             longitude={shop.longitude}
             website={shop.website}
