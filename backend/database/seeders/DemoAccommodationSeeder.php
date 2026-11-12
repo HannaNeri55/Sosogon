@@ -28,8 +28,9 @@ use RuntimeException;
  * Commons files (data/demo_accommodation_photos.php). They are made-up businesses; that data file
  * is the record of which listings are demo data.
  *
- * Idempotent: listings are matched by name and town, rooms by name, and photos are only added to a
- * listing or room that has none. Photos are stored in fixed folders (accommodations/demo-<slug>,
+ * Idempotent: listings are matched by name and town, rooms by name. A listing's gallery is kept in
+ * line with the data file (its order and cover too); room photos are only added to a room that
+ * lacks them. Photos are stored in fixed folders (accommodations/demo-<slug>,
  * accommodation-rooms/demo-<slug>-<room>), so a file already on disk is reused instead of being
  * downloaded again (running it against another database needs no new downloads). Other
  * accommodations are never touched.
@@ -46,7 +47,7 @@ class DemoAccommodationSeeder extends Seeder
     /** Commons file details by title: url, page, author, licence. */
     private array $commons = [];
 
-    private array $counts = ['listings' => 0, 'rooms' => 0, 'gallery' => 0, 'room photos' => 0, 'downloaded' => 0, 'reused' => 0];
+    private array $counts = ['listings' => 0, 'rooms' => 0, 'gallery' => 0, 'gallery reordered' => 0, 'gallery removed' => 0, 'room photos' => 0, 'downloaded' => 0, 'reused' => 0];
 
     public function __construct(private ImageOptimizationService $images) {}
 
@@ -61,13 +62,15 @@ class DemoAccommodationSeeder extends Seeder
             return;
         }
 
-        $adminRole = Role::where('name', 'admin')->value('id');
-        $adminId = $adminRole ? User::where('role_id', $adminRole)->orderBy('id')->value('id') : null;
-
+        // Commons first: it can take a while, and a hosted database (TiDB) drops a connection
+        // left idle that long. The database is first used after it.
         $this->lookUpCommons(array_values(array_unique(array_merge(...array_map(
             fn ($p) => [...$p['gallery'], ...array_merge(...array_values($p['rooms']))],
             array_values($photos)
         )))));
+
+        $adminRole = Role::where('name', 'admin')->value('id');
+        $adminId = $adminRole ? User::where('role_id', $adminRole)->orderBy('id')->value('id') : null;
 
         foreach ($listings as $data) {
             $this->seedListing($data, $photos[$data['slug']] ?? throw new RuntimeException("No photos for {$data['slug']}."), $adminId);
@@ -84,11 +87,16 @@ class DemoAccommodationSeeder extends Seeder
             ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($data['barangay']))])->value('id')
             ?? throw new RuntimeException("Unknown barangay {$data['barangay']} in {$data['town']}.");
 
-        // Photos first, so a listing is only published with its whole gallery in place.
+        // Photos first, so a listing is only published with its whole gallery in place. Files already
+        // on disk are reused, so this costs nothing for a listing that has them.
         $listing = Accommodation::where('name', $data['name'])->where('municipality_id', $town)->first();
-        $gallery = $listing && $listing->images()->exists() ? [] : $this->storeAll($photos['gallery'], "accommodations/demo-{$data['slug']}");
-        if (! $listing && count($gallery) < 5) {
-            throw new RuntimeException("{$data['name']}: only ".count($gallery).' of 5 gallery photos could be stored; run the seeder again.');
+        $gallery = $this->storeAll($photos['gallery'], "accommodations/demo-{$data['slug']}");
+        if (count($gallery) < count($photos['gallery'])) {
+            if (! $listing) {
+                throw new RuntimeException("{$data['name']}: only ".count($gallery).' of '.count($photos['gallery']).' gallery photos could be stored; run the seeder again.');
+            }
+            $this->command?->warn("{$data['name']}: some gallery photos couldn't be stored, so its gallery was left as it is; run the seeder again.");
+            $gallery = null;
         }
 
         DB::transaction(function () use ($data, $photos, $town, $barangay, $adminId, &$listing, $gallery) {
@@ -121,15 +129,47 @@ class DemoAccommodationSeeder extends Seeder
                 $this->counts['listings']++;
             }
 
-            foreach ($gallery as $i => $stored) {
-                AccommodationImage::create(Arr::only($stored, ['image_path', 'thumbnail_path']) + ['accommodation_id' => $listing->id, 'is_primary' => $i === 0, 'sort_order' => $i]);
-                $this->counts['gallery']++;
+            if ($gallery !== null) {
+                $this->syncGallery($listing, $gallery, $data['slug']);
             }
 
             foreach ($data['rooms'] as $order => $room) {
                 $this->seedRoom($listing, $data['slug'], $room, $photos['rooms'][$room['name']] ?? [], $order, $adminId);
             }
         });
+    }
+
+    /**
+     * Makes the listing's demo gallery match the data file: photos it lacks are added, the order and
+     * the cover (the first photo) are set, and photos since taken out of the data file are deleted.
+     * Photos an admin added later (stored outside the demo folder) are kept as they are.
+     */
+    private function syncGallery(Accommodation $listing, array $gallery, string $slug): void
+    {
+        $existing = $listing->images()->get()->keyBy('image_path');
+
+        foreach ($gallery as $i => $stored) {
+            $place = ['is_primary' => $i === 0, 'sort_order' => $i];
+            $image = $existing->get($stored['image_path']);
+            if (! $image) {
+                AccommodationImage::create(Arr::only($stored, ['image_path', 'thumbnail_path']) + $place + ['accommodation_id' => $listing->id]);
+                $this->counts['gallery']++;
+            } elseif ((bool) $image->is_primary !== $place['is_primary'] || (int) $image->sort_order !== $i) {
+                $image->update($place);
+                $this->counts['gallery reordered']++;
+            }
+        }
+
+        $keep = array_column($gallery, 'image_path');
+        foreach ($existing as $path => $image) {
+            if (str_starts_with($path, "accommodations/demo-{$slug}/") && ! in_array($path, $keep, true)) {
+                $image->delete();
+                $this->images->delete($image->image_path, $image->thumbnail_path);
+                $this->counts['gallery removed']++;
+            } elseif (! str_starts_with($path, "accommodations/demo-{$slug}/") && $image->is_primary) {
+                $image->update(['is_primary' => false]);
+            }
+        }
     }
 
     private function seedRoom(Accommodation $listing, string $slug, array $room, array $titles, int $order, ?int $adminId): void
