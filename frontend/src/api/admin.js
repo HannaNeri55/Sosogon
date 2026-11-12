@@ -279,17 +279,6 @@ export const updateAccommodationRoom = async (id, formData) => {
   return response.data
 }
 
-/** Amenity names owners typed themselves, with how many listings use each. */
-export const getCustomAmenities = async () => {
-  const response = await api.get('/admin/amenities/custom')
-  return response.data
-}
-
-export const promoteAmenity = async (name, scope) => {
-  const response = await api.post('/admin/amenity-suggestions', { name, scope })
-  return response.data
-}
-
 export const rejectAccommodationRoom = async (id, notes) => {
   const response = await api.put(
     `/admin/accommodation-rooms/${id}/reject`,

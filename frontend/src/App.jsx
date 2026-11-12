@@ -79,7 +79,6 @@ const ListingLocations = lazy(() => import('./pages/admin/ListingLocations'))
 const OwnerRegistrations = lazy(() => import('./pages/admin/OwnerRegistrations'))
 const ReviewItems = lazy(() => import('./pages/admin/ReviewItems'))
 const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'))
-const CustomAmenities = lazy(() => import('./pages/admin/CustomAmenities'))
 
 export default function App() {
   return (
@@ -185,7 +184,6 @@ export default function App() {
           <Route path="violations" element={<ViolationRecords />} />
           <Route path="appeals" element={<AccountAppeals />} />
           <Route path="account-log" element={<AccountActivityLog />} />
-          <Route path="custom-amenities" element={<CustomAmenities />} />
           <Route path="reports" element={<ReportsAnalytics />} />
         </Route>
       </Routes>

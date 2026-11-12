@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Accommodation;
-use App\Models\AccommodationRoom;
 use App\Models\AmenitySuggestion;
 use App\Models\Role;
 use App\Models\User;
@@ -81,27 +80,5 @@ class AmenityManagementTest extends TestCase
 
         $this->actingAs($this->owner)->postJson('/api/v1/business/accommodation/rooms', ['name' => 'Long', 'room_features' => [str_repeat('x', 101)]])->assertUnprocessable();
         $this->actingAs($this->owner)->postJson('/api/v1/business/accommodation/rooms', ['name' => 'Many', 'room_features' => array_map(fn ($i) => "Thing {$i}", range(1, 31))])->assertUnprocessable();
-    }
-
-    public function test_admin_reviews_custom_amenities_and_promotes_one_without_changing_listings(): void
-    {
-        $this->stay->update(['amenities' => ['Swimming Pool', 'Sunset Deck']]);
-        AccommodationRoom::create(['accommodation_id' => $this->stay->id, 'name' => 'Villa', 'room_features' => ['Sunset Deck', 'Kitchen'], 'status' => 'approved']);
-
-        $entries = $this->actingAs($this->admin)->getJson('/api/v1/admin/amenities/custom')->assertOk()->json();
-        $this->assertCount(1, $entries, 'Suggested names are not custom.');
-        $this->assertSame('Sunset Deck', $entries[0]['name']);
-        $this->assertSame(1, $entries[0]['property_uses']);
-        $this->assertSame(1, $entries[0]['unit_uses']);
-        $this->assertSame(['Test Resort'], $entries[0]['listings']);
-
-        $this->actingAs($this->admin)->postJson('/api/v1/admin/amenity-suggestions', ['name' => 'Sunset Deck', 'scope' => 'both'])->assertCreated();
-        $this->assertContains('Sunset Deck', $this->getJson('/api/v1/amenity-suggestions?scope=unit')->json());
-        $this->assertSame([], $this->actingAs($this->admin)->getJson('/api/v1/admin/amenities/custom')->json());
-        $this->assertSame(['Swimming Pool', 'Sunset Deck'], $this->stay->fresh()->amenities);
-
-        $this->actingAs($this->admin)->postJson('/api/v1/admin/amenity-suggestions', ['name' => 'sunset deck', 'scope' => 'both'])->assertUnprocessable();
-        $this->actingAs($this->owner)->postJson('/api/v1/admin/amenity-suggestions', ['name' => 'Nope', 'scope' => 'both'])->assertForbidden();
-        $this->actingAs($this->owner)->getJson('/api/v1/admin/amenities/custom')->assertForbidden();
     }
 }

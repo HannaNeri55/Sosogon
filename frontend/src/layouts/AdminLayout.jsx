@@ -16,7 +16,6 @@ import {
   FiCheckSquare,
   FiStar,
   FiLayers,
-  FiTag,
   FiChevronDown,
   FiExternalLink,
   FiShield,
@@ -80,12 +79,6 @@ const sidebarLinks = [
     to: '/admin/item-reviews',
     icon: FiLayers,
     label: 'Rooms, Menus & Products',
-  },
-  {
-    // Amenities owners typed themselves, which can become shared suggestions.
-    to: '/admin/custom-amenities',
-    icon: FiTag,
-    label: 'Custom Amenities',
   },
   {
     section: 'Community',

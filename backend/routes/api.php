@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\AccountStatusController;
 use App\Http\Controllers\Api\Admin\AdminAccommodationController;
 use App\Http\Controllers\Api\Admin\AdminAccommodationRoomController;
 use App\Http\Controllers\Api\Admin\AdminAccountEnforcementController;
-use App\Http\Controllers\Api\Admin\AdminAmenityController;
 use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminDestinationController;
@@ -276,10 +275,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::get('/accommodation-rooms', [AdminAccommodationRoomController::class, 'index']);
         Route::put('/accommodation-rooms/{id}', [AdminAccommodationRoomController::class, 'update'])->whereNumber('id');
         Route::put('/accommodation-rooms/{id}/approve', [AdminAccommodationRoomController::class, 'approve']);
-
-        // Amenities owners typed themselves, and promoting one to a shared suggestion
-        Route::get('/amenities/custom', [AdminAmenityController::class, 'custom']);
-        Route::post('/amenity-suggestions', [AdminAmenityController::class, 'promote']);
         Route::put('/accommodation-rooms/{id}/reject', [AdminAccommodationRoomController::class, 'reject']);
 
         // Menu item approvals
