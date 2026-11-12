@@ -21,8 +21,8 @@ const TYPES = [
 const TYPE_BY_VALUE = Object.fromEntries(TYPES.map((type) => [type.value, type]))
 
 /**
- * Read-only overview of every guest review and owner response. Seeded sample
- * reviews are tagged here (but not on public pages) so admins can tell them apart.
+ * Read-only overview of every guest review and owner response. Seeded sample reviews look like
+ * any other review; the Source filter can still separate them.
  */
 export default function GuestReviews() {
   const [type, setType] = useState('')
@@ -65,8 +65,7 @@ export default function GuestReviews() {
         <p className="text-primary-600 font-medium mb-2">Admin</p>
         <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Guest Reviews</h1>
         <p className="text-gray-600 mt-2">
-          Reviews from tourists and responses from business owners across all listings. Reviews tagged
-          “Sample” are seeded demo data and are not genuine feedback.
+          Reviews from tourists and responses from business owners across all listings.
         </p>
       </div>
 
@@ -117,7 +116,7 @@ export default function GuestReviews() {
           <p className="text-sm text-gray-500 mb-3">{data.total} review{data.total === 1 ? '' : 's'}</p>
           <ul className="space-y-4">
             {reviews.map((review) => {
-              const { isDemo, comment } = parseReview(review)
+              const { comment } = parseReview(review)
               const listingType = TYPE_BY_VALUE[review.listing_type]
               return (
                 <li key={review.id} className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-5">
@@ -146,11 +145,6 @@ export default function GuestReviews() {
                   <p className="text-sm text-gray-700">
                     <span className="font-medium text-gray-900">{review.user?.name || 'Unknown user'}</span>
                     <span className="text-gray-400"> · {formatShortDate(review.created_at)}</span>
-                    {isDemo && (
-                      <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-                        Sample
-                      </span>
-                    )}
                   </p>
                   {comment && <p className="mt-1.5 text-sm text-gray-600">{comment}</p>}
 
