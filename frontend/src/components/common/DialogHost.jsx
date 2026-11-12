@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { FiAlertTriangle, FiClock, FiLock, FiLogIn, FiServer, FiTrash2, FiWifiOff } from 'react-icons/fi'
 import Modal from './Modal'
 import { answerConfirm, closeErrorDialog, getDialogs, subscribeDialogs } from '../../utils/dialogs'
+import { getStoredUser } from '../../utils/authStorage'
 
 const ICONS = {
   connection: FiWifiOff,
@@ -13,11 +14,7 @@ const ICONS = {
 }
 
 function isTourist() {
-  try {
-    return JSON.parse(sessionStorage.getItem('user'))?.role === 'tourist'
-  } catch {
-    return false
-  }
+  return getStoredUser()?.role === 'tourist'
 }
 
 function ErrorDialog({ dialog }) {

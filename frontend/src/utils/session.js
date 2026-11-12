@@ -8,3 +8,11 @@ export function loginPathFor(role) {
 export function expiredLoginPathFor(role) {
   return `${loginPathFor(role)}?expired=1`
 }
+
+// Where a signed-in account belongs: its dashboard, or Account Health while it is restricted.
+export function homePathFor(user) {
+  if (['suspended', 'deactivated'].includes(user?.account_state)) return '/account/status'
+  if (user?.role === 'admin') return '/admin'
+  if (user?.role === 'business_owner') return '/business'
+  return '/dashboard'
+}

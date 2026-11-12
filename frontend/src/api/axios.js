@@ -2,6 +2,7 @@ import axios from 'axios'
 import { loginPathFor, expiredLoginPathFor } from '../utils/session'
 import { CONNECTION_MESSAGE, isConnectionError } from '../utils/apiErrors'
 import { showErrorDialog } from '../utils/dialogs'
+import { clearSession, getStoredUser, getToken, saveStoredUser } from '../utils/authStorage'
 
 // VITE_API_URL is the backend's address in production (e.g. https://stim-api.onrender.com).
 // Left empty locally, so requests stay relative and go through the Vite dev proxy.
@@ -15,7 +16,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('token')
+  const token = getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -26,11 +27,7 @@ api.interceptors.request.use((config) => {
 const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/logout']
 
 function storedRole() {
-  try {
-    return JSON.parse(sessionStorage.getItem('user'))?.role
-  } catch {
-    return undefined // No readable user: fall back to the main login page.
-  }
+  return getStoredUser()?.role // No readable user: undefined, the main login page.
 }
 
 // Laravel's stock wording for these is too terse to show as is.
@@ -99,10 +96,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthAttempt) {
       // A stored token being rejected means the session expired (24 h limit, or idle
       // logout for admins and business owners).
-      const hadSession = !!sessionStorage.getItem('token')
+      const hadSession = !!getToken()
       const role = storedRole()
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('user')
+      clearSession()
 
       if (!hadSession) {
         window.location.href = loginPathFor(role)
@@ -121,14 +117,8 @@ api.interceptors.response.use(
 
     // The account was suspended or deactivated: only the Account Health page is available.
     if (error.response?.status === 403 && error.response.data?.code === 'account_restricted') {
-      try {
-        const stored = JSON.parse(sessionStorage.getItem('user') || 'null')
-        if (stored) {
-          sessionStorage.setItem('user', JSON.stringify({ ...stored, account_state: error.response.data.account_state }))
-        }
-      } catch {
-        // Unreadable stored user: the page reloads it from the API anyway.
-      }
+      const stored = getStoredUser() // Unreadable: the page reloads it from the API anyway.
+      if (stored) saveStoredUser({ ...stored, account_state: error.response.data.account_state })
       if (!window.location.pathname.startsWith('/account/status')) {
         window.location.href = '/account/status'
       }
