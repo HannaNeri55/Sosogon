@@ -16,6 +16,7 @@ use App\Models\RatingReply;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
 use App\Models\RetailShopRevision;
+use App\Models\ReviewReport;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -23,7 +24,8 @@ use Illuminate\Support\Str;
 /**
  * Turns what happens on the site into notifications (see Notify): an owner or tourist doing
  * something the admin must act on notifies the admins; an admin's decision notifies the owner;
- * a review notifies the listing's owner and a reply notifies the reviewer.
+ * a review notifies the listing's owner and a reply notifies the reviewer; a reported review notifies
+ * the admins and their decision notifies the owner who reported it.
  *
  * Hooked to model events so every route to a change is covered (single and bulk reviews alike).
  * Only changes made through the website notify anyone: seeders and console commands don't.
@@ -68,6 +70,8 @@ class ActivityNotifier
         Rating::created(fn (Rating $model) => self::guard(fn () => self::ratingCreated($model)));
         RatingReply::created(fn (RatingReply $model) => self::guard(fn () => self::replyCreated($model)));
         AccountAppeal::created(fn (AccountAppeal $model) => self::guard(fn () => self::appealCreated($model)));
+        ReviewReport::created(fn (ReviewReport $model) => self::guard(fn () => self::reportCreated($model)));
+        ReviewReport::updated(fn (ReviewReport $model) => self::guard(fn () => self::reportDecided($model)));
     }
 
     private static function guard(callable $handler): void
@@ -296,6 +300,31 @@ class ActivityNotifier
     {
         Notify::admins('appeal_new', 'New account appeal',
             self::name($appeal->user).' appealed a decision on their account.', '/admin/appeals', self::actor());
+    }
+
+    private static function reportCreated(ReviewReport $report): void
+    {
+        $rating = $report->rating;
+        Notify::admins('review_reported', 'Review reported',
+            self::name($report->reporter).' reported '.self::name($rating?->user)."'s {$rating?->score}/5 review of ".($rating?->rateable?->name ?? 'their listing')
+            .': '.(ReviewReport::REASONS[$report->reason] ?? $report->reason).'.',
+            '/admin/guest-reviews?tab=reports', self::actor());
+    }
+
+    private static function reportDecided(ReviewReport $report): void
+    {
+        if (! $report->wasChanged('status') || ! in_array($report->status, ['action_taken', 'dismissed'], true) || ! self::byAdmin()) {
+            return;
+        }
+        $rating = $report->rating;
+        $listing = $rating?->rateable;
+        $about = 'the review'.($rating?->user ? ' by '.$rating->user->name : '').($listing ? " of {$listing->name}" : '');
+        [$title, $message] = $report->status === 'action_taken'
+            ? ['Reported review hidden', "The Tourism Office hid {$about} from the public".self::reason($report->decision_note)]
+            : ['Report dismissed', "The Tourism Office kept {$about}".self::reason($report->decision_note)];
+
+        Notify::user($report->reporter, 'review_report_decided', $title, $message,
+            $listing && isset(self::LISTINGS[$listing::class]) ? Notify::portal(self::LISTINGS[$listing::class], 'reviews') : '/business', self::actor());
     }
 
     private static function name(?User $user): string

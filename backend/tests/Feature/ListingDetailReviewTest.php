@@ -212,7 +212,7 @@ class ListingDetailReviewTest extends TestCase
             ->assertJsonPath('counts.destination', 1)
             ->assertJsonPath('counts.retail_shop', 1);
 
-        $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?source=demo')
+        $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?rating=5')
             ->assertJsonPath('total', 1)->assertJsonPath('data.0.listing_type', 'destination');
 
         $replied = $this->actingAs($this->admin)->getJson('/api/v1/admin/guest-reviews?type=retail_shop&filter=replied')->assertOk();
