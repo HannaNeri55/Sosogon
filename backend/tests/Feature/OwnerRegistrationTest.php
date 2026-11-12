@@ -137,7 +137,8 @@ class OwnerRegistrationTest extends TestCase
         $this->assertSame('active', $application->user->fresh()->status);
         $this->actingAs($this->admin)->putJson("/api/v1/admin/owner-applications/{$application->id}/approve")->assertStatus(409);
 
-        $this->app['auth']->shouldUse('web'); // a real login request starts unauthenticated
+        $this->app['auth']->forgetGuards(); // a real login request starts unauthenticated
+        $this->app['auth']->shouldUse('web');
         $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password123'])->assertOk();
         $this->actingAs($application->user->fresh(), 'sanctum')->getJson('/api/v1/business/dashboard')->assertOk();
     }
@@ -151,7 +152,8 @@ class OwnerRegistrationTest extends TestCase
         $this->assertSame('pending', $application->user->fresh()->status, 'A rejected account is never activated.');
 
         // The rejected owner may sign in, sees the reason, but still can't use business actions.
-        $this->app['auth']->shouldUse('web'); // a real login request starts unauthenticated
+        $this->app['auth']->forgetGuards(); // a real login request starts unauthenticated
+        $this->app['auth']->shouldUse('web');
         $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password123'])->assertOk()->assertJsonPath('user.application_status', 'rejected');
         $owner = $application->user->fresh();
         $this->actingAs($owner)->getJson('/api/v1/business/dashboard')->assertForbidden();

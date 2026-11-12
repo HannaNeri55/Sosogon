@@ -23,6 +23,10 @@ class AuthController extends Controller
 {
     public function register(Request $request): JsonResponse
     {
+        if ($refusal = $this->alreadySignedIn()) {
+            return $refusal;
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
@@ -114,6 +118,10 @@ class AuthController extends Controller
 
     public function login(Request $request): JsonResponse
     {
+        if ($refusal = $this->alreadySignedIn()) {
+            return $refusal;
+        }
+
         $validated = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
@@ -156,6 +164,26 @@ class AuthController extends Controller
             ],
             'token' => $token,
         ]);
+    }
+
+    /**
+     * One account per browser: the site keeps one login token per browser (shared by its tabs), and
+     * sends it with every request. A login or registration that arrives with a valid token is
+     * refused, so another account never replaces the signed-in one; that token and its account are
+     * left as they are. Logging out (which deletes the token) lets another account sign in.
+     */
+    private function alreadySignedIn(): ?JsonResponse
+    {
+        $current = Auth::guard('sanctum')->user();
+        if (! $current) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => "You're already logged in as {$current->name} in this browser. Log out first to use a different account.",
+            'code' => 'already_authenticated',
+            'user' => ['name' => $current->name, 'email' => $current->email, 'role' => $current->role?->name],
+        ], 409);
     }
 
     /**

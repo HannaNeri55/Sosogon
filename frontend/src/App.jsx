@@ -8,6 +8,7 @@ import AccommodationOwnerLayout from './layouts/AccommodationOwnerLayout'
 import FoodBeverageOwnerLayout from './layouts/FoodBeverageOwnerLayout'
 import RetailShopOwnerLayout from './layouts/RetailShopOwnerLayout'
 import ProtectedRoute from './routes/ProtectedRoute'
+import GuestOnlyRoute from './routes/GuestOnlyRoute'
 import LoadingSpinner from './components/common/LoadingSpinner'
 
 // Public pages
@@ -86,9 +87,10 @@ export default function App() {
       <Routes>
         {/* Auth flow pages (no layout wrapper) */}
         <Route path="/get-started" element={<RoleSelection />} />
-        <Route path="/login/admin" element={<AdminLogin />} />
-        <Route path="/register/tourist" element={<TouristRegister />} />
-        <Route path="/register/business_owner" element={<BusinessOwnerRegister />} />
+        {/* One account per browser: signed-in visitors are sent to their dashboard. */}
+        <Route path="/login/admin" element={<GuestOnlyRoute><AdminLogin /></GuestOnlyRoute>} />
+        <Route path="/register/tourist" element={<GuestOnlyRoute><TouristRegister /></GuestOnlyRoute>} />
+        <Route path="/register/business_owner" element={<GuestOnlyRoute><BusinessOwnerRegister /></GuestOnlyRoute>} />
         <Route path="/registration-pending" element={<RegistrationPending />} />
         <Route path="/forbidden" element={<ProtectedRoute roles={['business_owner', 'admin']}><Forbidden /></ProtectedRoute>} />
 
@@ -111,7 +113,7 @@ export default function App() {
           {/* Public so guests can fill in the planner; generating still requires a tourist login. */}
           <Route path="/plan-trip" element={<ItineraryPlanner />} />
           <Route path="/shared/itineraries/:token" element={<SharedItinerary />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<GuestOnlyRoute><Login /></GuestOnlyRoute>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
