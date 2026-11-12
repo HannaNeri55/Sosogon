@@ -33,7 +33,7 @@ export default function BusinessOnboarding() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/')
+    navigate('/login', { replace: true })
   }
 
   if (awaitingApproval) {
