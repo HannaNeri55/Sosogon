@@ -241,6 +241,9 @@ class ItineraryService
     /** Reminders already given in this trip, so the same advice isn't repeated on every stop. */
     private array $said = [];
 
+    /** Each stay's breakfast arrangement for this trip (see breakfastAtStay()). */
+    private array $breakfastCache = [];
+
     public function __construct(
         private ItineraryAI $ai,
         private GoogleMapsService $maps
@@ -1950,12 +1953,7 @@ class ItineraryService
                 continue;
             }
 
-            $pickedRoom = ! empty($preferences['room_id']) && (int) ($preferences['accommodation_id'] ?? 0) === (int) $stay['accommodation']->id
-                ? AccommodationRoom::approved()->where('accommodation_id', $stay['accommodation']->id)->find($preferences['room_id'])
-                : null;
-            [$rooms, $sleeps] = $pickedRoom
-                ? $this->roomsForGroup($pickedRoom, $travelers)
-                : $this->recommendRooms($stay['accommodation'], $preferences);
+            [$rooms, $sleeps] = $this->stayRooms($stay['accommodation'], $preferences);
             if ($rooms->isNotEmpty() && $sleeps < $travelers) {
                 $stays[$town]['note'] = trim(($stay['note'] ?? '')." This stay has rooms for {$sleeps} of your {$travelers} travelers — contact them about extra beds.");
             }
@@ -2022,6 +2020,7 @@ class ItineraryService
         $carried = [];
         $this->mealExcuses = [];
         $this->said = [];
+        $this->breakfastCache = [];
 
         foreach ($days as $dayNumber => $day) {
             $date = $startDate?->copy()->addDays($dayNumber - 1);
@@ -2120,13 +2119,17 @@ class ItineraryService
                 $cuisineExplained = true;
             };
             // $searched: where an unused food place was looked for ("near X or near Y").
-            $addMealAtStay = function (string $meal, int $start, string $searched, $from, Accommodation $stay) use ($add) {
+            $addMealAtStay = function (string $meal, int $start, string $searched, $from, Accommodation $stay) use ($add, $preferences) {
+                // Breakfast follows the stay's own arrangement (included with the room, or not).
+                $arrangement = $meal === 'breakfast' ? $this->breakfastAtStay($stay, $preferences) : null;
                 $add(ItineraryItem::TYPE_ACCOMMODATION, $stay, $start, $meal === 'breakfast' ? self::BREAKFAST_MINUTES : self::MEAL_MINUTES, [
                     'accommodation_id' => $stay->id,
                     'notes' => ucfirst($meal)." at {$stay->name}.",
                     'reason' => null,
-                    'preference_note' => $this->mealAtStayNote($meal, $searched, $stay),
-                    'cost_note' => ucfirst($meal).' at your accommodation — price not listed',
+                    'preference_note' => $arrangement
+                        ? $this->once($arrangement['note'] ?? "Ask {$stay->name} whether they serve breakfast.", "stay-breakfast-{$stay->id}")
+                        : $this->mealAtStayNote($meal, $searched, $stay),
+                    'cost_note' => ($arrangement['kind'] ?? null) === 'free' ? 'Breakfast included with your room' : ucfirst($meal).' at your accommodation — price not listed',
                 ], $from);
             };
             // A food place open around $at near $near, else on the way from $near to $then.
@@ -2503,8 +2506,20 @@ class ItineraryService
                 $breakfastAt = $this->minutesOf($settings['breakfast']);
                 $near = $home ?? $first ?? $townCenter;
                 $breakfastFits = $endsInTime($breakfastAt + self::BREAKFAST_MINUTES);
-                $breakfast = $near && $breakfastFits ? $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($near, $f), $mealKm,
-                    fn ($f) => $this->isOpen($f, $breakfastAt, $breakfastAt + self::BREAKFAST_MINUTES, $date), $foodScore) : null;
+                // Where breakfast is: at the stay when it's included with the room; when the stay
+                // charges for it, there too unless the tourist is on a budget and a budget eatery
+                // is close by; otherwise the nearest open food place (near the stay, or without
+                // one, near the day's first stop), and the stay only as a last resort.
+                $arrangement = $home ? $this->breakfastAtStay($home, $preferences)['kind'] : 'none';
+                $openForBreakfast = fn ($f) => $this->isOpen($f, $breakfastAt, $breakfastAt + self::BREAKFAST_MINUTES, $date);
+                $breakfast = match (true) {
+                    ! $near || ! $breakfastFits, $arrangement === 'free' => null,
+                    in_array($arrangement, ['paid', 'unknown'], true) => $this->budgetLevel($preferences) === 'budget'
+                        ? $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($near, $f), self::NEARBY_KM,
+                            fn ($f) => $f->price_range === 'budget' && $openForBreakfast($f), $foodScore)
+                        : null,
+                    default => $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($near, $f), $mealKm, $openForBreakfast, $foodScore),
+                };
 
                 $leaving = ($lastDay || $moving) && $home;
                 $listedCheckOut = $leaving ? $this->checkOutMinutes($home) : null;
@@ -4380,6 +4395,65 @@ class ItineraryService
         }
 
         return [$chosen, $sleeps];
+    }
+
+    /**
+     * The rooms the trip books at a stay, and how many guests they sleep: the room the tourist
+     * picked (enough of it for the group), else the recommended ones.
+     *
+     * @return array{0: Collection, 1: int}
+     */
+    private function stayRooms(Accommodation $stay, array $preferences): array
+    {
+        $picked = ! empty($preferences['room_id']) && (int) ($preferences['accommodation_id'] ?? 0) === (int) $stay->id
+            ? AccommodationRoom::approved()->where('accommodation_id', $stay->id)->find($preferences['room_id'])
+            : null;
+
+        return $picked ? $this->roomsForGroup($picked, $this->travelers($preferences)) : $this->recommendRooms($stay, $preferences);
+    }
+
+    /**
+     * What breakfast at a stay means for this trip, from what the stay itself lists:
+     * - 'free': every room the trip books says breakfast is included, or (when the rooms don't
+     *   say) the stay lists free/complimentary breakfast as an amenity or in its dining details;
+     * - 'paid': the stay serves breakfast (a restaurant, café or breakfast is listed) but it isn't
+     *   included for these rooms, or isn't said to be;
+     * - 'unknown': the stay says breakfast is available but to ask whether it's in the rate;
+     * - 'none': nothing says the stay serves breakfast.
+     * A room's own "breakfast included: no" wins over a property-wide "Free Breakfast" amenity:
+     * not every room or rate includes it. An amenity called just "Breakfast" is not taken as free.
+     *
+     * @return array{kind: string, note: ?string}
+     */
+    private function breakfastAtStay(Accommodation $stay, array $preferences): array
+    {
+        $key = "{$stay->id}";
+        if (isset($this->breakfastCache[$key])) {
+            return $this->breakfastCache[$key];
+        }
+        [$rooms] = $this->stayRooms($stay, $preferences);
+        $flags = $rooms->pluck('breakfast_included');
+        $amenities = collect((array) ($stay->amenities ?? []))->map(fn ($a) => mb_strtolower(is_array($a) ? (string) ($a['name'] ?? '') : (string) $a));
+        $dining = mb_strtolower((string) $stay->dining_details);
+        $listedFree = $amenities->contains(fn ($a) => preg_match('/\b(free|complimentary)\b.*breakfast|breakfast.*\b(included|inclusive)\b/', $a))
+            || (preg_match('/\b(free|complimentary)\b[^.]*breakfast|breakfast[^.]*\b(is|are)?\s*(included|free|complimentary)\b/', $dining) && ! str_contains($dining, 'whether'));
+        $serves = $amenities->contains(fn ($a) => preg_match('/breakfast|restaurant|caf[eé]|coffee shop|dining/', $a))
+            || preg_match('/breakfast|restaurant|caf[eé]|dining room/', $dining);
+        $roomName = $rooms->count() === 1 ? $rooms->first()->name : 'rooms';
+
+        $result = match (true) {
+            $rooms->isNotEmpty() && $flags->every(fn ($f) => $f === true) => ['kind' => 'free', 'note' => "Breakfast is included with your {$roomName} at {$stay->name}."],
+            // Strictly false: an option that doesn't say (null) isn't "not included".
+            $flags->contains(fn ($f) => $f === false) => $serves
+                ? ['kind' => 'paid', 'note' => "Breakfast isn't included with your {$roomName}; {$stay->name} serves it at extra cost (price not listed)."]
+                : ['kind' => 'none', 'note' => null],
+            $listedFree => ['kind' => 'free', 'note' => "{$stay->name} lists free breakfast for guests; confirm it's part of your booking."],
+            str_contains($dining, 'whether') && str_contains($dining, 'breakfast') => ['kind' => 'unknown', 'note' => "Ask {$stay->name} whether breakfast is part of your rate."],
+            (bool) $serves => ['kind' => 'paid', 'note' => "{$stay->name} serves breakfast at extra cost (price not listed)."],
+            default => ['kind' => 'none', 'note' => null],
+        };
+
+        return $this->breakfastCache[$key] = $result;
     }
 
     /** Guests one unit of an option sleeps: as stated, else assumed from its category, else unknown. */

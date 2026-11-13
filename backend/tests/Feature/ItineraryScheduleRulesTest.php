@@ -440,6 +440,92 @@ class ItineraryScheduleRulesTest extends TestCase
         $this->assertTrue($itinerary->items->where('day_number', 2)->contains('destination_id', $plans[2]['highlight_id']));
     }
 
+    /** Where each day's breakfast is: 'stay' or 'restaurant', by day. */
+    private function breakfasts(Itinerary $itinerary): array
+    {
+        return $itinerary->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast'))
+            ->mapWithKeys(fn ($i) => [$i->day_number => $i->item_type === 'accommodation' ? 'stay' : 'restaurant'])->sortKeys()->all();
+    }
+
+    private function hotel(): Accommodation
+    {
+        return Accommodation::where('municipality_id', $this->towns['bulan'])->firstOrFail();
+    }
+
+    private function threeDays(array $options = []): Itinerary
+    {
+        // Enough budget eateries around the hotel that breakfast never runs out of places.
+        if (! FoodBeverage::where('name', 'like', 'Hotel Street Eatery%')->exists()) {
+            $hotel = $this->hotel();
+            foreach (range(1, 4) as $n) {
+                FoodBeverage::create($this->fields('bulan', "Hotel Street Eatery {$n}", (float) $hotel->latitude + $n * 0.001, (float) $hotel->longitude) + [
+                    'cuisine_type' => 'Filipino', 'price_range' => 'budget', 'status' => 'approved',
+                ]);
+            }
+        }
+        $this->reply = ['title' => 'Breakfast', 'days' => [$this->day(1, 'bulan1'), $this->day(2, 'bulan2'), $this->day(3, 'bulan3')]];
+
+        return $this->generate(['bulan'], 3, $options);
+    }
+
+    public function test_free_breakfast_at_the_hotel_is_where_breakfast_is_every_day(): void
+    {
+        $this->hotel()->update(['amenities' => ['Free Wi-Fi', 'Restaurant', 'Free Breakfast']]);
+        // The booked room doesn't say either way (null): the hotel's own listing decides.
+        $this->hotel()->rooms()->create(['name' => 'Queen Room', 'max_guests' => 2, 'price' => 2000, 'status' => 'approved', 'breakfast_included' => null]);
+
+        $itinerary = $this->threeDays();
+
+        $this->assertSame([2 => 'stay', 3 => 'stay'], $this->breakfasts($itinerary), 'No outside restaurant for breakfast.');
+        $first = $itinerary->items->first(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast'));
+        $this->assertSame('Breakfast included with your room', $first->cost_note);
+        $this->assertStringContainsString('lists free breakfast', (string) $first->preference_note);
+        $this->assertMealTimes($itinerary);
+    }
+
+    public function test_breakfast_included_with_the_room_counts_even_without_the_amenity(): void
+    {
+        $room = $this->hotel()->rooms()->create(['name' => 'Twin Room', 'max_guests' => 2, 'price' => 2000, 'status' => 'approved', 'breakfast_included' => true]);
+
+        $this->assertSame([2 => 'stay', 3 => 'stay'], $this->breakfasts($this->threeDays()));
+
+        // The room's own "not included" wins over a property-wide "Free Breakfast".
+        $room->update(['breakfast_included' => false]);
+        $this->hotel()->update(['amenities' => ['Free Breakfast', 'Restaurant']]);
+        $itinerary = $this->threeDays(['budget' => 'budget']);
+        $this->assertSame([2 => 'restaurant', 3 => 'restaurant'], $this->breakfasts($itinerary), 'On a budget, a budget eatery beats paying extra at the hotel.');
+    }
+
+    public function test_paid_breakfast_follows_the_budget(): void
+    {
+        $this->hotel()->update(['amenities' => ['Restaurant'], 'dining_details' => 'The restaurant serves breakfast from 6:00 AM.']);
+
+        $this->assertSame([2 => 'restaurant', 3 => 'restaurant'], $this->breakfasts($this->threeDays(['budget' => 'budget'])));
+        $luxury = $this->threeDays(['budget' => 'luxury']);
+        $this->assertSame([2 => 'stay', 3 => 'stay'], $this->breakfasts($luxury), 'Not on a budget: breakfast at the hotel is the convenient choice.');
+        $this->assertStringContainsString('at extra cost', (string) $luxury->items->first(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast'))->preference_note);
+    }
+
+    public function test_a_hotel_without_breakfast_sends_breakfast_to_a_nearby_eatery(): void
+    {
+        $this->hotel()->update(['amenities' => ['Free Wi-Fi'], 'dining_details' => null]);
+
+        $itinerary = $this->threeDays();
+
+        $this->assertSame([2 => 'restaurant', 3 => 'restaurant'], $this->breakfasts($itinerary));
+        $this->assertMealTimes($itinerary);
+    }
+
+    public function test_without_accommodation_breakfast_is_near_the_first_stop(): void
+    {
+        $itinerary = $this->threeDays(['accommodation_needed' => false]);
+
+        $breakfasts = $itinerary->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast'));
+        $this->assertNotEmpty($breakfasts);
+        $this->assertTrue($breakfasts->every(fn ($i) => $i->item_type === 'food_beverage'));
+        $this->assertFalse($itinerary->items->contains('item_type', 'accommodation'));
+    }
+
     public function test_the_check_rejects_a_late_lunch_and_overlaps(): void
     {
         $check = fn (array $rows) => app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['num_days' => 1]);
