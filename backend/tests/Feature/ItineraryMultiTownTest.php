@@ -197,7 +197,7 @@ class ItineraryMultiTownTest extends TestCase
             $this->assertTrue($visits->groupBy('day_number')->every(fn ($day) => $day->pluck('destination.municipality_id')->unique()->count() === 1), "Arrival {$arrival}: a day covers two towns.");
             $this->assertEqualsCanonicalizing(array_values($this->towns), $visits->pluck('destination.municipality_id')->unique()->values()->all(), "Arrival {$arrival}: every town is visited.");
 
-            $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+            $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev', 'activities', 'preference_note']))->all();
             $this->assertSame([], app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => now()->addDays(3)->toDateString()]), "Arrival {$arrival} breaks a planning rule.");
         }
     }
@@ -235,7 +235,10 @@ class ItineraryMultiTownTest extends TestCase
         );
         foreach ($visit->activities as $activity) {
             [$start, $end] = $this->minutes($activity['time']);
-            $this->assertSame(60, $end - $start, 'Each activity takes an hour on a moderate pace.');
+            // One may be cut short to end when the 11:30 AM lunch starts.
+            $end === 690
+                ? $this->assertLessThanOrEqual(60, $end - $start)
+                : $this->assertSame(60, $end - $start, 'Each activity takes an hour on a moderate pace.');
         }
     }
 

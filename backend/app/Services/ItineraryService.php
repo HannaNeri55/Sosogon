@@ -104,29 +104,66 @@ class ItineraryService
     /** A wait at least this long is spent resting at the stay instead. */
     private const IDLE_MINUTES = 120;
 
-    /** Lunch starts between 11:00 AM and noon (12:15 PM at the latest, after a short drive); a later one isn't scheduled. */
-    private const EARLIEST_LUNCH = 660;
+    /**
+     * Lunch is always 11:30 AM – 12:30 PM, on every day of the trip, never moved later to fit in
+     * more sightseeing: the tourist is at the table by 11:30 (stops end in time, or a visit breaks
+     * for it) and a day that can't keep it loses a stop instead (see generate()).
+     */
+    private const LUNCH_START = 690;
 
-    private const LATEST_LUNCH = 735;
+    private const LUNCH_END = 750;
 
-    /** A lunch break in the middle of a visit that runs past noon: 11:30 AM – 12:30 PM. */
-    private const LUNCH_BREAK = 690;
+    /** Breakfast is over by 8:00 AM; a day that starts later (an arrival) has had it before. */
+    private const BREAKFAST_END = 480;
 
-    /** On the arrival day only, lunch may start as late as 1:30 PM. */
-    private const ARRIVAL_DAY_LATEST_LUNCH = 810;
+    /** Dinner is 6:00 – 7:30 PM: it starts by 6:30 PM and lasts an hour. */
+    private const DINNER_START = 1080;
+
+    private const LATEST_DINNER_START = 1110;
 
     /** No dinner is planned when the day only gets going after 8:45 PM. */
     private const LATEST_DINNER = 1245;
 
+    /** How many times a day's plan is rebuilt with one stop fewer when it breaks a scheduling rule. */
+    private const MAX_REPAIRS = 12;
+
     /**
-     * Each travel pace's daily schedule: breakfast time, how long each activity takes, when a
-     * visit usually ends (minutes after midnight), dinner time, and whether an afternoon
-     * merienda stop is added. Sunrise activities are skipped on a relaxed pace.
+     * Public transport (jeepney, bus, van, tricycle) is slower than driving and has waits and
+     * transfers: road time × this factor, plus a wait for the ride (a tricycle for short hops,
+     * a jeepney/bus/van with a tricycle to the entrance for longer ones). All estimates.
+     */
+    private const PUBLIC_TRANSPORT_FACTOR = 1.3;
+
+    private const TRICYCLE_KM = 5;
+
+    private const TRICYCLE_WAIT = 10;
+
+    private const JEEPNEY_WAIT = 20;
+
+    private const TRANSPORT_LABELS = [
+        'private_car' => 'private car',
+        'motorcycle' => 'motorcycle',
+        'rented_vehicle' => 'rented vehicle',
+        'public_transport' => 'public transport (jeepney, bus, van, tricycle)',
+        'no_preference' => 'no preference',
+    ];
+
+    /** Registering and the briefing before a boat trip or guided activity. */
+    private const REGISTRATION_MINUTES = 20;
+
+    /** Activities that need a boat, a guide or an operator, so a visit starts with registering. */
+    private const OPERATOR_ACTIVITY = '/island.?hopping|sland hopping|boat trip|boating|whale shark|butanding|diving|snorkel|firefly|surfing lesson|guided|banana boat/i';
+
+    /**
+     * Each travel pace's daily schedule: breakfast time (over by 8:00 AM), how long each activity
+     * takes, when a visit usually ends (minutes after midnight), dinner time (6:00 – 6:30 PM, so
+     * it's over by 7:30), and whether an afternoon merienda stop is added. Sunrise activities are
+     * only planned when the tourist asks for an early start (see wantsEarlyStart()).
      */
     private const PACES = [
-        'relaxed' => ['breakfast' => '8:30 AM', 'activity' => 90, 'visit_end' => 990, 'dinner' => '6:00 PM', 'merienda' => false],
-        'moderate' => ['breakfast' => '7:30 AM', 'activity' => 60, 'visit_end' => 1020, 'dinner' => '6:30 PM', 'merienda' => false],
-        'packed' => ['breakfast' => '6:30 AM', 'activity' => 45, 'visit_end' => 1050, 'dinner' => '7:00 PM', 'merienda' => true],
+        'relaxed' => ['breakfast' => '7:15 AM', 'activity' => 90, 'visit_end' => 990, 'dinner' => '6:00 PM', 'merienda' => false],
+        'moderate' => ['breakfast' => '7:00 AM', 'activity' => 60, 'visit_end' => 1020, 'dinner' => '6:30 PM', 'merienda' => false],
+        'packed' => ['breakfast' => '6:30 AM', 'activity' => 45, 'visit_end' => 1050, 'dinner' => '6:30 PM', 'merienda' => true],
     ];
 
     private const DISHES_PER_MEAL = 3;
@@ -154,11 +191,30 @@ class ItineraryService
         'midday' => [630, 840],     // 10:30 AM – 2:00 PM
         'afternoon' => [780, 1020], // 1:00 – 5:00 PM
         'sunset' => [990, 1080],    // 4:30 – 6:00 PM
-        'evening' => [1080, 1260],  // 6:00 – 9:00 PM
+        'evening' => [1170, 1290],  // 7:30 – 9:30 PM, after dinner
     ];
 
     /** Google driving times between destinations ("fromId-toId" => matrix entry), when available. */
     private array $roadLegs = [];
+
+    /** How the tourist gets around (the itinerary's transport_preference); sets travel times and notes. */
+    private string $transport = 'no_preference';
+
+    /**
+     * Whether sunrise activities (before breakfast) may be planned: only when the tourist asks
+     * for an early start (see wantsEarlyStart()). Edits keep whatever time the tourist sets.
+     */
+    private bool $earlyStart = true;
+
+    /**
+     * Meals a day deliberately has no stop for, with why (a late arrival, an early departure, no
+     * food place nearby, so the tourist is told what to do instead): [day => [meal => reason]].
+     * The schedule check accepts these and nothing else.
+     */
+    private array $mealExcuses = [];
+
+    /** Destinations that fit no day of the last build, by the day they were planned for: [day => [name]]. */
+    private array $unplaced = [];
 
     public function __construct(
         private ItineraryAI $ai,
@@ -175,6 +231,8 @@ class ItineraryService
         $destinations = $this->getEligibleDestinations($preferences);
 
         $this->roadLegs = [];
+        $this->transport = $preferences['transport_preference'] ?? 'no_preference';
+        $this->earlyStart = $this->wantsEarlyStart($preferences);
         $parsedItinerary = null;
         $aiResponse = null;
 
@@ -219,12 +277,69 @@ class ItineraryService
 
         $plan = $this->planStays($parsedItinerary, $destinations, $preferences);
         $parsedItinerary['days'] = $this->skipResortsAtResortStay($parsedItinerary['days'], $plan, $destinations, $preferences);
-        [$items, $dayTowns] = $this->buildDayItems($parsedItinerary['days'], $destinations, $plan, $preferences);
+
+        // Build the days, then check every one against the scheduling rules (meals in their
+        // windows, lunch 11:30 – 12:30, no overlaps, travel time between stops, opening hours…).
+        // A day that breaks one is rebuilt with one stop fewer — never with a later lunch —
+        // until it passes; the stops left out are named on that day.
+        $dropped = [];
+        $firstProblems = null;
+        // Destinations taken out of the trip, never added back by a top-up, and the ones that fit no day by the day they were planned for.
+        $excluded = [];
+        $leftOut = [];
+        for ($repair = 0; ; $repair++) {
+            [$items, $dayTowns] = $this->buildDayItems($parsedItinerary['days'], $destinations, $plan, $preferences);
+            $problems = $this->dayProblems($items, $destinations, $preferences);
+            $firstProblems ??= $problems;
+            // Stops that fit no day (too long for the time left, past the departure…) are taken
+            // out, and the days that lost them are topped up again from places that fit.
+            $unplacedIds = $destinations->whereIn('name', array_merge([], ...array_values($this->unplaced)))->pluck('id')->map(fn ($id) => (int) $id)->all();
+            if ($problems === [] && array_diff($unplacedIds, $excluded) !== [] && $repair < self::MAX_REPAIRS) {
+                foreach ($this->unplaced as $day => $names) {
+                    $leftOut[$day] = array_merge($leftOut[$day] ?? [], $names);
+                }
+                $excluded = array_values(array_unique([...$excluded, ...$unplacedIds]));
+                $parsedItinerary['days'] = $this->refill($parsedItinerary['days'], $excluded, $plan, $destinations, $preferences);
+
+                continue;
+            }
+            if ($problems === [] || $repair >= self::MAX_REPAIRS) {
+                break;
+            }
+            $repaired = false;
+            foreach (array_keys($problems) as $day) {
+                $victim = $this->stopToDrop($parsedItinerary['days'], $items, $day, $preferences);
+                if ($victim === null) {
+                    continue;
+                }
+                // Out of the trip, from whichever day the AI put it on (a stop may have moved days).
+                foreach ($parsedItinerary['days'] as $n => $planned) {
+                    $parsedItinerary['days'][$n]['destination_ids'] = array_values(array_diff($planned['destination_ids'], [$victim]));
+                }
+                $dropped[$day][] = $destinations->firstWhere('id', $victim)->name;
+                $excluded[] = $victim;
+                $repaired = true;
+            }
+            if (! $repaired) {
+                break;
+            }
+        }
+        if ($dropped !== []) {
+            Log::info('Itinerary days rebuilt with fewer stops', ['user_id' => $user?->id, 'dropped' => $dropped, 'problems' => $firstProblems]);
+        }
+        // Named on the day they were planned for: those taken out along the way, and any that still fit no day.
+        foreach ($this->unplaced as $day => $names) {
+            $dropped[$day] = array_merge($dropped[$day] ?? [], $names);
+        }
+        foreach ($leftOut as $day => $names) {
+            $dropped[$day] = array_merge($dropped[$day] ?? [], $names);
+        }
+        $items = $this->noteDroppedStops($items, $dropped);
+
         $stays = $this->bookNights($plan['stays'], $dayTowns, $preferences);
 
-        $problems = $this->scheduleProblems($items, $destinations, $preferences);
         if ($problems !== []) {
-            Log::warning('Itinerary schedule problems', ['user_id' => $user?->id, 'problems' => $problems]);
+            Log::warning('Itinerary schedule problems', ['user_id' => $user?->id, 'problems' => array_merge(...array_values($problems))]);
         }
 
         // Total for the whole group: every stop (entrance fees, dishes, souvenirs) plus the rooms.
@@ -307,6 +422,7 @@ class ItineraryService
     {
         $itinerary->load(['stays.accommodation', 'rooms', 'items.destination', 'items.accommodation', 'items.foodBeverage', 'items.retailShop', 'items.dishes', 'items.souvenirs']);
         $preferences = ['travelers' => $itinerary->travelers, 'num_days' => $itinerary->num_days, 'budget' => $itinerary->budget];
+        $this->transport = $itinerary->transport_preference ?? 'no_preference';
         $travelers = $this->travelers($preferences);
         $stays = $itinerary->stays;
 
@@ -334,10 +450,10 @@ class ItineraryService
                     continue;
                 }
 
-                // A lunch break whose visit was removed or moved is now an ordinary lunch after the stop before it.
-                if ($place instanceof FoodBeverage && preg_match('/^Lunch break during your visit to (.+?)\.(?= |$)/u', (string) $item->notes, $host)
-                    && ! ($prev instanceof Destination && $prev->name === $host[1])) {
-                    $item->notes = preg_replace('/^Lunch break during your visit to .+?\.(?= |$)/u', $prev ? "Lunch near {$prev->name}." : 'Lunch.', $item->notes);
+                // A lunch or dinner break whose visit was removed or moved is now an ordinary meal after the stop before it.
+                if ($place instanceof FoodBeverage && preg_match('/^(Lunch|Dinner) break during your visit to (.+?)\.(?= |$)/u', (string) $item->notes, $host)
+                    && ! ($prev instanceof Destination && $prev->name === $host[2])) {
+                    $item->notes = preg_replace('/^(Lunch|Dinner) break during your visit to .+?\.(?= |$)/u', $prev ? "{$host[1]} near {$prev->name}." : "{$host[1]}.", $item->notes);
                     $item->update(['notes' => $item->notes]);
                 }
 
@@ -376,8 +492,8 @@ class ItineraryService
                 }
                 $item->update($fields);
 
-                // A lunch break is a round trip from the destination it happens during.
-                if (! ($place instanceof FoodBeverage && Str::startsWith((string) $item->notes, 'Lunch break'))) {
+                // A lunch or dinner break is a round trip from the destination it happens during.
+                if (! ($place instanceof FoodBeverage && preg_match('/^(Lunch|Dinner) break/', (string) $item->notes))) {
                     $prev = $place;
                 }
             }
@@ -470,6 +586,17 @@ class ItineraryService
     }
 
     /** The destination IDs the tourist asked for (preferred_destinations), as integers. */
+    /**
+     * Whether the tourist asked for an early start (in their notes: sunrise, dawn, an early
+     * morning or departure), the only case where an activity is planned before breakfast.
+     * Never on a relaxed pace.
+     */
+    private function wantsEarlyStart(array $preferences): bool
+    {
+        return ($preferences['travel_pace'] ?? 'moderate') !== 'relaxed'
+            && preg_match('/sunrise|dawn|early (start|morning|departure|riser|bird)|maaga|madaling.?araw/i', (string) ($preferences['additional_preferences'] ?? '')) === 1;
+    }
+
     private function preferredIds(array $preferences): array
     {
         return array_values(array_unique(array_map('intval', $preferences['preferred_destinations'] ?? [])));
@@ -702,6 +829,10 @@ class ItineraryService
         $prompt .= "- Interests: {$interestsFormatted}\n";
         $prompt .= "- Travel Pace: {$travelPace}\n";
         $prompt .= "- Budget: {$budget}\n";
+        $prompt .= '- Getting around: '.(self::TRANSPORT_LABELS[$this->transport] ?? 'no preference')."\n";
+        if (! empty($preferences['travelers'])) {
+            $prompt .= "- Travelers: {$preferences['travelers']}\n";
+        }
         $prompt .= $arrivalAt !== null
             ? '- Arrival on Day 1: around '.$this->formatMinutes($arrivalAt)."\n"
             : '- Arrival on Day 1: not given (planned for around '.$this->formatMinutes(self::DEFAULT_ARRIVAL).")\n";
@@ -718,7 +849,12 @@ class ItineraryService
         $prompt .= "\n";
         $prompt .= "HOW THIS TRIP WORKS:\n";
         $prompt .= "- You ONLY choose each day's destinations, their order and why. The planner itself handles arrival".($this->needsStay($preferences) ? ' and check-in on Day 1' : ' on Day 1').", schedules each destination's listed activities, ".($this->needsStay($preferences) ? 'picks one accommodation per town' : 'suggests no accommodation (the tourist has their own arrangements)').", every meal (breakfast, lunch, an afternoon merienda and dinner at verified restaurants, so never spend a destination on a meal), rest breaks and souvenir shopping, and sets all clock times.\n";
-        $prompt .= "- Travelling between towns takes most of a day, so a day never covers two towns.\n\n";
+        $prompt .= "- Travelling between towns takes most of a day, so a day never covers two towns.\n";
+        $prompt .= "- FIXED MEAL TIMES the planner always keeps: breakfast 6:00 – 8:00 AM, lunch 11:30 AM – 12:30 PM (never later), dinner 6:00 – 7:30 PM. A day whose stops can't fit around these loses a stop, so choose fewer, closer destinations rather than more: a comfortable day beats a crowded one.\n";
+        if ($this->transport === 'public_transport') {
+            $prompt .= "- The tourist uses PUBLIC TRANSPORT (jeepneys, buses, vans, tricycles): every trip takes longer than driving, with waits and transfers. Prefer destinations close together and near town centres or main roads, and keep the day's stops few.\n";
+        }
+        $prompt .= "\n";
         $prompt .= "AVAILABLE VERIFIED DESTINATIONS (use ONLY these, reference by ID):\n";
         $prompt .= "{$destinationsList}\n\n";
         $prompt .= $this->otherPlacesContext($preferences);
@@ -750,7 +886,7 @@ class ItineraryService
         if ($destinations->contains(fn ($d) => $d->dining_details)) {
             $prompt .= "5d. A destination with \"Food on site\" can be where the tourist eats (the planner serves lunch there during a visit over noon), so it's a good pick around midday.\n";
         }
-        $prompt .= "6. Every \"reason\" is one or two sentences, at most 35 words, saying why that destination suits THIS tourist (interests, budget, pace) and what they will do there. Do not repeat the place's name.\n\n";
+        $prompt .= "6. Every \"reason\" is two or three sentences, at most 60 words: what the place is known for, what the tourist will actually do there (from its listed activities, never vague phrases like \"explore the area\" or \"enjoy the destination\"), and why it suits THIS tourist (interests, budget, pace). Mention preparation (swimwear, a guide, a boat) only when the list shows it is needed. Do not repeat the place's name, and never state prices, hours or conditions the list doesn't give.\n\n";
         $prompt .= "RESPOND WITH ONLY THIS JSON (no other text), with one entry for every day from 1 to {$numDays}:\n";
         $prompt .= "{\n";
         $prompt .= '  "title": "A short descriptive title for this itinerary",'."\n";
@@ -1095,7 +1231,7 @@ class ItineraryService
             ? ($this->arrivalMinutes($preferences) ?? self::DEFAULT_ARRIVAL) + self::ARRIVAL_MINUTES
             : $this->minutesOf($this->pace($pace)['breakfast']) + self::BREAKFAST_MINUTES + self::CHECKOUT_MINUTES;
         $until = min($this->departureMinutes($preferences), $this->visitEndTime($pace));
-        $lunch = $from < self::LATEST_LUNCH && $until > 750 ? self::MEAL_MINUTES : 0;
+        $lunch = $from < self::LUNCH_START && $until > self::LUNCH_END ? self::MEAL_MINUTES : 0;
 
         return max(0, $until - $from - $lunch);
     }
@@ -1110,7 +1246,7 @@ class ItineraryService
     {
         $pace = $preferences['travel_pace'] ?? 'moderate';
         $clock = ($this->arrivalMinutes($preferences) ?? self::DEFAULT_ARRIVAL) + self::ARRIVAL_MINUTES + 15;
-        $lunchDue = $clock < self::LATEST_LUNCH;
+        $lunchDue = $clock < self::LUNCH_START;
         $prev = null;
         foreach ($places as $place) {
             if ($prev) {
@@ -1123,7 +1259,7 @@ class ItineraryService
             if ($hours && $clock > $hours[1]) {
                 return false;
             }
-            if ($lunchDue && $clock > 750) {
+            if ($lunchDue && $clock > self::LUNCH_START) {
                 $clock += self::MEAL_MINUTES + 10;
                 $lunchDue = false;
             }
@@ -1138,7 +1274,7 @@ class ItineraryService
     {
         $from = ($this->arrivalMinutes($preferences) ?? self::DEFAULT_ARRIVAL) + self::ARRIVAL_MINUTES;
 
-        return $this->visitEndTime($preferences['travel_pace'] ?? 'moderate') - $from - ($from < self::LATEST_LUNCH ? self::MEAL_MINUTES : 0);
+        return $this->visitEndTime($preferences['travel_pace'] ?? 'moderate') - $from - ($from < self::LUNCH_START ? self::MEAL_MINUTES : 0);
     }
 
     /**
@@ -1724,6 +1860,7 @@ class ItineraryService
         $byId = $destinations->keyBy(fn ($d) => (int) $d->id);
         // Stops that didn't fit their day, waiting for a later day: id => [day, reason].
         $carried = [];
+        $this->mealExcuses = [];
 
         foreach ($days as $dayNumber => $day) {
             $date = $startDate?->copy()->addDays($dayNumber - 1);
@@ -1784,10 +1921,19 @@ class ItineraryService
             $checkedOut = false;
             // On Day 1, the stay's listed check-in time when the tourist arrives before it.
             $checkInAt = null;
-            // Lunch starts by about noon; on the arrival day it can wait until 1:30 PM for a
-            // tourist arriving late in the morning. Arriving after that: no lunch to plan, or to miss.
-            $latestLunch = $arrivalDay ? self::ARRIVAL_DAY_LATEST_LUNCH : self::LATEST_LUNCH;
-            $lateArrival = $arrivalDay && ($arrivalAt ?? self::DEFAULT_ARRIVAL) + self::ARRIVAL_MINUTES > $latestLunch - 30;
+            // Lunch is 11:30 AM – 12:30 PM every day. A tourist arriving after 11:15 AM (too late to
+            // be seated by 11:30) has lunch before arriving or on the way: none is planned.
+            $lateArrival = $arrivalDay && ($arrivalAt ?? self::DEFAULT_ARRIVAL) + 15 > self::LUNCH_START;
+            $hadDinner = false;
+            // A meal the day deliberately goes without, with the note telling the tourist what to do
+            // instead (shown on the day's first stop when nothing else says it).
+            $dayNotes = [];
+            $excuse = function (string $meal, ?string $note = null) use ($dayNumber, &$dayNotes) {
+                $this->mealExcuses[$dayNumber][$meal] = true;
+                if ($note !== null) {
+                    $dayNotes[] = $note;
+                }
+            };
 
             $add = function (string $type, $place, int $start, int $minutes, array $fields, $from) use (&$items, &$sequence, $dayNumber) {
                 $fields['notes'] = $this->withTravelNote($fields['notes'] ?? null, $from, $place, $start);
@@ -1871,70 +2017,90 @@ class ItineraryService
                     ? "Free time at {$base->name}: rest or enjoy its amenities {$then}."
                     : "Back to {$base->name} to rest and freshen up {$then}.";
             };
-            // A morning with nothing on until lunch is spent at the stay rather than waiting around.
+            // A morning with nothing on until lunch is spent at the stay rather than waiting around
+            // (back in time to reach lunch by 11:30).
             $freeMorning = function () use (&$clock, $base, $lastDay, $restAt, $restNotes, $endsInTime) {
-                if ($base && ! $lastDay && $endsInTime(690) && 690 - $clock >= self::IDLE_MINUTES) {
-                    $restAt($base, 690, $restNotes('before lunch'), 'An unhurried break, so the day never feels rushed.');
+                $until = self::LUNCH_START - 15;
+                if ($base && ! $lastDay && $endsInTime($until) && $until - $clock >= self::IDLE_MINUTES) {
+                    $restAt($base, $until, $restNotes('before lunch'), 'An unhurried break, so the day never feels rushed.');
                 }
             };
-            // Lunch near where the tourist is (or on the way to $then), else near the stay, else at
-            // the stay; a message when none is possible. Past LATEST_LUNCH there's no lunch at all.
-            $lunch = function ($then) use (&$prev, &$clock, &$hadLunch, &$usedFood, &$checkedOut, $findMeal, $addFood, $addMealAtStay, $home, $tonight, $lateArrival, $latestLunch, $plan, $foodScore, $mealKm, $date, $preferences, $endsInTime, $dayEnd, $leaveNote): ?string {
+            // Lunch at 11:30 AM – 12:30 PM, at a place the tourist can reach by 11:30: near where
+            // they are (or on the way to $then), else near the stay, else at the stay. It is never
+            // moved later. A message when none is possible: an excused gap when the tourist isn't
+            // around then or there's simply no food place, else (no place reachable in time) left
+            // for the schedule check, which then takes a stop out of the day.
+            $lunch = function ($then) use (&$prev, &$clock, &$hadLunch, &$usedFood, &$checkedOut, $addFood, $addMealAtStay, $excuse, $home, $tonight, $lateArrival, $plan, $foodScore, $mealKm, $date, $preferences, $endsInTime, $dayEnd, $leaveNote): ?string {
                 $hadLunch = true;
                 $from = $prev ?? $then;
                 if (! $from) {
                     return null;
                 }
-                // Past lunchtime: nothing to plan after a late arrival, else say so rather than skip it silently.
-                if ($clock > $latestLunch) {
-                    return $lateArrival ? null : "There's no time for a sit-down lunch in today's plan, so bring snacks or grab something on the way.";
-                }
-                $earliest = self::EARLIEST_LUNCH;
-                // Leaving before a sit-down lunch would be over.
-                if (! $endsInTime(max($clock, $earliest) + self::MEAL_MINUTES)) {
-                    return $clock < $dayEnd ? "{$leaveNote}, before a sit-down lunch would be over, so eat on the way or bring snacks." : null;
-                }
-                [$pick, $why] = $findMeal($from, $then, max($clock, $earliest), $then ? "a break before {$then->name}" : "a break near {$from->name}");
-                if ($pick && ($clock + $this->travelMinutes($from, $pick['place']) > $latestLunch
-                    || ! $endsInTime(max($clock + $this->travelMinutes($from, $pick['place']), $earliest) + self::MEAL_MINUTES))) {
-                    $pick = null;
-                }
-                if ($pick) {
-                    $lunchAt = max($clock + $this->travelMinutes($from, $pick['place']), $earliest);
-                    $addFood($pick, $lunchAt, self::MEAL_MINUTES, "Lunch near {$from->name}.", $why, 'lunch', $from, $prev);
-                    $prev = $pick['place'];
-                    $clock = $lunchAt + self::MEAL_MINUTES;
+                if ($lateArrival) {
+                    $excuse('lunch');
 
                     return null;
                 }
+                // Leaving before lunch would be over.
+                if (! $endsInTime(self::LUNCH_END)) {
+                    $excuse('lunch');
+
+                    return $clock < $dayEnd ? "{$leaveNote}, before lunch (11:30 AM – 12:30 PM) would be over, so eat on the way or bring snacks." : null;
+                }
+                $at = self::LUNCH_START;
+                $open = fn ($f) => $this->isOpen($f, $at, $at + self::MEAL_MINUTES, $date);
+                $inTime = fn ($place) => $clock + $this->travelMinutes($prev, $place) <= $at;
+                $lunchScore = fn ($f) => $this->foodScore($f, $preferences, 'lunch');
                 $stay = $this->mealStay($then ? $home : $tonight, $home, $tonight, $checkedOut);
-                // Before settling for the stay, an unused food place near it that's open in time.
+                $searches = [
+                    [$from, fn ($f) => $this->kmBetween($from, $f), $mealKm, fn ($pick) => $this->mealReason($pick, $from, $then ? "a break before {$then->name}" : "a break near {$from->name}", $preferences)],
+                ];
+                if ($then && $then !== $from) {
+                    $searches[] = [$from, fn ($f) => $this->kmBetween($from, $f) + $this->kmBetween($f, $then) - $this->kmBetween($from, $then), self::MAX_DETOUR_KM,
+                        fn ($pick) => "There's no unused verified food place right next to {$from->name}; this one is on the way to {$then->name}{$this->detourNote($pick['km'])}."];
+                }
                 if ($stay && ! $this->samePlace($from, $stay)) {
-                    $at = fn ($f) => max($clock + $this->travelMinutes($from, $f), $earliest);
-                    $pick = $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($stay, $f), $mealKm,
-                        fn ($f) => $at($f) <= $latestLunch && $endsInTime($at($f) + self::MEAL_MINUTES) && $this->isOpen($f, $at($f), $at($f) + self::MEAL_MINUTES, $date), $foodScore);
+                    $searches[] = [$stay, fn ($f) => $this->kmBetween($stay, $f), $mealKm,
+                        fn ($pick) => "There's no unused verified food place near {$from->name}, so lunch is back near your accommodation: ".$this->mealReason($pick, $stay, 'an easy break', $preferences)];
+                }
+                // Then the stay itself, and last the nearest food place anywhere that can still be reached by 11:30.
+                $anywhere = [$from, fn ($f) => $this->kmBetween($from, $f), null,
+                    fn ($pick) => "There's no unused verified food place close to {$from->name}, so lunch is at the nearest one open then, ".number_format($pick['km'], 1).' km away.'];
+                $anyPlace = false;
+                $meal = fn ($f) => ! $this->isSnackPlace($f);
+                $snack = fn ($f) => true;
+                $order = [...array_map(fn ($s) => [...$s, $meal], $searches), 'stay', [...$anywhere, $meal], ...array_map(fn ($s) => [...$s, $snack], [...$searches, $anywhere])];
+                foreach ($order as $search) {
+                    if ($search === 'stay') {
+                        if ($stay && $inTime($stay)) {
+                            $addMealAtStay('lunch', $at, $this->samePlace($from, $stay) ? "near {$stay->name}" : "near {$from->name} or near {$stay->name}", $prev, $stay);
+                            $prev = $stay;
+                            $clock = self::LUNCH_END;
+
+                            return null;
+                        }
+
+                        continue;
+                    }
+                    [$near, $distance, $maxKm, $reason, $kind] = $search;
+                    $pick = $this->pickPlace($plan['food'], $usedFood, $distance, $maxKm, fn ($f) => $kind($f) && $open($f) && $inTime($f), $lunchScore);
                     if ($pick) {
-                        $lunchAt = $at($pick['place']);
-                        $addFood($pick, $lunchAt, self::MEAL_MINUTES, "Lunch near {$stay->name}.",
-                            "There's no unused verified food place near {$from->name}, so lunch is back near your accommodation: "
-                            .$this->mealReason($pick, $stay, 'an easy break', $preferences), 'lunch', $stay, $prev);
+                        $addFood($pick, $at, self::MEAL_MINUTES, "Lunch near {$near->name}.", $reason($pick), 'lunch', $near, $prev);
                         $prev = $pick['place'];
-                        $clock = $lunchAt + self::MEAL_MINUTES;
+                        $clock = self::LUNCH_END;
 
                         return null;
                     }
+                    $anyPlace = $anyPlace || $this->pickPlace($plan['food'], $usedFood, $distance, $maxKm, $open) !== null;
                 }
-                if ($stay && $clock + $this->travelMinutes($prev, $stay) <= $latestLunch
-                    && $endsInTime(max($clock + $this->travelMinutes($prev, $stay), $earliest) + self::MEAL_MINUTES)) {
-                    $lunchAt = max($clock + $this->travelMinutes($prev, $stay), $earliest);
-                    $addMealAtStay('lunch', $lunchAt, $this->samePlace($from, $stay) ? "near {$stay->name}" : "near {$from->name} or near {$stay->name}", $prev, $stay);
-                    $prev = $stay;
-                    $clock = $lunchAt + self::MEAL_MINUTES;
-
+                // A food place or the stay exists but can't be reached by 11:30: not excused, so
+                // the day is rebuilt with fewer stops rather than lunch moved later.
+                if ($anyPlace || $stay) {
                     return null;
                 }
+                $excuse('lunch');
 
-                return "We're sorry — there's no unused verified food place near {$from->name}".($then ? " or on the way to {$then->name}" : '').', so please bring a packed lunch.';
+                return "We're sorry — there's no unused verified food place near {$from->name}".($then ? " or on the way to {$then->name}" : '').', so please bring a packed lunch to eat at 11:30 AM.';
             };
             // An afternoon merienda (snack) near where the tourist is, if a food place is close.
             $merienda = function () use (&$prev, &$clock, &$hadMerienda, $findMeal, $addFood, $endsInTime) {
@@ -1955,7 +2121,6 @@ class ItineraryService
             // then, where shopping is over by $endBy (so it never pushes out lunch or dinner).
             $goShopping = function (int $endBy) use (&$prev, &$clock, &$usedShops, &$shopped, $plan, $add, $dayNumber, $numDays, $date, $preferences, $dayEnd) {
                 $endBy = $dayEnd === null ? $endBy : min($endBy, $dayEnd);
-                $shopped = true;
                 $site = $prev;
                 if (! $site) {
                     return;
@@ -1968,6 +2133,7 @@ class ItineraryService
                     return;
                 }
                 $usedShops[] = $shop['place']->id;
+                $shopped = true;
                 $start = $clock + $this->travelMinutes($site, $shop['place']);
                 $add(ItineraryItem::TYPE_RETAIL_SHOP, $shop['place'], $start, self::SHOPPING_MINUTES, [
                     'retail_shop_id' => $shop['place']->id,
@@ -1976,6 +2142,104 @@ class ItineraryService
                 ] + $this->souvenirPlan($shop['place'], $preferences), $site);
                 $prev = $shop['place'];
                 $clock = $start + self::SHOPPING_MINUTES;
+            };
+
+            $shopToday = $shopDaily || $dayNumber === $numDays;
+            $dinnerTarget = $this->minutesOf($settings['dinner']);
+            // Arriving after dinner time: dinner whenever the tourist can, if at all.
+            $lateDinner = $arrivalDay && ($arrivalAt ?? self::DEFAULT_ARRIVAL) + self::ARRIVAL_MINUTES > self::LATEST_DINNER_START;
+            // Check in before dinner if that's still to do, or rest at the stay instead of a long
+            // wait (after travelling, even a shorter one on the arrival day).
+            $beforeDinner = function () use (&$prev, &$clock, &$checkedIn, &$checkInAt, $base, $lastDay, $arrivalDay, $endsInTime, $dinnerTarget, $restAt, $restNotes) {
+                if (! $base || ! $prev || $lastDay || ! $endsInTime($dinnerTarget)) {
+                    return;
+                }
+                if (! $checkedIn) {
+                    $from = max($clock + $this->travelMinutes($prev, $base), $checkInAt ?? 0);
+                    $restAt($base, max($dinnerTarget - 15, $from + 30), $restNotes('before dinner'), 'Your base for this part of the trip.', 30);
+                } elseif ($dinnerTarget - $clock >= ($arrivalDay ? 45 : self::IDLE_MINUTES)) {
+                    $restAt($base, $dinnerTarget - 15, $restNotes('before dinner'), "A breather after the day's travel and outings, so the evening never feels rushed.", $arrivalDay ? 30 : 90);
+                }
+            };
+            // Dinner (6:00 – 7:30 PM: starting by 6:30) near where the tourist is, then on the way
+            // back to tonight's stay, then at the stay, wherever can be reached in time. None after
+            // a late arrival or before an early departure (said so); none reachable in time is left
+            // for the schedule check, which then takes a stop out of the day.
+            $dinner = function () use (&$prev, &$clock, &$hadDinner, &$usedFood, &$checkedOut, $plan, $addFood, $addMealAtStay, $appendNote, $excuse, $home, $tonight, $lastDay, $lateDinner, $dinnerTarget, $endsInTime, $dayEnd, $leaveNote, $mealKm, $date, $preferences) {
+                $hadDinner = true;
+                if (! $prev) {
+                    return;
+                }
+                if (! $endsInTime(max($dinnerTarget, $clock) + self::MEAL_MINUTES)) {
+                    $excuse('dinner');
+                    if ($clock < $dayEnd) {
+                        $appendNote("{$leaveNote}, before dinner time, so plan to eat on the way.");
+                    }
+
+                    return;
+                }
+                if ($clock > self::LATEST_DINNER) {
+                    $excuse('dinner');
+                    $appendNote('You arrive after the usual dinner time, so eat on the way or ask '.($tonight?->name ?? 'your accommodation').' about food options.');
+
+                    return;
+                }
+                $latestStart = $lateDinner ? self::LATEST_DINNER : self::LATEST_DINNER_START;
+                $dinnerScore = fn ($f) => $this->foodScore($f, $preferences, 'dinner');
+                $start = fn ($place) => max($dinnerTarget, $clock + $this->travelMinutes($prev, $place));
+                $open = fn ($f) => $endsInTime($start($f) + self::MEAL_MINUTES) && $this->isOpen($f, $start($f), $start($f) + self::MEAL_MINUTES, $date);
+                $inTime = fn ($f) => $start($f) <= $latestStart && $open($f);
+                $near = fn ($f) => $this->kmBetween($prev, $f);
+                $onTheWay = fn ($f) => $this->kmBetween($prev, $f) + $this->kmBetween($f, $tonight) - $this->kmBetween($prev, $tonight);
+
+                // A restaurant near where the day ends or on the way back, then the stay, and only
+                // then a café or snack shop.
+                $findDinner = function (callable $kind) use ($plan, &$usedFood, $near, $onTheWay, $mealKm, $inTime, $open, $dinnerScore, $prev, $tonight, $preferences, &$anyPlace): array {
+                    $pick = $this->pickPlace($plan['food'], $usedFood, $near, $mealKm, fn ($f) => $kind($f) && $inTime($f), $dinnerScore);
+                    $anyPlace = $anyPlace || $this->pickPlace($plan['food'], $usedFood, $near, $mealKm, $open) !== null;
+                    if ($pick) {
+                        return [$pick, $this->mealReason($pick, $prev, 'right where your day ends', $preferences)];
+                    }
+                    if ($tonight && $prev !== $tonight) {
+                        $pick = $this->pickPlace($plan['food'], $usedFood, $onTheWay, self::MAX_DETOUR_KM, fn ($f) => $kind($f) && $inTime($f), $dinnerScore);
+                        $anyPlace = $anyPlace || $this->pickPlace($plan['food'], $usedFood, $onTheWay, self::MAX_DETOUR_KM, $open) !== null;
+                        if ($pick) {
+                            return [$pick, "On your way back from {$prev->name} to {$tonight->name}{$this->detourNote($pick['km'])}."];
+                        }
+                    }
+
+                    return [null, null];
+                };
+                $anyPlace = false;
+                $stay = $this->mealStay($tonight, $home, $tonight, $checkedOut);
+                $stayInTime = $stay && $start($stay) <= $latestStart && $endsInTime($start($stay) + self::MEAL_MINUTES);
+                [$pick, $reason] = $findDinner(fn ($f) => ! $this->isSnackPlace($f));
+                if (! $pick && ! $stayInTime) {
+                    [$pick, $reason] = $findDinner(fn ($f) => true);
+                }
+                if ($pick) {
+                    $at = $start($pick['place']);
+                    $addFood($pick, $at, self::MEAL_MINUTES, "Dinner near {$prev->name}.", $reason, 'dinner', $prev, $prev);
+                    $prev = $pick['place'];
+                    $clock = $at + self::MEAL_MINUTES;
+
+                    return;
+                }
+                if ($stayInTime) {
+                    $at = $start($stay);
+                    $addMealAtStay('dinner', $at, "near {$prev->name}".($prev !== $stay ? " or on the way to {$stay->name}" : ''), $prev, $stay);
+                    $prev = $stay;
+                    $clock = $at + self::MEAL_MINUTES;
+
+                    return;
+                }
+                if ($checkedOut && $lastDay) {
+                    $excuse('dinner');
+                    $appendNote("We're sorry — there's no verified food place near {$prev->name} for dinner, and you've checked out of {$home->name}, so eat on the way.");
+                } elseif (! $anyPlace && ! $stay) {
+                    $excuse('dinner');
+                    $appendNote("We're sorry — there's no verified food place near {$prev->name} for dinner, so eat on the way or bring food along.");
+                }
             };
 
             $plans = $stops->mapWithKeys(fn ($d) => [$d->id => $this->stretchVisit(
@@ -1990,6 +2254,9 @@ class ItineraryService
                 $arrive = $arrivalAt ?? self::DEFAULT_ARRIVAL;
                 $prev = null;
                 $clock = $arrive;
+                if ($lateArrival && $arrive < self::LUNCH_END + 90) {
+                    $excuse('lunch', 'You arrive after lunch time (11:30 AM – 12:30 PM) has started, so have lunch before you arrive or on your way.');
+                }
                 if ($home) {
                     // Check in on arrival unless the stay lists a later check-in time; with no
                     // listed time, only if the room is ready (never assumed).
@@ -2005,7 +2272,11 @@ class ItineraryService
                     $when = $arrivalAt !== null
                         ? 'You arrive around '.$this->formatMinutes($arrivalAt).'.'
                         : 'No arrival time was given, so Day 1 assumes you arrive around '.$this->formatMinutes(self::DEFAULT_ARRIVAL).'; shift the day\'s times if you arrive earlier or later.';
+                    // Arriving shortly before lunch: settle in quickly, so lunch still starts at 11:30.
                     $minutes = min(self::ARRIVAL_MINUTES, 1439 - $arrive);
+                    if (! $lateArrival && $arrive < self::LUNCH_START && $arrive + $minutes > self::LUNCH_START) {
+                        $minutes = self::LUNCH_START - $arrive;
+                    }
                     $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $arrive, $minutes, [
                         'accommodation_id' => $home->id,
                         'notes' => $arrivalNote.$when,
@@ -2022,23 +2293,33 @@ class ItineraryService
                     $prev = $home;
                     $clock += $minutes;
                 }
-                // An early arrival still gets breakfast near the stay.
+                // An early arrival still gets breakfast near the stay, over by 8:00 AM; arriving
+                // later, the tourist has had it before setting off.
                 $near = $prev ?? $first ?? $townCenter;
-                if ($near && $clock <= 570 && $endsInTime($clock + self::BREAKFAST_MINUTES)) {
+                $breakfast = null;
+                if ($near && $endsInTime($clock + self::BREAKFAST_MINUTES)) {
+                    $breakfastAt = fn ($f) => $clock + $this->travelMinutes($prev, $f);
                     $breakfast = $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($near, $f), $mealKm,
-                        fn ($f) => $this->isOpen($f, $clock + $this->travelMinutes($near, $f), $clock + $this->travelMinutes($near, $f) + self::BREAKFAST_MINUTES, $date), $foodScore);
+                        fn ($f) => $breakfastAt($f) + self::BREAKFAST_MINUTES <= self::BREAKFAST_END
+                            && $this->isOpen($f, $breakfastAt($f), $breakfastAt($f) + self::BREAKFAST_MINUTES, $date), $foodScore);
                     if ($breakfast) {
-                        $at = $clock + $this->travelMinutes($prev, $breakfast['place']);
+                        $at = $breakfastAt($breakfast['place']);
                         $addFood($breakfast, $at, self::BREAKFAST_MINUTES, "Breakfast near {$near->name}.",
                             $this->mealReason($breakfast, $near, 'an easy start before heading out', $preferences), 'breakfast', $near, $prev);
                         $prev = $breakfast['place'];
                         $clock = $at + self::BREAKFAST_MINUTES;
                     }
                 }
+                if (! $breakfast) {
+                    $excuse('breakfast', $clock + self::BREAKFAST_MINUTES > self::BREAKFAST_END
+                        ? null
+                        : "There's no verified breakfast place open near {$near?->name} this early, so have breakfast before you set off.");
+                }
             } elseif ($sunriseDay) {
-                // Breakfast is packed: the day starts before breakfast places open.
+                // The tourist asked for an early start: breakfast is packed, eaten after sunrise
+                // (see the first stop), because the day starts before breakfast places open.
                 $clock = self::WINDOWS['dawn'][0] - $this->travelMinutes($home, $first);
-                $morningNote = 'Breakfast places are still closed this early: bring breakfast from your accommodation to enjoy after sunrise.';
+                $morningNote = 'You asked for an early start, so the day begins before breakfast places open: bring a packed breakfast from your accommodation to enjoy right after sunrise.';
                 if (($lastDay || $moving) && $home) {
                     $morningNote .= " Check out of {$home->name} before you leave.";
                     $checkedOut = true;
@@ -2086,13 +2367,20 @@ class ItineraryService
                     $prev = $breakfast['place'];
                 } elseif ($home && $breakfastFits) {
                     $addMealAtStay('breakfast', $breakfastAt, "near {$home->name}", null, $home);
+                } elseif ($breakfastFits) {
+                    $excuse('breakfast', "There's no verified breakfast place near ".($near?->name ?? 'your first stop').' that opens by '.$this->formatMinutes($breakfastAt).', so have breakfast before heading out.');
+                } else {
+                    $excuse('breakfast');
                 }
 
                 // Breakfast at the stay, then check out: right after it when the day has places to
                 // go, else after a free morning there, at the listed check-out time.
                 if ($leaving && ! $checkedOut) {
                     $at = $breakfastFits ? $clock : max(0, ($dayEnd ?? $clock) - self::CHECKOUT_MINUTES);
-                    $by = $listedCheckOut !== null ? $listedCheckOut - self::CHECKOUT_MINUTES : null;
+                    // Checked out in time to be at lunch by 11:30 (near tonight's stay when moving on),
+                    // even when check-out is later.
+                    $lunchBy = self::LUNCH_START - max(15, $moving ? $this->travelMinutes($home, $tonight) : 0);
+                    $by = $listedCheckOut !== null ? min($listedCheckOut, $lunchBy) - self::CHECKOUT_MINUTES : null;
                     if ($first === null && $by !== null && $by > $at && $endsInTime($by + self::CHECKOUT_MINUTES)) {
                         $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $at, $by - $at, [
                             'accommodation_id' => $home->id,
@@ -2128,7 +2416,8 @@ class ItineraryService
                 // The first day in a new town starts with the drive from last night's town.
                 $drive = $this->travelMinutes($prev, $destination);
                 if ($index === 0 && $home && ! $arrivalDay && ($dayTowns[$dayNumber - 1] ?? $town) !== $town && $drive > 60) {
-                    $note = trim("{$note} Today starts with the ~{$drive} min drive from {$home->name} to {$destination->municipality?->name}.");
+                    $trip = $this->transport === 'public_transport' ? 'trip by public transport' : 'drive';
+                    $note = trim("{$note} Today starts with the ~{$drive} min {$trip} from {$home->name} to {$destination->municipality?->name}.");
                 }
 
                 // A sunset or evening destination starts just in time, not hours early.
@@ -2142,21 +2431,58 @@ class ItineraryService
                     return $latest !== null ? max($at, $latest) : $at;
                 };
                 $layout = $this->layoutVisit($arrival(), $planned);
-
-                // A destination with its own food serves lunch: a visit that starts at lunchtime
-                // begins with lunch there, instead of a restaurant stop on the way.
-                $onSiteLunch = in_array('lunch', (array) ($destination->meals_offered ?? []), true) && $destination->dining_details;
-                $siteLunch = fn (int $start) => ['at' => [$start, $start + self::MEAL_MINUTES], 'name' => 'Lunch at the on-site dining area', 'duration' => self::MEAL_MINUTES,
-                    'label' => 'midday', 'window' => self::WINDOWS['midday'], 'description' => $destination->dining_details];
-                $lunchNote = "Lunch is at {$destination->name}'s own dining area, so there's no separate restaurant stop; prices aren't listed on SOSOGON.";
-                if (! $hadLunch && $onSiteLunch && $layout['start'] >= self::EARLIEST_LUNCH && $layout['start'] <= self::LATEST_LUNCH) {
-                    $hadLunch = true;
-                    $planned[] = $siteLunch($layout['start']);
+                // An early start: the packed breakfast right after sunrise, by 8:00 AM.
+                if ($index === 0 && $sunriseDay) {
+                    $at = max(360, collect($layout['activities'])->map(fn ($a) => $this->slotMinutes($a['time'])[1] ?? null)->filter()->min() ?? 360);
+                    $planned[] = ['at' => [$at, $at + 30], 'name' => 'Breakfast — the packed breakfast you brought', 'duration' => 30, 'label' => 'morning', 'window' => null,
+                        'description' => 'A light breakfast with the view before the rest of the visit.'];
                     $layout = $this->layoutVisit($arrival(), $planned);
-                    $note = trim("{$note} {$lunchNote}");
                 }
-                // Lunch first when it's already 11 AM, or the visit starts after 11:30.
-                if (! $hadLunch && ($clock >= self::EARLIEST_LUNCH || $layout['start'] >= self::EARLIEST_LUNCH + 30)) {
+
+                // Lunch is 11:30 AM – 12:30 PM. A destination with its own food serves it during the
+                // visit; otherwise a visit that runs into lunchtime breaks for the nearest food place,
+                // leaving in time to be seated by 11:30. A visit that would only get going around
+                // lunchtime comes after lunch instead.
+                $siteMeal = fn (string $meal, int $start, string $label) => ['at' => [$start, $start + self::MEAL_MINUTES], 'name' => ucfirst($meal).' at the on-site dining area', 'duration' => self::MEAL_MINUTES,
+                    'label' => $label, 'window' => null, 'description' => $destination->dining_details];
+                $servesOnSite = fn (string $meal) => in_array($meal, (array) ($destination->meals_offered ?? []), true) && $destination->dining_details;
+                $onSiteLunch = $servesOnSite('lunch');
+                $lunchNote = "Lunch is at {$destination->name}'s own dining area, so there's no separate restaurant stop; prices aren't listed on SOSOGON.";
+                $lunchSpot = null;
+                $lunchSpotReason = null;
+                if (! $hadLunch && ! $onSiteLunch) {
+                    [$lunchSpot, $lunchSpotReason] = $findMeal($destination, null, self::LUNCH_START, 'a short break from your visit', 'lunch');
+                }
+                $away = $lunchSpot ? $this->travelMinutes($destination, $lunchSpot['place']) : 0;
+                // No food place near the destination (and no picnic spot to eat at): lunch is where
+                // the tourist goes next (back near the stay, or the nearest food place), so the
+                // visit ends in time to get there.
+                $lunchAfter = false;
+                $picnicSpot = collect($planned)->contains(fn ($a) => stripos($a['name'], 'picnic') !== false);
+                if (! $hadLunch && ! $onSiteLunch && ! $lunchSpot && ! $picnicSpot) {
+                    $elsewhere = $this->mealStay($tonight ?? $home, $home, $tonight, $checkedOut)
+                        ?? $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($destination, $f), null,
+                            fn ($f) => $this->isOpen($f, self::LUNCH_START, self::LUNCH_END, $date))['place'] ?? null;
+                    if ($elsewhere) {
+                        $away = $this->travelMinutes($destination, $elsewhere);
+                        $lunchAfter = true;
+                    }
+                }
+                // When the tourist leaves the visit for lunch (after rinsing off from a swim or a hike).
+                $breakFrom = self::LUNCH_START - $away - (! $onSiteLunch && $away > 0 && in_array($kind, ['water', 'highland'], true) ? self::FRESHEN_UP_MINUTES : 0);
+                // Busy times inside the visit (lunch and dinner breaks) that its activities go around.
+                $blocks = [];
+                // With lunch elsewhere, a visit too short to be worth it before lunch comes after it.
+                $needed = min($this->minimumVisit($destination, $pace), array_sum(array_column($planned, 'duration')));
+                $lunchFirst = match (true) {
+                    $onSiteLunch => $layout['start'] > self::LUNCH_START,
+                    $lunchAfter => $layout['start'] + $needed > $breakFrom,
+                    default => $layout['start'] > $breakFrom - 30,
+                };
+                if (! $hadLunch && $lunchFirst) {
+                    if ($shopToday && ! $shopped) {
+                        $goShopping(self::LUNCH_START - 15);
+                    }
                     $freeMorning();
                     if ($missing = $lunch($destination)) {
                         $note = trim("{$note} {$missing}");
@@ -2171,7 +2497,18 @@ class ItineraryService
                     $merienda();
                     $layout = $this->layoutVisit($arrival(), $planned);
                 }
-                // A long wait (for a sunset stop) is spent resting at the stay.
+                // A visit that only starts after dinner time (an evening activity) comes after dinner.
+                if (! $hadDinner && $layout['start'] >= $dinnerTarget) {
+                    $beforeDinner();
+                    $dinner();
+                    $layout = $this->layoutVisit($arrival(), $planned);
+                }
+                // A long wait (for a sunset stop) is spent souvenir shopping when today has a
+                // souvenir stop, and otherwise resting at the stay.
+                if ($shopToday && ! $shopped && $hadLunch && $layout['start'] - ($clock + $this->travelMinutes($prev, $destination)) >= self::SHOPPING_MINUTES + 30) {
+                    $goShopping($layout['start'] - 30);
+                    $layout = $this->layoutVisit($arrival(), $planned);
+                }
                 if ($base && ! $lastDay && $endsInTime($layout['start']) && $layout['start'] - ($clock + $this->travelMinutes($prev, $destination)) >= self::IDLE_MINUTES
                     && $restAt($base, $layout['start'] - $this->travelMinutes($base, $destination), $restNotes("before heading to {$destination->name}"), 'A breather in the heat of the day, so you are fresh for the late-afternoon stop.')) {
                     $layout = $this->layoutVisit($arrival(), $planned);
@@ -2182,69 +2519,98 @@ class ItineraryService
                 if ($dayEnd !== null) {
                     $limit = min($limit ?? $dayEnd, $dayEnd);
                 }
+                if ($lunchAfter && ! $hadLunch && $layout['start'] < $breakFrom) {
+                    $limit = min($limit ?? $breakFrom, $breakFrom);
+                }
                 if ($limit !== null && $layout['end'] > $limit) {
                     $planned = $this->shortenVisit($planned, $layout['end'] - $limit);
                     $layout = $this->layoutVisit($arrival(), $planned);
                 }
+                // Still too long to leave for lunch in time: its last activities wait for another visit.
+                while ($lunchAfter && ! $hadLunch && $layout['end'] > $breakFrom && count(array_filter($planned, fn ($a) => $a['label'] !== 'prep')) > 1) {
+                    array_pop($planned);
+                    $layout = $this->layoutVisit($arrival(), $planned);
+                }
                 // Such a stop is left out when it would still run past the end of the day, or
-                // would be cut shorter than a sensible visit. A visit that ends in time for lunch
-                // (by noon) is followed by it; only one that runs past noon breaks for lunch at 11:30.
-                $lunchInside = ! $hadLunch && $layout['start'] < self::LUNCH_BREAK && $layout['end'] > 720;
-                // The break starts where an activity ends between 11:00 and noon, so no activity is
-                // cut in two; without such a gap, at 11:30.
-                $breakAt = collect($layout['activities'])
-                    ->map(fn ($a) => $this->slotMinutes($a['time'])[1] ?? null)
-                    ->filter(fn ($end) => $end !== null && $end >= self::EARLIEST_LUNCH && $end <= 720)
-                    ->max() ?? self::LUNCH_BREAK;
+                // would be cut shorter than a sensible visit. A visit over before the tourist must
+                // leave for lunch is followed by it; one that runs into lunchtime breaks for it.
+                // Lunch eaten right here (its dining area or picnic spot) also ends a visit that's
+                // over shortly before 11:30, rather than leaving to look for lunch elsewhere.
+                $eatsHere = ! $lunchSpot && ($onSiteLunch || $picnicSpot);
+                $lunchInside = ! $hadLunch && ! $lunchAfter && $layout['start'] <= self::LUNCH_START
+                    && $layout['end'] > ($eatsHere ? self::LUNCH_START - 30 : $breakFrom);
+                // The whole break: getting ready, the trip there and back, and lunch itself.
+                $lunchMinutes = $lunchInside ? self::LUNCH_END + $away - min($breakFrom, self::LUNCH_START) : 0;
                 $tooShort = array_sum(array_column($planned, 'duration'))
                     < min($this->minimumVisit($destination, $pace), array_sum(array_column($plans[$destination->id], 'duration')));
-                $pastDeparture = $dayEnd !== null && ($tooShort || $dayEnd < $layout['end'] + ($lunchInside ? self::MEAL_MINUTES : 0));
-                if ($pastDeparture || ($optional && ($tooShort || $this->visitEnd($planned, $pace, $hours) < $layout['end'] + ($lunchInside ? self::MEAL_MINUTES : 0)))) {
+                $pastDeparture = $dayEnd !== null && ($tooShort || $dayEnd < $layout['end'] + $lunchMinutes);
+                if ($pastDeparture || ($optional && ($tooShort || $this->visitEnd($planned, $pace, $hours) < $layout['end'] + $lunchMinutes))) {
                     // Not dropped from the trip: offered to the following days.
                     $carried[$destination->id] = [$movedFrom[$destination->id] ?? $dayNumber, $day['reasons'][$destination->id] ?? null];
 
                     continue;
                 }
 
-                // Lunch during the visit when it runs over noon.
+                // One long activity is split around a meal break instead of starting after it.
+                $breakFor = function (int $from, int $to) use (&$planned, &$layout, &$blocks, $arrival) {
+                    $planned = $this->splitAt($planned, $from - $arrival());
+                    $blocks[] = [$from, $to];
+                    $layout = $this->layoutVisit($arrival(), $planned, $blocks);
+                };
+                // A meal eaten at the destination itself (its dining area, a picnic, a packed meal).
+                $mealHere = function (array $activity) use (&$planned, &$layout, &$blocks, $arrival) {
+                    $planned = $this->splitAt($planned, $activity['at'][0] - $arrival());
+                    $planned[] = $activity;
+                    $layout = $this->layoutVisit($arrival(), $planned, $blocks);
+                };
+
+                // Lunch during the visit when it runs into lunchtime: 11:30 AM – 12:30 PM.
                 $lunchStop = null;
                 if ($lunchInside) {
                     $hadLunch = true;
-                    [$meal, $mealReason] = $findMeal($destination, null, $breakAt, 'a short break from your visit');
                     $picnic = collect($planned)->search(fn ($a) => stripos($a['name'], 'picnic') !== false);
-                    // One long activity is split around the break instead of starting after it.
-                    $breakFor = function (int $from, int $to) use (&$planned, &$layout, $arrival) {
-                        $planned = $this->splitAt($planned, $from - $arrival());
-                        $layout = $this->layoutVisit($arrival(), $planned, [[$from, $to]]);
-                    };
                     if ($onSiteLunch) {
-                        $planned[] = $siteLunch($breakAt);
-                        $planned = $this->splitAt($planned, $breakAt - $arrival());
-                        $layout = $this->layoutVisit($arrival(), $planned);
+                        $mealHere($siteMeal('lunch', self::LUNCH_START, 'midday'));
                         $note = trim("{$note} {$lunchNote}");
-                    } elseif ($meal) {
-                        $away = $this->travelMinutes($destination, $meal['place']);
-                        $breakFor($breakAt - $away, $breakAt + self::MEAL_MINUTES + $away);
-                        $lunchStop = [$meal, $mealReason];
+                    } elseif ($lunchSpot) {
+                        $breakFor($breakFrom, self::LUNCH_END + $away);
+                        $lunchStop = [$lunchSpot, $lunchSpotReason];
+                        // Nothing left after the break: the visit simply ends in time for lunch,
+                        // which follows it as usual.
+                        if ($layout['end'] <= $breakFrom) {
+                            array_pop($blocks);
+                            $hadLunch = false;
+                            $lunchStop = null;
+                        }
                     } elseif ($picnic !== false) {
-                        $planned[$picnic] = ['at' => [$breakAt, $breakAt + self::MEAL_MINUTES], 'name' => "{$planned[$picnic]['name']} — your picnic lunch"] + $planned[$picnic];
-                        $planned = $this->splitAt($planned, $breakAt - $arrival());
-                        $layout = $this->layoutVisit($arrival(), $planned);
+                        $activity = $planned[$picnic];
+                        unset($planned[$picnic]);
+                        $mealHere(['at' => [self::LUNCH_START, self::LUNCH_END], 'name' => "{$activity['name']} — your picnic lunch", 'duration' => self::MEAL_MINUTES] + $activity);
                         $note = trim("{$note} We're sorry — there's no unused verified food place near {$destination->name}, so lunch is a picnic here. Pack food from your accommodation or a store on the way.");
                     } else {
-                        $breakFor($breakAt, $breakAt + self::MEAL_MINUTES);
-                        $note = trim("{$note} We're sorry — there's no unused verified food place near {$destination->name}, so please bring a packed lunch for around noon.");
+                        $mealHere(['at' => [self::LUNCH_START, self::LUNCH_END], 'name' => 'Lunch break — your packed lunch', 'duration' => self::MEAL_MINUTES, 'label' => 'midday', 'window' => null, 'description' => null]);
+                        $note = trim("{$note} We're sorry — there's no unused verified food place near {$destination->name}, so please bring a packed lunch for the 11:30 AM break.");
                     }
                 }
 
-                // A picnic activity in the lunch window is lunch.
-                foreach ($hadLunch ? [] : $layout['activities'] as $k => $activity) {
-                    $slot = $this->slotMinutes($activity['time']);
-                    if ($slot && stripos($activity['name'], 'picnic') !== false && $slot[0] >= 660 && $slot[0] <= self::LATEST_LUNCH) {
-                        $hadLunch = true;
-                        $layout['activities'][$k]['name'] .= ' — your picnic lunch';
-                        $note = trim("{$note} Lunch is a picnic here: pack food from your accommodation or a store on the way.");
-                        break;
+                // Dinner during a visit that runs on into the evening (an evening activity after
+                // it): 6:00 – 7:30 PM, at the destination's own dining area or a food place nearby.
+                $dinnerStop = null;
+                if (! $hadDinner && $layout['start'] < $dinnerTarget && $layout['end'] > $dinnerTarget + self::MEAL_MINUTES) {
+                    $hadDinner = true;
+                    if ($servesOnSite('dinner')) {
+                        $mealHere($siteMeal('dinner', $dinnerTarget, 'evening'));
+                        $note = trim("{$note} Dinner is at {$destination->name}'s own dining area; prices aren't listed on SOSOGON.");
+                    } else {
+                        [$meal, $mealReason] = $findMeal($destination, null, $dinnerTarget, 'dinner before the evening activities', 'dinner');
+                        if ($meal) {
+                            $dinnerAway = $this->travelMinutes($destination, $meal['place']);
+                            $breakFor($dinnerTarget - $dinnerAway, $dinnerTarget + self::MEAL_MINUTES + $dinnerAway);
+                            $dinnerStop = [$meal, $mealReason];
+                        } else {
+                            $mealHere(['at' => [$dinnerTarget, $dinnerTarget + self::MEAL_MINUTES], 'name' => 'Dinner break — your packed dinner', 'duration' => self::MEAL_MINUTES, 'label' => 'evening', 'window' => null, 'description' => null]);
+                            $note = trim("{$note} We're sorry — there's no unused verified food place near {$destination->name}, so bring a packed dinner for the evening.");
+                        }
                     }
                 }
 
@@ -2260,40 +2626,51 @@ class ItineraryService
                     ),
                 ] + $this->entranceCost($destination, $travelers), $prev);
                 if ($lunchStop) {
-                    $addFood($lunchStop[0], $breakAt, self::MEAL_MINUTES, "Lunch break during your visit to {$destination->name}.", $lunchStop[1], 'lunch', $destination, $destination);
+                    $addFood($lunchStop[0], self::LUNCH_START, self::MEAL_MINUTES, "Lunch break during your visit to {$destination->name}.", $lunchStop[1], 'lunch', $destination, $destination);
+                }
+                if ($dinnerStop) {
+                    $addFood($dinnerStop[0], $dinnerTarget, self::MEAL_MINUTES, "Dinner break during your visit to {$destination->name}.", $dinnerStop[1], 'dinner', $destination, $destination);
                 }
                 $prev = $destination;
                 $clock = $layout['end'];
                 $lastKind = $kind;
             }
 
-            // A free day at the stay, unless the tourist only arrives late in the day.
-            if ($stops->isEmpty() && $home && (! $arrivalDay || $clock + 120 <= $this->visitEndTime($pace))
-                && $endsInTime($this->layoutVisit($clock + $this->travelMinutes($prev, $home), $this->plannedActivities(null, $home, $pace, null))['end'])) {
-                // No destination left for today: a free day at the stay.
-                $start = $clock + $this->travelMinutes($prev, $home);
-                $layout = $this->layoutVisit($start, $this->plannedActivities(null, $home, $pace, null));
-                $add(ItineraryItem::TYPE_ACCOMMODATION, $home, $layout['start'], $layout['end'] - $layout['start'], [
-                    'accommodation_id' => $home->id,
-                    'notes' => "Free day at {$home->name}.",
+            // A free day at the stay, unless the tourist only arrives late in the day: the
+            // morning there until lunch, then (after lunch) the afternoon around it.
+            $freeDay = $stops->isEmpty() && $home && (! $arrivalDay || $clock + 120 <= $this->visitEndTime($pace));
+            $freeDayNote = $this->joinNotes($morningNote, $sightseeing === []
+                ? 'You picked '.$this->interestList($preferences).' without a sightseeing interest, so today has no attractions: it is built around meals at verified local restaurants'
+                    .($shopDaily ? ' and a souvenir stop' : '').', with free time at your stay. Add Nature, Beaches, Culture, Adventure or Relaxation for sightseeing.'
+                : null);
+            // Spent at tonight's stay once the tourist has moved on.
+            $freeAt = $checkedOut && $tonight ? $tonight : $home;
+            [$morningAtStay, $afternoonAtStay] = $freeDay ? $this->plannedActivities(null, $freeAt, $pace, null) : [null, null];
+            $freeDayStop = function (array $activity, int $start, int $end) use (&$prev, &$clock, &$freeDayNote, $add, $freeAt) {
+                $layout = $this->layoutVisit($start, [['duration' => $end - $start, 'label' => 'anytime', 'window' => null] + $activity]);
+                $add(ItineraryItem::TYPE_ACCOMMODATION, $freeAt, $start, $end - $start, [
+                    'accommodation_id' => $freeAt->id,
+                    'notes' => "Free day at {$freeAt->name}.",
                     'reason' => 'A slower day to rest and enjoy your stay between outings.',
                     'activities' => $layout['activities'],
-                    'preference_note' => $this->joinNotes($morningNote, $sightseeing === []
-                        ? 'You picked '.$this->interestList($preferences).' without a sightseeing interest, so today has no attractions: it is built around meals at verified local restaurants'
-                            .($shopDaily ? ' and a souvenir stop' : '').', with free time at your stay. Add Nature, Beaches, Culture, Adventure or Relaxation for sightseeing.'
-                        : null),
+                    'preference_note' => $freeDayNote,
                 ], $prev);
-                $prev = $home;
-                $clock = $layout['end'];
+                $freeDayNote = null;
+                $prev = $freeAt;
+                $clock = $end;
+            };
+            if ($freeDay && ! $hadLunch && ! $checkedOut) {
+                $start = $clock + $this->travelMinutes($prev, $home);
+                if ($endsInTime(self::LUNCH_START - 15) && self::LUNCH_START - 15 - $start >= 45) {
+                    $freeDayStop($morningAtStay, $start, self::LUNCH_START - 15);
+                }
             }
 
-            // Nothing else before lunch: souvenir shopping first (over by 12:30), else a free
-            // morning at the stay. Shopping after lunch is over in time for dinner, which then
-            // still starts within its evening window.
-            $dinnerTarget = $this->minutesOf($settings['dinner']);
-            $shopToday = $shopDaily || $dayNumber === $numDays;
-            if (! $hadLunch && $clock < 690 && $shopToday) {
-                $goShopping(750);
+            // Nothing else before lunch: souvenir shopping first (over in time to reach lunch by
+            // 11:30), else a free morning at the stay. Shopping after lunch is over in time for
+            // dinner, which then still starts within its evening window.
+            if (! $hadLunch && $clock < self::LUNCH_START && $shopToday && ! $shopped) {
+                $goShopping(self::LUNCH_START - 15);
             }
             if (! $hadLunch && $prev) {
                 $freeMorning();
@@ -2301,8 +2678,15 @@ class ItineraryService
                     $appendNote($missing);
                 }
             }
+            if ($freeDay) {
+                $start = max($clock, self::LUNCH_END) + $this->travelMinutes($prev, $freeAt);
+                $length = $afternoonAtStay['duration'];
+                if ($endsInTime($start + $length) && $start + $length <= $dinnerTarget - 30) {
+                    $freeDayStop($afternoonAtStay, $start, $start + $length);
+                }
+            }
             if (! $shopped && $shopToday) {
-                $goShopping(self::LATEST_DINNER - 30);
+                $goShopping($dinnerTarget - 10);
             }
 
             // A merienda when the afternoon has room for one (always offered on a packed pace).
@@ -2312,48 +2696,15 @@ class ItineraryService
                 $merienda();
             }
 
-            // Check in before dinner if that's still to do, or rest at the stay instead of a long
-            // wait (after travelling, even a shorter one on the arrival day).
-            if ($base && $prev && ! $lastDay && $endsInTime($dinnerTarget)) {
-                if (! $checkedIn) {
-                    $from = max($clock + $this->travelMinutes($prev, $base), $checkInAt ?? 0);
-                    $restAt($base, max($dinnerTarget - 15, $from + 30), $restNotes('before dinner'),
-                        'Your base for this part of the trip.', 30);
-                } elseif ($dinnerTarget - $clock >= ($arrivalDay ? 45 : self::IDLE_MINUTES)) {
-                    $restAt($base, $dinnerTarget - 15, $restNotes('before dinner'), "A breather after the day's travel and outings, so the evening never feels rushed.", $arrivalDay ? 30 : 90);
-                }
+            if (! $hadDinner) {
+                $beforeDinner();
+                $dinner();
             }
 
-            // Dinner near where the day ends, then on the way back to tonight's stay, then at the
-            // stay; none after a late arrival, when dinner time is long past.
-            if ($prev && ! $endsInTime(max($dinnerTarget, $clock) + self::MEAL_MINUTES)) {
-                if ($clock < $dayEnd) {
-                    $appendNote("{$leaveNote}, before dinner time, so plan to eat on the way.");
-                }
-            } elseif ($prev && $clock > self::LATEST_DINNER) {
-                $appendNote('You arrive after the usual dinner time, so eat on the way or ask '.($tonight?->name ?? 'your accommodation').' about food options.');
-            } elseif ($prev) {
-                $dinnerStart = fn ($f) => max($dinnerTarget, $clock + $this->travelMinutes($prev, $f));
-                $dinnerOpen = fn ($f) => $endsInTime($dinnerStart($f) + self::MEAL_MINUTES) && $this->isOpen($f, $dinnerStart($f), $dinnerStart($f) + self::MEAL_MINUTES, $date);
-                $dinner = $this->pickPlace($plan['food'], $usedFood, fn ($f) => $this->kmBetween($prev, $f), $mealKm, $dinnerOpen, $foodScore);
-                $dinnerReason = $dinner ? $this->mealReason($dinner, $prev, 'right where your day ends', $preferences) : null;
-                if (! $dinner && $tonight && $prev !== $tonight) {
-                    $dinner = $this->pickPlace($plan['food'], $usedFood,
-                        fn ($f) => $this->kmBetween($prev, $f) + $this->kmBetween($f, $tonight) - $this->kmBetween($prev, $tonight),
-                        self::MAX_DETOUR_KM, $dinnerOpen, $foodScore);
-                    if ($dinner) {
-                        $dinnerReason = "On your way back from {$prev->name} to {$tonight->name}{$this->detourNote($dinner['km'])}.";
-                    }
-                }
-                if ($dinner) {
-                    $addFood($dinner, $dinnerStart($dinner['place']), self::MEAL_MINUTES, "Dinner near {$prev->name}.", $dinnerReason, 'dinner', $prev, $prev);
-                } elseif (($dinnerStay = $this->mealStay($tonight, $home, $tonight, $checkedOut))
-                    && $endsInTime(max($dinnerTarget, $clock + $this->travelMinutes($prev, $dinnerStay)) + self::MEAL_MINUTES)) {
-                    $addMealAtStay('dinner', max($dinnerTarget, $clock + $this->travelMinutes($prev, $dinnerStay)),
-                        "near {$prev->name}".($prev !== $dinnerStay ? " or on the way to {$dinnerStay->name}" : ''), $prev, $dinnerStay);
-                } elseif ($checkedOut && $lastDay) {
-                    $appendNote("We're sorry — there's no verified food place near {$prev->name} for dinner, and you've checked out of {$home->name}, so eat on the way.");
-                }
+            // Notes for meals the day goes without, on its first stop.
+            $firstToday = collect($items)->search(fn ($i) => $i['day_number'] === $dayNumber);
+            if ($dayNotes !== [] && $firstToday !== false) {
+                $items[$firstToday]['preference_note'] = $this->joinNotes(implode(' ', $dayNotes), $items[$firstToday]['preference_note'] ?? null);
             }
 
             // Without a stay there's no arrival stop: Day 1's first stop says when the tourist arrives.
@@ -2372,6 +2723,10 @@ class ItineraryService
             $lastTown = $town;
         }
 
+        $this->unplaced = [];
+        foreach ($carried as $id => [$fromDay]) {
+            $this->unplaced[$fromDay][] = $byId[$id]->name;
+        }
         if ($carried !== []) {
             Log::warning('Itinerary destinations that fit no day', ['destinations' => collect(array_keys($carried))->map(fn ($id) => $byId[$id]->name)->all()]);
         }
@@ -2402,7 +2757,11 @@ class ItineraryService
             return 0;
         }
 
-        return $pinned->min(fn ($a) => $a['window'][0]) - (count($planned) - $pinned->count()) * $this->activityMinutes($pace);
+        // Its other activities first, and dinner (6:00 – 7:30 PM) before an evening one.
+        $others = collect($planned)->reject(fn ($a) => in_array($a['label'], ['sunset', 'evening'], true))->sum('duration');
+        $dinner = $pinned->contains(fn ($a) => $a['label'] === 'evening') ? self::MEAL_MINUTES : 0;
+
+        return $pinned->min(fn ($a) => $a['window'][0]) - $others - $dinner;
     }
 
     /**
@@ -2434,7 +2793,7 @@ class ItineraryService
                 'description' => $activity->description,
             ];
 
-            $tooEarly = $label === 'dawn' && ($arrivalDay || $pace === 'relaxed' || ($hours && $hours[0] > self::WINDOWS['dawn'][0] + 30));
+            $tooEarly = $label === 'dawn' && (! $this->earlyStart || $arrivalDay || $pace === 'relaxed' || ($hours && $hours[0] > self::WINDOWS['dawn'][0] + 30));
             // A sunset or evening activity needs about an hour of it before closing time.
             $tooLate = in_array($label, ['sunset', 'evening'], true) && $hours && $hours[1] < self::WINDOWS[$label][0] + 60;
             // An activity that only makes sense at its time (sunrise viewing at noon doesn't) is left out.
@@ -2444,7 +2803,31 @@ class ItineraryService
         }
 
         // No usable listed activities: the shortest sensible visit for this kind of place at this pace.
-        return $planned ?: [['name' => "Explore {$destination->name}", 'duration' => max($this->minimumVisit($destination, $pace), $this->activityMinutes($pace)), 'label' => 'anytime', 'window' => null, 'description' => null]];
+        $planned = $planned ?: [['name' => "Explore {$destination->name}", 'duration' => max($this->minimumVisit($destination, $pace), $this->activityMinutes($pace)), 'label' => 'anytime', 'window' => null, 'description' => null]];
+
+        // Boat trips, guided tours and the like start with registering and a briefing.
+        if ($this->needsOperator($destination)) {
+            $onWater = (int) $destination->category_id === 8
+                || $destination->activities->contains(fn ($a) => preg_match('/island|boat|whale shark|butanding|diving|snorkel|firefly|surf/i', (string) $a->name));
+            array_unshift($planned, [
+                'name' => 'Registration and briefing',
+                'duration' => self::REGISTRATION_MINUTES,
+                'label' => 'prep',
+                'window' => null,
+                'description' => $onWater
+                    ? 'Register with the site or the local operator, settle any fees and get the safety briefing (and life vests for a boat trip) before heading out.'
+                    : 'Register at the entrance, settle any fees and meet your guide before the tour starts.',
+            ]);
+        }
+
+        return $planned;
+    }
+
+    /** Whether a destination's activities need a boat, a guide or an operator (island hopping, whale sharks, diving…). */
+    private function needsOperator(Destination $destination): bool
+    {
+        return (int) $destination->category_id === 8
+            || $destination->activities->contains(fn ($a) => preg_match(self::OPERATOR_ACTIVITY, (string) $a->name));
     }
 
     /**
@@ -2468,29 +2851,36 @@ class ItineraryService
     }
 
     /**
-     * When a visit's first activity without a fixed time runs past $minutes into the visit (a
-     * break starts there), splits it into the part before the break and the rest after it,
-     * so the visit doesn't wait for the break to start. A remainder under 30 minutes isn't
-     * worth coming back to, so the activity just ends at the break; with under 30 minutes
-     * before the break, the visit is left as it was.
+     * When the activity under way $minutes into the visit (a break starts there) runs past it,
+     * splits it into the part before the break and the rest after it, so the visit doesn't wait
+     * for the break to start; the rest is done whenever the visit resumes. A remainder under 30
+     * minutes isn't worth coming back to, so the activity just ends at the break; with under 30
+     * minutes of it before the break, the visit is left as it was.
      */
     private function splitAt(array $planned, int $minutes): array
     {
+        $elapsed = 0;
         foreach ($planned as $i => $activity) {
             if (isset($activity['at']) || in_array($activity['label'], ['dawn', 'sunset', 'evening'], true)) {
                 continue;
             }
-            if ($minutes < 30 || $activity['duration'] <= $minutes) {
+            if ($elapsed + $activity['duration'] <= $minutes) {
+                $elapsed += $activity['duration'];
+
+                continue;
+            }
+            $before = $minutes - $elapsed;
+            if ($before < 30) {
                 return $planned;
             }
-            if ($activity['duration'] - $minutes < 30) {
-                $planned[$i]['duration'] = $minutes;
+            if ($activity['duration'] - $before < 30) {
+                $planned[$i]['duration'] = $before;
 
                 return $planned;
             }
             array_splice($planned, $i, 1, [
-                ['duration' => $minutes] + $activity,
-                ['duration' => $activity['duration'] - $minutes] + $activity,
+                ['duration' => $before] + $activity,
+                ['duration' => $activity['duration'] - $before, 'label' => 'anytime', 'window' => null] + $activity,
             ]);
 
             return $planned;
@@ -2543,6 +2933,20 @@ class ItineraryService
             $tips[] = $mentionsShoes ? 'Bring water.' : 'Wear comfortable shoes and bring water.';
         } elseif ($destination->activities->contains('type', 'outdoor')) {
             $tips[] = 'Bring water and sun protection.';
+        }
+        // Activities that depend on the sea, the weather or the season: never promised.
+        $activityNames = $destination->activities->pluck('name')->implode(' ').' '.$destination->name;
+        if ((int) $destination->category_id === 8 || preg_match('/island.?hopping|sland hopping|boat|banca|bangka/i', $activityNames)) {
+            $tips[] = 'Boat trips depend on the weather and sea conditions: check for Coast Guard or PAGASA advisories the day before, and trips may be cancelled in rough seas.';
+        }
+        if (preg_match('/whale shark|butanding/i', $activityNames)) {
+            $tips[] = 'Whale shark sightings depend on the season and conditions and are never guaranteed; confirm with the local tourism office or operator before you go.';
+        }
+        if (preg_match('/surf/i', $activityNames)) {
+            $tips[] = 'Surfing conditions depend on the season and the swell; ask a local surf school before you book a lesson.';
+        }
+        if (preg_match('/firefly/i', $activityNames)) {
+            $tips[] = 'Firefly watching depends on the weather and the night; it is best on dark, dry evenings.';
         }
         if (trim((string) $destination->operating_hours) === '') {
             $tips[] = "Opening hours aren't listed, so confirm with the site before you go.";
@@ -2608,6 +3012,16 @@ class ItineraryService
             return $notes;
         }
 
+        if ($this->transport === 'public_transport') {
+            // Long trips late in the day: the last jeepneys and vans between towns leave early.
+            if ($this->kmBetween($from, $to) > 15 && $start - $minutes >= 960 && ! str_contains((string) $notes, 'last trip')) {
+                $notes = trim(($notes ?? '').' Jeepneys and vans between towns thin out by early evening, so confirm the last trip before you set out.');
+            }
+
+            // Wording the schedule check looks for: every public-transport leg is an estimate.
+            return trim(($notes ?? '')." Leave {$from->name} by {$this->formatMinutes($start - $minutes)}: about {$minutes} min ({$this->publicTransportLeg($from, $to)}; public transport estimate, so confirm routes and fares locally).");
+        }
+
         $how = $this->roadLeg($from, $to) ? 'driving time from Google Maps' : 'estimated from the map distance, so allow extra time';
 
         return trim(($notes ?? '')." Leave {$from->name} by {$this->formatMinutes($start - $minutes)}: about {$minutes} min ({$how}).");
@@ -2634,74 +3048,257 @@ class ItineraryService
     }
 
     /**
-     * What breaks the planning rules in a built trip (empty when nothing does): a stop without
-     * a readable time, one that starts before the previous stop ends plus the travel between
-     * them, a lunch break outside its visit, a meal outside its usual window, and a destination
-     * used twice or visited outside its opening hours.
+     * What breaks the planning rules in a built trip (empty when nothing does); see dayProblems().
      *
      * @return array<int, string>
      */
     public function scheduleProblems(array $items, Collection $destinations, array $preferences): array
     {
+        $problems = $this->dayProblems($items, $destinations, $preferences);
+
+        return $problems === [] ? [] : array_merge(...array_values($problems));
+    }
+
+    /**
+     * The scheduling rules every generated trip is checked against before it's saved, by day
+     * (empty when nothing breaks them). Deterministic, so they hold whatever the AI suggested:
+     * - every day has breakfast (6:00 – 8:00 AM), lunch (11:30 AM – 12:30 PM, never later) and
+     *   dinner (6:00 – 7:30 PM), once each, unless the tourist isn't around then (a late arrival,
+     *   an early departure) or there is no food place at all (the plan then says what to do);
+     * - nothing else happens during lunch: no stop overlaps it, and a visit that breaks for it
+     *   has no activity in the break (the trip to and from the food place included);
+     * - stops are in time order without overlaps, each starting after the one before it ends
+     *   plus the travel between them, and activities fit inside their stop;
+     * - the trip has the requested number of days, stays in the selected towns, never repeats a
+     *   destination or visits one outside its opening hours, and public-transport trips carry
+     *   public-transport travel times.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function dayProblems(array $items, Collection $destinations, array $preferences): array
+    {
         $startDate = ! empty($preferences['start_date']) ? Carbon::parse($preferences['start_date']) : null;
+        $numDays = (int) ($preferences['num_days'] ?? collect($items)->max('day_number') ?? 1);
+        $towns = array_map('intval', $preferences['municipality_ids'] ?? []);
         $byId = $destinations->keyBy(fn ($d) => (int) $d->id);
-        $windows = ['Breakfast' => [330, 600], 'Lunch' => [660, self::LATEST_LUNCH], 'Afternoon merienda' => [870, 1000], 'Dinner' => [1050, 1290]];
+        $arrivalGiven = $this->arrivalMinutes($preferences) !== null;
+        $arrive = $this->arrivalMinutes($preferences) ?? self::DEFAULT_ARRIVAL;
+        $depart = $this->departureMinutes($preferences);
+        $windows = [
+            'breakfast' => [360, self::BREAKFAST_END],
+            'lunch' => [self::LUNCH_START, self::LUNCH_END],
+            'dinner' => [self::DINNER_START, self::LATEST_DINNER_START + self::MEAL_MINUTES],
+        ];
         $problems = [];
         $seen = [];
 
         foreach (collect($items)->groupBy('day_number') as $day => $rows) {
+            $day = (int) $day;
+            $add = function (string $problem) use (&$problems, $day) {
+                $problems[$day][] = "Day {$day}: {$problem}";
+            };
+            if ($day < 1 || $day > $numDays) {
+                $add("the trip only has {$numDays} day(s).");
+            }
             $date = $startDate?->copy()->addDays($day - 1);
+            // When the tourist is around: from the arrival on Day 1, until the departure on the last day.
+            $dayStart = $day === 1 ? $arrive : 0;
+            $dayEnd = $day === $numDays && $depart !== null ? $depart : 1440;
             $prevEnd = null;
             $visit = null;
+            $meals = [];
+            $lunchBreaks = [];
+            $busy = [];
+
             foreach ($rows->sortBy('sequence') as $row) {
-                $label = "Day {$day}, stop {$row['sequence']}";
+                $label = "stop {$row['sequence']}";
                 $slot = $this->slotMinutes($row['time_slot'] ?? null);
                 if (! $slot) {
-                    $problems[] = "{$label} has no readable time.";
+                    $add("{$label} has no readable time.");
 
                     continue;
                 }
                 [$from, $to] = $slot;
                 $notes = (string) ($row['notes'] ?? '');
+                $type = $row['item_type'] ?? null;
+                $travel = (int) ($row['travel_time_from_prev'] ?? 0);
+                if (preg_match('/^(Breakfast|Lunch|Dinner)\b/', $notes, $meal)) {
+                    $meals[] = [strtolower($meal[1]), $from, $to];
+                }
 
-                // A lunch break belongs to the visit right before it, with the trip to and from
-                // the food place inside that visit; the visit's end stays the time to beat.
-                if (Str::startsWith($notes, 'Lunch break')) {
-                    $travel = (int) ($row['travel_time_from_prev'] ?? 0);
+                // A lunch or dinner break belongs to the visit right before it, with the trip to and
+                // from the food place inside that visit; the visit's end stays the time to beat.
+                if (preg_match('/^(Lunch|Dinner) break\b/', $notes, $break)) {
                     if (! $visit || $from - $travel < $visit[0] || $to + $travel > $visit[1]) {
-                        $problems[] = "{$label}: the lunch break falls outside its visit.";
+                        $add("{$label}: the ".strtolower($break[1]).' break falls outside its visit.');
                     }
-                    $visit = null;
+                    if ($break[1] === 'Lunch') {
+                        $lunchBreaks[] = [$from - $travel, $to + $travel];
+                    }
 
                     continue;
                 }
-                if ($prevEnd !== null && $from < $prevEnd + (int) ($row['travel_time_from_prev'] ?? 0)) {
-                    $problems[] = "{$label} starts before the previous stop ends plus the travel time.";
+                if ($prevEnd !== null && $from < $prevEnd + $travel) {
+                    $add("{$label} starts before the previous stop ends plus the travel time.");
                 }
-                foreach ($windows as $meal => [$earliest, $latest]) {
-                    // Day 1 lunch may wait for a late-morning arrival.
-                    $latest = $meal === 'Lunch' && (int) $day === 1 ? self::ARRIVAL_DAY_LATEST_LUNCH : $latest;
-                    if (Str::startsWith($notes, $meal) && ($from < $earliest || $from > $latest)) {
-                        $problems[] = "{$label}: {$meal} at {$this->formatMinutes($from)} is outside its usual time.";
+                if ($to > $dayEnd) {
+                    $add("{$label} ends after the departure at {$this->formatMinutes($dayEnd)}.");
+                }
+                if ($day === 1 && $arrivalGiven && $from < $arrive) {
+                    $add("{$label} starts before the arrival at {$this->formatMinutes($arrive)}.");
+                }
+                if ($this->transport === 'public_transport' && $travel > 0 && ! str_contains($notes, 'public transport estimate')) {
+                    $add("{$label}: the travel time isn't a public-transport time.");
+                }
+                foreach ((array) ($row['activities'] ?? []) as $activity) {
+                    $span = $this->slotMinutes($activity['time'] ?? null);
+                    if (! $span || $span[0] < $from || $span[1] > $to) {
+                        $add("{$label}: the activity \"".($activity['name'] ?? '')."\" falls outside the stop's time.");
+
+                        continue;
+                    }
+                    if (preg_match('/\b(breakfast|lunch|dinner)\b/i', $activity['name'] ?? '', $meal)) {
+                        $meals[] = [strtolower($meal[1]), $span[0], $span[1]];
+                    } else {
+                        $busy[] = [$span[0], $span[1], $label.' ("'.($activity['name'] ?? '').'")'];
                     }
                 }
-                if (($row['item_type'] ?? null) === ItineraryItem::TYPE_DESTINATION) {
+                if ($type === ItineraryItem::TYPE_DESTINATION) {
                     $id = (int) $row['destination_id'];
                     if (isset($seen[$id])) {
-                        $problems[] = "{$label} repeats a destination already in the trip.";
+                        $add("{$label} repeats a destination already in the trip.");
                     }
                     $seen[$id] = true;
                     $place = $byId[$id] ?? null;
                     if ($place && ! $this->isOpen($place, $from, $to, $date)) {
-                        $problems[] = "{$label} is outside {$place->name}'s opening hours.";
+                        $add("{$label} is outside {$place->name}'s opening hours.");
+                    }
+                    if ($place && $towns !== [] && ! in_array((int) $place->municipality_id, $towns, true)) {
+                        $add("{$label} ({$place->name}) is outside the selected municipalities.");
+                    }
+                    $visit = [$from, $to];
+                } else {
+                    $visit = null;
+                    if (! preg_match('/^(Breakfast|Lunch|Dinner)\b/', $notes)) {
+                        $busy[] = [$from, $to, $label];
                     }
                 }
-                $visit = ($row['item_type'] ?? null) === ItineraryItem::TYPE_DESTINATION ? [$from, $to] : null;
                 $prevEnd = $to;
+            }
+
+            foreach ($windows as $meal => [$earliest, $latest]) {
+                $found = array_values(array_filter($meals, fn ($m) => $m[0] === $meal));
+                // Late on Day 1 a dinner can only be when the tourist gets there.
+                $latest = $meal === 'dinner' && $day === 1 && $arrive + self::ARRIVAL_MINUTES > self::LATEST_DINNER_START ? self::LATEST_DINNER + self::MEAL_MINUTES : $latest;
+                foreach ($found as [, $from, $to]) {
+                    if ($from < $earliest || $to > $latest) {
+                        $add(ucfirst($meal)." at {$this->timeRange($from, $to - $from)} is outside {$this->formatMinutes($earliest)} – {$this->formatMinutes($latest)}.");
+                    }
+                }
+                if (count($found) > 1) {
+                    $add("{$meal} is planned more than once.");
+                }
+                $around = match ($meal) {
+                    'breakfast' => $dayStart + self::BREAKFAST_MINUTES <= self::BREAKFAST_END && $dayEnd >= self::BREAKFAST_END,
+                    'lunch' => $dayStart + 15 <= self::LUNCH_START && $dayEnd >= self::LUNCH_END,
+                    'dinner' => $dayStart <= self::LATEST_DINNER && $dayEnd >= self::LATEST_DINNER_START + self::MEAL_MINUTES,
+                };
+                if ($found === [] && $around && ! $this->mealExcused($rows, $day, $meal)) {
+                    $add("there's no {$meal} in the plan.");
+                }
+            }
+
+            // Nothing but lunch between 11:30 and 12:30 (including the trip to and from a lunch
+            // break's food place).
+            foreach ($busy as [$from, $to, $what]) {
+                if ($from < self::LUNCH_END && $to > self::LUNCH_START && collect($meals)->contains(fn ($m) => $m[0] === 'lunch')) {
+                    $add("{$what} overlaps lunch (11:30 AM – 12:30 PM).");
+                }
+                foreach ($lunchBreaks as [$breakFrom, $breakTo]) {
+                    if ($from < $breakTo && $to > $breakFrom) {
+                        $add("{$what} overlaps the lunch break.");
+                    }
+                }
             }
         }
 
         return $problems;
+    }
+
+    /**
+     * The days without the $excluded destinations, topped up again (by the usual day rules)
+     * from the other eligible places, so a stop that didn't fit gives its time to one that does.
+     */
+    private function refill(array $days, array $excluded, array $plan, Collection $destinations, array $preferences): array
+    {
+        $pool = $destinations->reject(fn ($d) => in_array((int) $d->id, $excluded, true))->values();
+        $gone = $destinations->whereIn('id', $excluded)->pluck('name')->all();
+        foreach ($days as $n => $day) {
+            $days[$n]['destination_ids'] = array_values(array_diff($day['destination_ids'], $excluded));
+            // A planner-added stop explained by a place now gone is explained again by the stop before it.
+            foreach ($days[$n]['destination_ids'] as $k => $id) {
+                $reason = (string) ($day['reasons'][$id] ?? '');
+                if (in_array($id, $day['added'] ?? [], true) && collect($gone)->contains(fn ($name) => str_contains($reason, $name))) {
+                    $before = $k > 0 ? $pool->firstWhere('id', $days[$n]['destination_ids'][$k - 1]) : null;
+                    $days[$n]['reasons'][$id] = $this->addedReason($pool->firstWhere('id', $id), $before);
+                }
+            }
+        }
+
+        return $this->skipResortsAtResortStay($this->shapeDays($days, $pool, $preferences), $plan, $pool, $preferences);
+    }
+
+    /**
+     * Whether a day goes without $meal on purpose: the planner said so while building it, or (for
+     * a saved trip) the day's notes tell the tourist what to do instead — bring it, eat on the
+     * way or before setting off.
+     */
+    private function mealExcused(Collection $rows, int $day, string $meal): bool
+    {
+        if (isset($this->mealExcuses[$day][$meal])) {
+            return true;
+        }
+        $hint = '(bring|packed|eat on the way|on your way|on the way|before you set off|before heading out|before you arrive|about food)';
+
+        return $rows->contains(fn ($row) => preg_match("/\\b{$meal}\\b[^.]*{$hint}|{$hint}[^.]*\\b{$meal}\\b/i", (string) ($row['preference_note'] ?? '')) === 1);
+    }
+
+    /**
+     * The destination to take out of a day that breaks a scheduling rule: one the planner added
+     * rather than the AI or the tourist picked, else the day's last stop that the tourist didn't
+     * ask for, else its last stop. Null when the day has no destination left.
+     */
+    private function stopToDrop(array $days, array $items, int $day, array $preferences): ?int
+    {
+        $ids = collect($items)->where('day_number', $day)->where('item_type', ItineraryItem::TYPE_DESTINATION)
+            ->sortBy('sequence')->pluck('destination_id')->map(fn ($id) => (int) $id)->values();
+        if ($ids->isEmpty()) {
+            return null;
+        }
+        $added = collect($days)->flatMap(fn ($d) => $d['added'] ?? [])->map(fn ($id) => (int) $id)->all();
+        $asked = $this->preferredIds($preferences);
+
+        return $ids->reverse()->first(fn ($id) => in_array($id, $added, true) && ! in_array($id, $asked, true))
+            ?? $ids->reverse()->first(fn ($id) => ! in_array($id, $asked, true))
+            ?? $ids->last();
+    }
+
+    /** Says on each day which stops were left out to keep its meals and travel times realistic. */
+    private function noteDroppedStops(array $items, array $dropped): array
+    {
+        foreach ($dropped as $day => $names) {
+            $first = collect($items)->search(fn ($i) => $i['day_number'] === $day);
+            if ($first === false) {
+                continue;
+            }
+            $items[$first]['preference_note'] = $this->joinNotes(
+                'To keep lunch at 11:30 AM – 12:30 PM and leave enough time for travel and meals, today leaves out '
+                    .$this->naturalList(array_unique($names)).'. You can add '.(count(array_unique($names)) === 1 ? 'it' : 'them').' to another day when you edit the itinerary.',
+                $items[$first]['preference_note'] ?? null,
+            );
+        }
+
+        return $items;
     }
 
     /** An activity that can't happen at its time of day: done in sequence, noting when it's best. */
@@ -2734,7 +3331,7 @@ class ItineraryService
      */
     private function layoutVisit(int $arrival, array $planned, array $blocks = []): array
     {
-        $rank = ['dawn' => 0, 'morning' => 1, 'midday' => 2, 'anytime' => 2, 'afternoon' => 3, 'sunset' => 4, 'evening' => 5];
+        $rank = ['prep' => -1, 'dawn' => 0, 'morning' => 1, 'midday' => 2, 'anytime' => 2, 'afternoon' => 3, 'sunset' => 4, 'evening' => 5];
         $order = array_keys($planned);
         usort($order, fn ($a, $b) => [$rank[$planned[$a]['label']] ?? 2, $a] <=> [$rank[$planned[$b]['label']] ?? 2, $b]);
 
@@ -2747,10 +3344,14 @@ class ItineraryService
 
         $rows = [];
         $cursor = $arrival;
-        $remaining = count($order);
+        // Registering doesn't count as doing something there.
+        $remaining = count(array_filter($planned, fn ($a) => $a['label'] !== 'prep'));
+        $done = 0;
         foreach ($order as $i) {
             $activity = $planned[$i];
-            $remaining--;
+            if ($activity['label'] !== 'prep') {
+                $remaining--;
+            }
             if (isset($activity['at'])) {
                 $rows[] = [$activity['at'][0], $activity['at'][1], $activity['name'], $activity['description']];
 
@@ -2764,7 +3365,7 @@ class ItineraryService
             $timed = $activity['window'] && in_array($activity['label'], ['dawn', 'morning', 'midday', 'afternoon', 'sunset', 'evening'], true);
             $pinned = in_array($activity['label'], ['dawn', 'sunset', 'evening'], true);
             if ($timed && ($pinned ? $cursor + $length > $activity['window'][1] : $cursor >= $activity['window'][1])) {
-                if ($rows !== [] || $remaining > 0) {
+                if ($done > 0 || $remaining > 0) {
                     continue;
                 }
                 $activity = $this->outsideWindow($activity);
@@ -2776,6 +3377,7 @@ class ItineraryService
             $rows[] = [$start, $start + $length, $activity['name'], $activity['description']];
             $busy[] = [$start, $start + $length];
             $cursor = $start + $length;
+            $done += $activity['label'] !== 'prep' ? 1 : 0;
         }
         usort($rows, fn ($a, $b) => $a[0] <=> $b[0]);
 
@@ -3107,6 +3709,8 @@ class ItineraryService
         return ($cuisine === null || $cuisine($place) ? 2 : 0) + ($place->price_range === $this->budgetLevel($preferences) ? 1 : 0)
             + ($this->localFoodWanted($place, $preferences) ? 1 : 0)
             + ($meal === 'merienda' && $this->isSnackPlace($place) ? 2 : 0)
+            // A café or snack shop isn't a proper lunch or dinner when a restaurant is near too.
+            - (in_array($meal, ['lunch', 'dinner'], true) && $this->isSnackPlace($place) ? 2 : 0)
             + ($meal !== null && in_array($meal, (array) ($place->meals_served ?? []), true) ? 1 : 0);
     }
 
@@ -3237,8 +3841,30 @@ class ItineraryService
         }
 
         $minutes = $this->roadLeg($from, $to)['duration_min'] ?? round($this->kmBetween($from, $to), 2) / 30 * 60;
+        // By public transport: slower, plus the wait for a tricycle or a jeepney/bus/van; a place
+        // a few hundred metres away is a walk.
+        if ($this->transport === 'public_transport') {
+            $km = $this->kmBetween($from, $to);
+            $minutes = match (true) {
+                $km < 0.5 => $km / 4 * 60,
+                $km <= self::TRICYCLE_KM => $minutes * self::PUBLIC_TRANSPORT_FACTOR + self::TRICYCLE_WAIT,
+                default => $minutes * self::PUBLIC_TRANSPORT_FACTOR + self::JEEPNEY_WAIT,
+            };
+        }
 
         return (int) (ceil($minutes / 5) * 5);
+    }
+
+    /** How a leg is travelled by public transport, for the travel note. */
+    private function publicTransportLeg($from, $to): string
+    {
+        $km = $this->kmBetween($from, $to);
+
+        return match (true) {
+            $km < 0.5 => 'a short walk',
+            $km <= self::TRICYCLE_KM => 'by tricycle, including about '.self::TRICYCLE_WAIT.' min waiting',
+            default => 'by jeepney, bus or van and a tricycle to the entrance, including about '.self::JEEPNEY_WAIT.' min of waiting and transfers',
+        };
     }
 
     /** Google's driving route between two destinations, when the distance matrix measured it. */

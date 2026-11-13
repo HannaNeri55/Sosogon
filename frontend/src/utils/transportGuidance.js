@@ -42,9 +42,9 @@ export const TRANSPORT_GUIDES = {
     travelmode: 'transit',
     inSiteRoute: true,
     linkLabel: 'Road directions',
-    time: null,
+    time: 'by public transport, incl. waiting (estimate)',
     overview:
-      "Tap Road directions between two stops to see the road route on a map here, or Navigate here to follow it live. Jeepneys, tricycles, buses and vans use these roads, but SOSOGON doesn't list their routes, fares or schedules: ask your accommodation, the municipal tourism office or locals, and confirm the fare before you ride.",
+      "Travel times between stops are public-transport estimates that include waiting and transfers (a tricycle for short hops, a jeepney, bus or van plus a tricycle for longer ones). Tap Road directions between two stops to see the road route on a map here, or Navigate here to follow it live. SOSOGON doesn't list routes, fares or schedules: ask your accommodation, the municipal tourism office or locals, and confirm the fare and the last trip before you ride.",
   },
   no_preference: {
     label: 'No Preference',

@@ -153,7 +153,7 @@ class ItineraryInterestTest extends TestCase
 
     private function problems(Itinerary $itinerary): array
     {
-        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev', 'activities', 'preference_note']))->all();
 
         return app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => now()->addDays(3)->toDateString()]);
     }

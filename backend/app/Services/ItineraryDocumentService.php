@@ -203,7 +203,7 @@ class ItineraryDocumentService
 
     private function isLunchDuring(ItineraryItem $stop, ItineraryItem $host): bool
     {
-        if ($stop->item_type !== ItineraryItem::TYPE_FOOD_BEVERAGE || ! str_starts_with((string) $stop->notes, 'Lunch break')) {
+        if ($stop->item_type !== ItineraryItem::TYPE_FOOD_BEVERAGE || ! preg_match('/^(Lunch|Dinner) break/', (string) $stop->notes)) {
             return false;
         }
         [$start, $end] = $this->slotTimes($stop->time_slot);

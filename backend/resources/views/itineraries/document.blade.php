@@ -155,7 +155,7 @@
                     @if($row['lunch'])
                         @php($lunch = $row['lunch'])
                         <div class="lunch">
-                            <div class="lunch-label">Lunch break during this visit</div>
+                            <div class="lunch-label">{{ str_starts_with($lunch['notes'] ?? '', 'Dinner') ? 'Dinner' : 'Lunch' }} break during this visit</div>
                             <div><span class="time">{{ $lunch['slot'] }}</span></div>
                             <div class="place">{{ $lunch['name'] }}</div>
                             @include('itineraries.partials.stop-details', ['stop' => $lunch])
