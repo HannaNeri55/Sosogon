@@ -69,8 +69,8 @@ class NotificationTest extends TestCase
 
     public function test_a_tourist_registration_notifies_every_admin(): void
     {
-        $this->postJson('/api/v1/register', ['name' => 'Nina Newcomer', 'email' => 'nina@example.com', 'password' => 'password123',
-            'password_confirmation' => 'password123', 'role' => 'tourist'])->assertCreated();
+        $this->postJson('/api/v1/register', ['name' => 'Nina Newcomer', 'email' => 'nina@example.com', 'phone' => '09171234567', 'password' => 'Password123!',
+            'password_confirmation' => 'Password123!', 'role' => 'tourist'])->assertCreated();
 
         foreach ([$this->admin, $this->otherAdmin] as $admin) {
             $this->assertSame(['New tourist account | Nina Newcomer (nina@example.com) created a tourist account.'], $this->messages($admin));
@@ -80,9 +80,10 @@ class NotificationTest extends TestCase
 
     public function test_a_business_owner_registration_tells_the_admins_who_and_what(): void
     {
-        $this->post('/api/v1/register', ['name' => 'Ben Builder', 'email' => 'ben@example.com', 'password' => 'password123',
-            'password_confirmation' => 'password123', 'role' => 'business_owner', 'business_type' => 'accommodation',
-            'business_name' => 'Ben\'s Bay Inn', 'business_address' => 'Zone 1, Bulan', 'municipality_id' => $this->town,
+        $barangay = DB::table('barangays')->insertGetId(['municipality_id' => $this->town, 'name' => 'Zone 1', 'created_at' => now(), 'updated_at' => now()]);
+        $this->post('/api/v1/register', ['name' => 'Ben Builder', 'email' => 'ben@example.com', 'phone' => '09171234567', 'password' => 'Password123!',
+            'password_confirmation' => 'Password123!', 'role' => 'business_owner', 'business_type' => 'accommodation',
+            'business_name' => 'Ben\'s Bay Inn', 'business_address' => 'Zone 1, Bulan', 'municipality_id' => $this->town, 'barangay_id' => $barangay,
             'business_permit_number' => 'BP-2026-001', 'business_permit_file' => UploadedFile::fake()->create('permit.pdf', 100, 'application/pdf')],
             ['Accept' => 'application/json'])->assertCreated();
 

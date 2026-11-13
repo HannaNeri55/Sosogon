@@ -3,34 +3,37 @@ import { useNavigate, Link } from 'react-router-dom'
 import { registerUser } from '../../api/auth'
 import { getMunicipalities, getBarangays } from '../../api/admin'
 import toast from 'react-hot-toast'
-import { FiBriefcase, FiUser, FiMail, FiPhone, FiLock, FiMapPin, FiFileText, FiUploadCloud, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi'
+import { FiBriefcase, FiUser, FiLock, FiMapPin, FiFileText, FiUploadCloud, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi'
 import { showApiError } from '../../utils/apiErrors'
 import { focusFirstInvalid } from '../../utils/formErrors'
+import { ACCOUNT_RULES, ACCOUNT_SHOW_NOW } from '../../utils/authValidation'
+import useLiveValidation from '../../hooks/useLiveValidation'
+import AuthField from '../../components/auth/AuthField'
+import useEmailAvailability from '../../hooks/useEmailAvailability'
+import { PasswordFields, PersonalFields } from '../../components/auth/AccountFields'
 
-function Field({ label, name, type = 'text', value, onChange, error, required = true, icon: Icon, children, autoComplete = 'off' }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      {children || (
-        <div className="relative">
-          {Icon && <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />}
-          <input
-            name={name}
-            type={type}
-            autoComplete={autoComplete}
-            className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'input-error' : ''}`}
-            value={value || ''}
-            onChange={onChange}
-            aria-invalid={!!error}
-          />
-        </div>
-      )}
-      {error && <p className="field-error">{Array.isArray(error) ? error[0] : error}</p>}
-    </div>
-  )
+const PERMIT_TYPES = ['pdf', 'doc', 'docx']
+const PERMIT_MAX_MB = 10
+
+/** The account rules plus the business details (the server's OwnerApplicationRules). */
+const RULES = {
+  ...ACCOUNT_RULES,
+  business_name: (v) => (!v.business_name.trim() ? 'Enter your business name.' : v.business_name.trim().length > 255 ? 'Keep the business name to 255 characters or fewer.' : undefined),
+  business_address: (v) => (!v.business_address.trim() ? 'Enter the business address.' : v.business_address.trim().length > 500 ? 'Keep the address to 500 characters or fewer.' : undefined),
+  municipality_id: (v) => (!v.municipality_id ? 'Choose the municipality.' : undefined),
+  barangay_id: (v) => (!v.barangay_id ? 'Choose the barangay.' : undefined),
+  business_permit_number: (v) => (!v.business_permit_number.trim() ? 'Enter the business permit number.' : v.business_permit_number.trim().length > 100 ? 'Keep the permit number to 100 characters or fewer.' : undefined),
+  business_permit_file: (v) => {
+    const file = v.business_permit_file
+    if (!file) return 'Upload your business permit.'
+    if (!PERMIT_TYPES.includes(file.name.split('.').pop().toLowerCase())) return 'Upload a PDF or Word document (.pdf, .doc or .docx).'
+    if (file.size > PERMIT_MAX_MB * 1024 * 1024) return `The file is too large. Upload one of ${PERMIT_MAX_MB} MB or less.`
+    return undefined
+  },
 }
+
+// Choosing an option or a file is a finished action, so its problem shows at once.
+const SHOW_NOW = { ...ACCOUNT_SHOW_NOW, business_permit_file: (v) => !!v.business_permit_file }
 
 function SectionHeader({ icon: Icon, step, title }) {
   return (
@@ -44,12 +47,33 @@ function SectionHeader({ icon: Icon, step, title }) {
   )
 }
 
+/** A required <select> with the same label, error and hint layout as AuthField. */
+function SelectField({ id, label, error, hint, children, ...selectProps }) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1.5">
+        {label} <span className="text-red-500" aria-hidden="true">*</span>
+      </label>
+      <select
+        id={id}
+        required
+        className={`input-field ${error ? 'input-error' : ''}`}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+        {...selectProps}
+      >
+        {children}
+      </select>
+      {error ? <p id={`${id}-error`} className="field-error" role="alert">{error}</p> : hint && <p id={`${id}-hint`} className="mt-1.5 text-xs text-gray-500">{hint}</p>}
+    </div>
+  )
+}
+
 export default function BusinessOwnerRegister() {
   const navigate = useNavigate()
   const [municipalities, setMunicipalities] = useState([])
   const [barangays, setBarangays] = useState([])
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState({})
   const [agreed, setAgreed] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -66,6 +90,9 @@ export default function BusinessOwnerRegister() {
     business_permit_number: '',
     business_permit_file: null,
   })
+  // Each field is checked while the user types (see useLiveValidation); the server checks again.
+  const live = useLiveValidation(formData, RULES, { now: SHOW_NOW })
+  useEmailAvailability(formData.email, live)
 
   useEffect(() => {
     getMunicipalities().then(setMunicipalities)
@@ -77,28 +104,9 @@ export default function BusinessOwnerRegister() {
     }
   }, [formData.municipality_id])
 
-  const validate = () => {
-    const e = {}
-    if (!formData.name.trim()) e.name = 'Full name is required'
-    if (!formData.email.trim()) e.email = 'Email is required'
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) e.email = 'Invalid email'
-    if (!formData.phone.trim()) e.phone = 'Phone is required'
-    if (!formData.password) e.password = 'Password is required'
-    else if (formData.password.length < 8) e.password = 'Minimum 8 characters'
-    if (formData.password !== formData.password_confirmation) e.password_confirmation = 'Passwords do not match'
-    if (!formData.business_name.trim()) e.business_name = 'Business name is required'
-    if (!formData.business_address.trim()) e.business_address = 'Business address is required'
-    if (!formData.municipality_id) e.municipality_id = 'Municipality is required'
-    if (!formData.barangay_id) e.barangay_id = 'Barangay is required'
-    if (!formData.business_permit_number.trim()) e.business_permit_number = 'Permit number is required'
-    if (!formData.business_permit_file) e.business_permit_file = 'Permit document is required'
-    setErrors(e)
-    return Object.keys(e).length === 0
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) {
+    if (!live.submit()) {
       focusFirstInvalid()
       return
     }
@@ -106,9 +114,10 @@ export default function BusinessOwnerRegister() {
     setLoading(true)
     try {
       const payload = new FormData()
-      payload.append('name', formData.name)
-      payload.append('email', formData.email)
+      payload.append('name', formData.name.trim())
+      payload.append('email', formData.email.trim())
       payload.append('phone', formData.phone)
+      // Sent exactly as typed.
       payload.append('password', formData.password)
       payload.append('password_confirmation', formData.password_confirmation)
       payload.append('role', 'business_owner')
@@ -126,9 +135,9 @@ export default function BusinessOwnerRegister() {
       toast.success('Registration submitted! Your account is pending admin approval.')
       navigate('/registration-pending')
     } catch (e) {
-      const serverErrors = e.response?.data?.errors
+      const serverErrors = e.response?.status === 422 && e.response.data?.errors
       if (serverErrors) {
-        setErrors(serverErrors)
+        live.setServerErrors(serverErrors)
         focusFirstInvalid()
       } else {
         showApiError(e, 'Registration failed')
@@ -139,9 +148,17 @@ export default function BusinessOwnerRegister() {
   }
 
   const handleInputChange = (name, value) => {
-    setFormData({ ...formData, [name]: value })
-    setErrors({ ...errors, [name]: '' })
+    setFormData((current) => ({ ...current, [name]: value }))
+    live.changed(name)
   }
+
+  const text = (name) => ({
+    name,
+    value: formData[name],
+    error: live.errors[name],
+    onChange: (e) => handleInputChange(name, e.target.value),
+    onBlur: () => live.blurred(name),
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-primary-50/40 flex items-center justify-center px-4 py-12">
@@ -156,100 +173,103 @@ export default function BusinessOwnerRegister() {
             <p className="text-gray-500 text-sm">Submit your details for verification — your account requires admin approval</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit} className="space-y-8" noValidate>
             <div>
               <SectionHeader icon={FiUser} step={1} title="Personal Information" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
-                  label="Full Name"
-                  name="name"
-                  autoComplete="off"
-                  icon={FiUser}
-                  value={formData.name}
-                  error={errors.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                />
-                <Field
-                  label="Email Address"
-                  name="email"
-                  type="email"
-                  autoComplete="off"
-                  icon={FiMail}
-                  value={formData.email}
-                  error={errors.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                />
-                <Field
-                  label="Phone Number"
-                  name="phone"
-                  type="tel"
-                  autoComplete="off"
-                  icon={FiPhone}
-                  value={formData.phone}
-                  error={errors.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                />
+                <PersonalFields idPrefix="owner" values={formData} live={live} onChange={handleInputChange} />
               </div>
             </div>
 
             <div className="pt-8 border-t border-gray-100">
               <SectionHeader icon={FiBriefcase} step={2} title="Business Information" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
+                <AuthField
+                  id="owner-business-name"
                   label="Business Name"
-                  name="business_name"
+                  required
                   icon={FiBriefcase}
-                  value={formData.business_name}
-                  error={errors.business_name}
-                  onChange={(e) => handleInputChange('business_name', e.target.value)}
+                  maxLength={255}
+                  placeholder="e.g. Bulan Bay Inn"
+                  hint="The name customers know your business by."
+                  {...text('business_name')}
                 />
-                <Field label="Business Type" name="business_type" error={errors.business_type}>
-                  <select className="input-field" value={formData.business_type} onChange={(e) => handleInputChange('business_type', e.target.value)}>
-                    <option value="accommodation">Accommodation</option>
-                    <option value="food_beverage">Food and Beverage</option>
-                    <option value="retail_product">Retail / Local Products</option>
-                  </select>
-                </Field>
-                <Field
+                <SelectField
+                  id="owner-business-type"
+                  label="Business Type"
+                  name="business_type"
+                  value={formData.business_type}
+                  error={live.errors.business_type}
+                  onChange={(e) => handleInputChange('business_type', e.target.value)}
+                >
+                  <option value="accommodation">Accommodation</option>
+                  <option value="food_beverage">Food and Beverage</option>
+                  <option value="retail_product">Retail / Local Products</option>
+                </SelectField>
+                <AuthField
+                  id="owner-business-address"
                   label="Business Address"
-                  name="business_address"
+                  required
                   icon={FiMapPin}
-                  value={formData.business_address}
-                  error={errors.business_address}
-                  onChange={(e) => handleInputChange('business_address', e.target.value)}
+                  maxLength={500}
+                  placeholder="e.g. Purok 3, Rizal St."
+                  hint="Street, purok or landmark. Choose the municipality and barangay below."
+                  {...text('business_address')}
                 />
-                <Field label="Municipality" name="municipality_id" error={errors.municipality_id}>
-                  <select className={`input-field ${errors.municipality_id ? 'input-error' : ''}`} aria-invalid={!!errors.municipality_id} value={formData.municipality_id} onChange={(e) => { setFormData({ ...formData, municipality_id: e.target.value, barangay_id: '' }); setErrors({ ...errors, municipality_id: '' }) }}>
-                    <option value="">Select Municipality</option>
-                    {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="Barangay" name="barangay_id" error={errors.barangay_id}>
-                  <select className={`input-field ${errors.barangay_id ? 'input-error' : ''}`} aria-invalid={!!errors.barangay_id} value={formData.barangay_id} onChange={(e) => handleInputChange('barangay_id', e.target.value)}>
-                    <option value="">Select Barangay</option>
-                    {barangays.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </Field>
-                <Field
+                <SelectField
+                  id="owner-municipality"
+                  label="Municipality"
+                  name="municipality_id"
+                  value={formData.municipality_id}
+                  error={live.errors.municipality_id}
+                  onBlur={() => live.blurred('municipality_id')}
+                  onChange={(e) => {
+                    setFormData((current) => ({ ...current, municipality_id: e.target.value, barangay_id: '' }))
+                    live.changed('municipality_id')
+                    live.blurred('municipality_id')
+                  }}
+                >
+                  <option value="">Select Municipality</option>
+                  {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </SelectField>
+                <SelectField
+                  id="owner-barangay"
+                  label="Barangay"
+                  name="barangay_id"
+                  value={formData.barangay_id}
+                  error={live.errors.barangay_id}
+                  hint={!formData.municipality_id ? 'Choose the municipality first.' : undefined}
+                  onBlur={() => live.blurred('barangay_id')}
+                  onChange={(e) => {
+                    handleInputChange('barangay_id', e.target.value)
+                    live.blurred('barangay_id')
+                  }}
+                >
+                  <option value="">Select Barangay</option>
+                  {barangays.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </SelectField>
+                <AuthField
+                  id="owner-permit-number"
                   label="Business Permit Number"
-                  name="business_permit_number"
+                  required
                   icon={FiFileText}
-                  value={formData.business_permit_number}
-                  error={errors.business_permit_number}
-                  onChange={(e) => handleInputChange('business_permit_number', e.target.value)}
+                  maxLength={100}
+                  placeholder="As printed on your permit"
+                  hint="Copy it exactly as printed on your Mayor's or Business Permit."
+                  {...text('business_permit_number')}
                 />
               </div>
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Business Permit Document <span className="text-red-500">*</span>
+                <label htmlFor="business_permit_file" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Business Permit Document <span className="text-red-500" aria-hidden="true">*</span>
                 </label>
                 <label
                   htmlFor="business_permit_file"
                   className={`flex items-center gap-3 px-4 py-3.5 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                    errors.business_permit_file ? 'border-red-300 bg-red-50/50' : 'border-gray-200 hover:border-primary-300 hover:bg-primary-50/30'
+                    live.errors.business_permit_file ? 'border-red-300 bg-red-50/50' : 'border-gray-200 hover:border-primary-300 hover:bg-primary-50/30'
                   }`}
                 >
-                  {formData.business_permit_file ? (
+                  {formData.business_permit_file && !live.errors.business_permit_file ? (
                     <FiCheckCircle size={18} className="text-primary-600 shrink-0" />
                   ) : (
                     <FiUploadCloud size={18} className="text-gray-400 shrink-0" />
@@ -259,39 +279,27 @@ export default function BusinessOwnerRegister() {
                   </span>
                   <input
                     id="business_permit_file"
+                    name="business_permit_file"
                     type="file"
                     accept=".pdf,.doc,.docx"
-                    className="hidden"
-                    onChange={(e) => handleInputChange('business_permit_file', e.target.files[0])}
+                    className="sr-only"
+                    aria-invalid={!!live.errors.business_permit_file}
+                    aria-describedby={live.errors.business_permit_file ? 'business_permit_file-error' : 'business_permit_file-hint'}
+                    onChange={(e) => handleInputChange('business_permit_file', e.target.files[0] || null)}
                   />
                 </label>
-                {errors.business_permit_file && <p className="field-error">{Array.isArray(errors.business_permit_file) ? errors.business_permit_file[0] : errors.business_permit_file}</p>}
+                {live.errors.business_permit_file ? (
+                  <p id="business_permit_file-error" className="field-error" role="alert">{live.errors.business_permit_file}</p>
+                ) : (
+                  <p id="business_permit_file-hint" className="mt-1.5 text-xs text-gray-500">PDF or Word document (.pdf, .doc, .docx), up to {PERMIT_MAX_MB} MB.</p>
+                )}
               </div>
             </div>
 
             <div className="pt-8 border-t border-gray-100">
               <SectionHeader icon={FiLock} step={3} title="Account Security" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
-                  label="Password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  icon={FiLock}
-                  value={formData.password}
-                  error={errors.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                />
-                <Field
-                  label="Confirm Password"
-                  name="password_confirmation"
-                  type="password"
-                  autoComplete="new-password"
-                  icon={FiLock}
-                  value={formData.password_confirmation}
-                  error={errors.password_confirmation}
-                  onChange={(e) => handleInputChange('password_confirmation', e.target.value)}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <PasswordFields idPrefix="owner" values={formData} live={live} onChange={handleInputChange} />
               </div>
             </div>
 

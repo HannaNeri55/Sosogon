@@ -33,3 +33,8 @@ export const resetPassword = async (payload) => {
   const response = await api.post('/reset-password', payload)
   return response.data
 }
+/** Whether an email can still be used to register ({ available: boolean }). */
+export const checkEmailAvailable = async (email) => {
+  const response = await api.get('/register/email-available', { params: { email }, quiet: true })
+  return response.data
+}

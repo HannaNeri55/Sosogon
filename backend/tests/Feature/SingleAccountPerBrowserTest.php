@@ -81,7 +81,7 @@ class SingleAccountPerBrowserTest extends TestCase
         $admin = $this->signIn('admin');
 
         $this->fromBrowser($admin, 'POST', '/api/v1/register', ['name' => 'New Tourist', 'email' => 'new@example.com',
-            'password' => 'password123', 'password_confirmation' => 'password123', 'role' => 'tourist'])
+            'phone' => '09171234567', 'password' => 'Password123!', 'password_confirmation' => 'Password123!', 'role' => 'tourist'])
             ->assertStatus(409)->assertJsonPath('code', 'already_authenticated');
 
         $this->assertDatabaseMissing('users', ['email' => 'new@example.com']);

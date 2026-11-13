@@ -1,10 +1,12 @@
 // frontend/src/pages/public/Login.jsx
 import { useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi'
+import { FiMail, FiLock } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
 import { postAuthPath } from '../../utils/pendingItinerary'
-import { loginErrors, validateLogin } from '../../utils/loginErrors'
+import { LOGIN_RULES, LOGIN_SHOW_NOW, loginErrors } from '../../utils/loginErrors'
+import useLiveValidation from '../../hooks/useLiveValidation'
+import AuthField, { PasswordField } from '../../components/auth/AuthField'
 import SessionExpiredNotice from '../../components/common/SessionExpiredNotice'
 import LoginAlert from '../../components/common/LoginAlert'
 
@@ -13,26 +15,29 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const [loading, setLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '' })
-  // Messages under each field, and the dialog for a refused sign-in (see utils/loginErrors.js).
-  const [errors, setErrors] = useState({})
+  // Fields are checked while the user types (useLiveValidation); a refused sign-in opens a
+  // dialog (see utils/loginErrors.js).
+  const live = useLiveValidation(formData, LOGIN_RULES, { now: LOGIN_SHOW_NOW })
   const [alert, setAlert] = useState(null)
+  const [wrongCredentials, setWrongCredentials] = useState(false)
   const emailRef = useRef(null)
   const passwordRef = useRef(null)
 
   const change = (name, value) => {
-    setFormData({ ...formData, [name]: value })
-    // Typing again clears the red. A wrong-credentials error belongs to both fields.
-    setErrors((current) => (current.credentials ? {} : { ...current, [name]: undefined }))
+    setFormData((current) => ({ ...current, [name]: value }))
+    live.changed(name)
+    // A wrong-credentials error belongs to both fields: editing either clears it.
+    if (wrongCredentials) {
+      setWrongCredentials(false)
+      live.clearServerErrors()
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const invalid = validateLogin(formData)
-    setErrors(invalid)
-    if (invalid.email || invalid.password) {
-      (invalid.email ? emailRef : passwordRef).current?.focus()
+    if (!live.submit()) {
+      (LOGIN_RULES.email(formData) ? emailRef : passwordRef).current?.focus()
       return
     }
 
@@ -44,8 +49,11 @@ export default function Login() {
       const restricted = ['suspended', 'deactivated'].includes(user.account_state)
       navigate(!restricted && user.role === 'tourist' && from?.startsWith('/') ? from : postAuthPath(user))
     } catch (error) {
+      // The email and password stay as typed, so the user can correct them.
       const result = loginErrors(error)
-      setErrors(result.fields)
+      const { credentials, ...fields } = result.fields
+      setWrongCredentials(!!credentials)
+      live.setServerErrors(fields)
       setAlert(result.alert)
     } finally {
       setLoading(false)
@@ -81,51 +89,39 @@ export default function Login() {
           <SessionExpiredNotice />
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <AuthField
+              id="login-email"
+              inputRef={emailRef}
+              label="Email"
+              icon={FiMail}
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="juandelacruz@gmail.com"
+              hint="The email address you registered with."
+              value={formData.email}
+              error={live.errors.email}
+              describedBy={wrongCredentials ? 'login-password-error' : undefined}
+              onChange={(e) => change('email', e.target.value)}
+              onBlur={() => live.blurred('email')}
+            />
             <div>
-              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <div className="relative">
-                <FiMail className={`absolute left-3 top-1/2 -translate-y-1/2 ${errors.email ? 'text-red-500' : 'text-gray-400'}`} size={16} />
-                <input
-                  ref={emailRef}
-                  id="login-email"
-                  name="email"
-                  type="email"
-                  autoComplete="username"
-                  className={`input-field pl-9 ${errors.email ? 'input-error' : ''}`}
-                  value={formData.email}
-                  onChange={(e) => change('email', e.target.value)}
-                  aria-invalid={!!errors.email}
-                  aria-describedby={typeof errors.email === 'string' ? 'login-email-error' : errors.credentials ? 'login-password-error' : undefined}
-                />
-              </div>
-              {typeof errors.email === 'string' && <p id="login-email-error" className="field-error">{errors.email}</p>}
-            </div>
-            <div>
-              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-              <div className="relative">
-                <FiLock className={`absolute left-3 top-1/2 -translate-y-1/2 ${errors.password ? 'text-red-500' : 'text-gray-400'}`} size={16} />
-                <input
-                  ref={passwordRef}
-                  id="login-password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  className={`input-field pl-9 pr-9 ${errors.password ? 'input-error' : ''}`}
-                  value={formData.password}
-                  onChange={(e) => change('password', e.target.value)}
-                  aria-invalid={!!errors.password}
-                  aria-describedby={errors.password ? 'login-password-error' : undefined}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                </button>
-              </div>
-              {typeof errors.password === 'string' && <p id="login-password-error" className="field-error">{errors.password}</p>}
+              <PasswordField
+                id="login-password"
+                inputRef={passwordRef}
+                label="Password"
+                icon={FiLock}
+                name="password"
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                value={formData.password}
+                error={live.errors.password}
+                onChange={(e) => change('password', e.target.value)}
+                onBlur={() => live.blurred('password')}
+              />
               <div className="text-right mt-2">
                 <Link to="/forgot-password" className="text-sm text-primary-600 font-medium hover:text-primary-700">
                   Forgot password?
@@ -141,7 +137,7 @@ export default function Login() {
             alert={alert}
             onClose={() => {
               setAlert(null)
-              if (errors.credentials) passwordRef.current?.select()
+              if (wrongCredentials) passwordRef.current?.select()
             }}
           />
 

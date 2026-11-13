@@ -66,6 +66,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
         Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     });
+    // The registration forms ask, while the user types, whether an email already has an account.
+    Route::get('/register/email-available', [AuthController::class, 'emailAvailable'])->middleware('throttle:30,1');
 
     // A visitor opened a page of the public website (sent once per navigation; see PageViewController)
     Route::post('/page-views', [PageViewController::class, 'store'])->middleware('throttle:60,1');

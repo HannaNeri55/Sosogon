@@ -1,14 +1,18 @@
 import { FiLock, FiUserX } from 'react-icons/fi'
+import { validateEmail } from './authValidation'
 
-const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
+/**
+ * The sign-in form's checks, as rules for useLiveValidation: a well-formed email and a
+ * password. The password's strength isn't checked here (older accounts may predate the rules).
+ */
+export const LOGIN_RULES = {
+  email: (v) => validateEmail(v.email),
+  password: (v) => (v.password ? undefined : 'Enter your password.'),
+}
 
-/** Checks the sign-in form before sending it. Returns { email?, password? } messages. */
-export function validateLogin({ email, password }) {
-  const errors = {}
-  if (!email.trim()) errors.email = 'Enter your email address.'
-  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = 'Enter a valid email address, like name@example.com.'
-  if (!password) errors.password = 'Enter your password.'
-  return errors
+/** An email that can't become valid by typing more (a space, a second @) is flagged at once. */
+export const LOGIN_SHOW_NOW = {
+  email: (v) => /\s/.test(v.email.trim()) || (v.email.match(/@/g) || []).length > 1 || v.email.trim().startsWith('@'),
 }
 
 /**
