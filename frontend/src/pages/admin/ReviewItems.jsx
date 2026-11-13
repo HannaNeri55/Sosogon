@@ -232,7 +232,7 @@ export default function ReviewItems() {
     <div>
       <div className="mb-5">
         <p className="text-primary-600 font-medium mb-2">Admin</p>
-        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Rooms, Menus &amp; Products</h1>
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Offerings</h1>
         <p className="text-sm text-gray-500 mt-2 max-w-3xl">
           Approve new rooms, dishes and products, and review changes to approved ones. Approved versions stay visible to
           tourists until a change is approved. Approving an item does not publish its listing.
