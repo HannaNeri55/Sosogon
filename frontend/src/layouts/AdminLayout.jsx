@@ -19,7 +19,6 @@ import {
   FiChevronDown,
   FiExternalLink,
   FiShield,
-  FiMap,
   FiInbox,
   FiClipboard,
 } from 'react-icons/fi'
@@ -61,11 +60,6 @@ const sidebarLinks = [
     to: '/admin/announcements',
     icon: FiBell,
     label: 'Announcements',
-  },
-  {
-    to: '/admin/listing-locations',
-    icon: FiMap,
-    label: 'Listing Locations',
   },
   {
     section: 'Approvals',

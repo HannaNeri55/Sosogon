@@ -105,7 +105,7 @@ export default function AdminDashboard() {
           </h1>
           <p className="text-gray-600 mt-1">Here&apos;s what&apos;s happening across Sorsogon tourism today.</p>
         </div>
-        {pending > 0 ? (
+        {pending > 0 && (
           <Link
             to="/admin/submissions"
             className="inline-flex items-center gap-2 self-start rounded-full bg-accent-50 border border-accent-100 px-4 py-2 text-sm font-semibold text-accent-700 hover:bg-accent-100 transition-colors"
@@ -113,10 +113,6 @@ export default function AdminDashboard() {
             <FiClock size={15} aria-hidden="true" /> {pending} submission{pending === 1 ? '' : 's'} waiting for review
             <FiArrowRight size={14} aria-hidden="true" />
           </Link>
-        ) : (
-          <span className="inline-flex items-center gap-2 self-start rounded-full bg-secondary-50 border border-secondary-100 px-4 py-2 text-sm font-semibold text-secondary-700">
-            <FiCheckCircle size={15} aria-hidden="true" /> All submissions reviewed
-          </span>
         )}
       </header>
 
