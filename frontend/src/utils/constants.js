@@ -28,8 +28,8 @@ export const ROOM_CAPACITY = { Standard: 2, Deluxe: 2, Suite: 4, 'Family Room': 
 // The pace sets how many attractions a day holds (one fewer on the arrival day), when breakfast
 // is and how unhurried each visit is; meals, rest and travel are planned around them.
 export const TRAVEL_PACES = [
-  { value: 'relaxed', label: 'Relaxed', detail: 'Up to 2 attractions a day · breakfast ~8:30 AM · longer visits' },
-  { value: 'moderate', label: 'Moderate', detail: 'Up to 3 attractions a day · breakfast ~7:30 AM' },
+  { value: 'relaxed', label: 'Relaxed', detail: 'Up to 2 attractions a day · breakfast ~7:15 AM · longer visits' },
+  { value: 'moderate', label: 'Moderate', detail: 'Up to 3 attractions a day · breakfast ~7:00 AM' },
   { value: 'packed', label: 'Packed', detail: 'Up to 4 attractions a day · breakfast ~6:30 AM · afternoon merienda' },
 ]
 

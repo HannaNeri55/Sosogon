@@ -156,7 +156,7 @@ class ItineraryTripOptionsTest extends TestCase
 
     private function problems(Itinerary $itinerary): array
     {
-        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev', 'activities', 'preference_note']))->all();
 
         return app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => $this->start()->toDateString()]);
     }
@@ -242,7 +242,7 @@ class ItineraryTripOptionsTest extends TestCase
         // The last day holds fewer stops the earlier the tourist leaves; other days keep the pace's.
         $target = fn (string $time) => (new \ReflectionMethod(ItineraryService::class, 'dayTarget'))->invoke(app(ItineraryService::class), 2, $this->request(['departure_time' => $time]));
         $this->assertSame(0, $target('08:30'));
-        $this->assertSame(1, $target('12:00'));
+        $this->assertSame(2, $target('12:00'));
         $this->assertSame(3, $target('20:00'));
         $this->assertSame(3, (new \ReflectionMethod(ItineraryService::class, 'dayTarget'))->invoke(app(ItineraryService::class), 2, $this->request()));
     }
@@ -344,23 +344,40 @@ class ItineraryTripOptionsTest extends TestCase
 
     // ---------------- Transportation preference ----------------
 
-    public function test_every_transport_preference_is_accepted_and_leaves_the_plan_unchanged(): void
+    public function test_every_transport_preference_is_accepted_and_shapes_travel_times(): void
     {
         $shape = fn (Itinerary $i) => $i->items->sortBy(['day_number', 'sequence'])
             ->map(fn ($s) => [$s->day_number, $s->item_type, $s->destination_id ?? $s->food_beverage_id ?? $s->accommodation_id ?? $s->retail_shop_id, $s->time_slot])->values()->all();
+        $withoutTransportLine = fn (string $prompt) => preg_replace('/^- Getting around: .*\n/m', '', $prompt);
 
         $baseline = $this->generate();
         $baselinePrompt = end($this->prompts);
-        foreach (['private_car', 'motorcycle', 'rented_vehicle', 'public_transport', 'no_preference'] as $mode) {
+        $this->assertStringContainsString('- Getting around: no preference', $baselinePrompt);
+        $this->assertStringContainsString('lunch 11:30 AM – 12:30 PM (never later)', $baselinePrompt);
+        // Driving modes: the same plan with driving times; the AI is told how the tourist travels.
+        foreach (['private_car', 'motorcycle', 'rented_vehicle', 'no_preference'] as $mode) {
             $itinerary = $this->generate(['transport_preference' => $mode]);
             $this->assertSame($shape($baseline), $shape($itinerary), "{$mode} changed the plan.");
             $this->assertEquals((float) $baseline->estimated_cost_max, (float) $itinerary->estimated_cost_max, "{$mode} changed the cost.");
-            $this->assertSame($baselinePrompt, end($this->prompts), "{$mode} changed what the AI is asked.");
+            $this->assertSame($withoutTransportLine($baselinePrompt), $withoutTransportLine(end($this->prompts)), "{$mode} changed what the AI is asked.");
             // Kept with the itinerary, so its directions can follow it.
             $this->assertSame($mode, $itinerary->transport_preference);
             $this->actingAs($this->tourist)->getJson("/api/v1/itineraries/{$itinerary->id}")->assertOk()->assertJsonPath('transport_preference', $mode);
         }
         $this->assertNull($baseline->transport_preference, 'Left out: none saved, shown as no preference.');
+
+        // Public transport: slower legs with waiting time, said to be estimates, and the AI is
+        // asked for fewer, closer stops. The plan still keeps every scheduling rule.
+        $public = $this->generate(['transport_preference' => 'public_transport']);
+        $this->assertStringContainsString('PUBLIC TRANSPORT', end($this->prompts));
+        $legs = $public->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0);
+        $this->assertNotEmpty($legs);
+        $this->assertTrue($legs->every(fn ($i) => str_contains((string) $i->notes, 'public transport estimate')), 'Every leg says it is a public-transport estimate.');
+        $this->assertFalse($public->items->contains(fn ($i) => str_contains((string) $i->notes, 'driving time')), 'No driving times.');
+        $baselineLegs = $baseline->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0)->sum('travel_time_from_prev');
+        $this->assertGreaterThan($baselineLegs / max(1, $baseline->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0)->count()),
+            $legs->sum('travel_time_from_prev') / $legs->count(), 'Legs take longer on average.');
+        $this->assertSame([], $this->problems($public));
 
         $post = fn (array $overrides) => $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', $this->request($overrides));
         $post(['transport_preference' => 'helicopter'])->assertUnprocessable()->assertJsonValidationErrors('transport_preference');

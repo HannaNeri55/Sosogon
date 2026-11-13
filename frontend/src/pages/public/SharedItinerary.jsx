@@ -4,6 +4,7 @@ import { FiActivity, FiCalendar, FiDownload, FiHome, FiLoader, FiNavigation } fr
 import toast from 'react-hot-toast'
 import { downloadSharedItineraryPdf, getSharedItinerary } from '../../api/itineraries'
 import ItineraryDayCard from '../../components/itinerary/ItineraryDayCard'
+import TripReminders from '../../components/itinerary/TripReminders'
 import StayCard from '../../components/itinerary/StayCard'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { BUDGETS, TRAVEL_PACES } from '../../utils/constants'
@@ -129,6 +130,8 @@ export default function SharedItinerary() {
           </p>
           <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">{guide.overview}</p>
         </div>
+
+        <TripReminders itinerary={itinerary} />
 
         <div className="space-y-6">
           {dayNumbers.map((dayNumber) => (

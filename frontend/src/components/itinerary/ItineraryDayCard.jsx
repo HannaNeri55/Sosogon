@@ -190,9 +190,21 @@ function samePlace(a, b) {
   return Boolean(first?.id) && first.id === second?.id
 }
 
-// A lunch break is its own food stop, but it happens during the visit listed before it.
+// The day's theme: the towns it covers and the kinds of places it visits (from the stops
+// themselves), e.g. "Bulan · Beach & Waterfall"; a day without attractions is a rest day.
+function dayTheme(stops) {
+  const visits = stops.filter((stop) => stop.item_type === 'destination' && stop.destination)
+  // The towns of the day's attractions (where it's spent), else of its other stops.
+  const townsOf = (list) => [...new Set(list.map((stop) => placeFor(stop).listing?.municipality?.name).filter(Boolean))]
+  const towns = visits.length > 0 ? townsOf(visits) : townsOf(stops)
+  const kinds = [...new Set(visits.map((stop) => stop.destination.category?.name).filter(Boolean))]
+  const what = kinds.length > 0 ? kinds.join(' & ') : visits.length === 0 && stops.length > 0 ? 'Rest and local food' : ''
+  return [towns.join(', '), what].filter(Boolean).join(' · ')
+}
+
+// A lunch (or dinner) break is its own food stop, but it happens during the visit listed before it.
 function isLunchBreakDuring(stop, host) {
-  if (!host || stop.item_type !== 'food_beverage' || !/^Lunch break/.test(stop.notes || '')) return false
+  if (!host || stop.item_type !== 'food_beverage' || !/^(Lunch|Dinner) break/.test(stop.notes || '')) return false
   const inner = splitSlot(stop.time_slot)
   const outer = splitSlot(host.time_slot)
   return Boolean(inner.start && outer.start && inner.start >= outer.start && inner.end <= outer.end)
@@ -555,6 +567,9 @@ export default function ItineraryDayCard({
               Day {dayNumber}
               {dateLabel && ` — ${dateLabel}`}
             </h3>
+            {stops.length > 0 && dayTheme(stops) && (
+              <p className="text-sm font-medium text-primary-700">{dayTheme(stops)}</p>
+            )}
             {stops.length > 0 && (
               <p className="text-sm text-gray-500">
                 {stops.length} stop{stops.length !== 1 ? 's' : ''} • {slotStart(stops[0].time_slot)} – {slotEnd(stops[stops.length - 1].time_slot)}
@@ -592,7 +607,7 @@ export default function ItineraryDayCard({
                 {lunch && (
                   <div className="ml-4 pl-4 border-l-2 border-dashed border-primary-200">
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-600 mb-2">
-                      <FiCoffee size={12} /> Lunch break during this visit
+                      <FiCoffee size={12} /> {/^Dinner/.test(lunch.notes || '') ? 'Dinner' : 'Lunch'} break during this visit
                     </p>
                     {editorFor(lunch)}
                   </div>
@@ -638,7 +653,7 @@ export default function ItineraryDayCard({
                 {lunch && (
                   <div className="mt-3 ml-2 sm:ml-6 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 p-3">
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-600 mb-2">
-                      <FiCoffee size={12} /> Lunch break during this visit
+                      <FiCoffee size={12} /> {/^Dinner/.test(lunch.notes || '') ? 'Dinner' : 'Lunch'} break during this visit
                     </p>
                     <StopDetails stop={lunch} compact />
                   </div>

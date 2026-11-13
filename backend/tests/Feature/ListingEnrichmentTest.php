@@ -164,7 +164,7 @@ class ListingEnrichmentTest extends TestCase
         $this->assertLessThanOrEqual(720, $from, $lunch['time']);
         $this->assertSame(60, $to - $from);
         $this->assertStringContainsString("Food Beach's own dining area", $visit->preference_note);
-        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev', 'activities', 'preference_note']))->all();
         $this->assertSame([], app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => $itinerary->start_date]));
 
         $prompt = end($this->prompts);
@@ -175,10 +175,12 @@ class ListingEnrichmentTest extends TestCase
     public function test_without_food_on_site_lunch_is_still_a_restaurant_break(): void
     {
         $itinerary = $this->generateWithOnSiteFood(false);
-        $day2 = $itinerary->items->where('day_number', 2);
+        // The day the beach is visited (it fits Day 1 or moves to Day 2).
+        $visit = $itinerary->items->firstWhere('item_type', 'destination');
+        $day = $itinerary->items->where('day_number', $visit->day_number);
 
-        $this->assertTrue($day2->contains(fn ($i) => $i->item_type === 'food_beverage' && str_starts_with((string) $i->notes, 'Lunch')));
-        $this->assertNull(collect($day2->firstWhere('item_type', 'destination')->activities)->firstWhere('name', 'Lunch at the on-site dining area'));
+        $this->assertTrue($day->contains(fn ($i) => $i->item_type === 'food_beverage' && str_starts_with((string) $i->notes, 'Lunch')));
+        $this->assertNull(collect($visit->activities)->firstWhere('name', 'Lunch at the on-site dining area'));
         $this->assertStringNotContainsString('Food on site', end($this->prompts));
     }
 

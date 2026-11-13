@@ -145,9 +145,9 @@ class ItineraryGenerationTest extends TestCase
         ]);
     }
 
-    private function generate(int $travelers = 2, string $pace = 'moderate', string $budget = 'budget'): Itinerary
+    private function generate(int $travelers = 2, string $pace = 'moderate', string $budget = 'budget', ?string $notes = null): Itinerary
     {
-        $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', [
+        $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', array_filter([
             'municipality_id' => $this->town,
             'num_days' => 3,
             'interests' => ['nature'],
@@ -158,7 +158,8 @@ class ItineraryGenerationTest extends TestCase
             'end_date' => now()->addDays(5)->toDateString(),
             'food_preference' => 'seafood',
             'accommodation_type' => 'resort',
-        ])->assertCreated();
+            'additional_preferences' => $notes,
+        ]))->assertCreated();
 
         return Itinerary::with(['items.dishes', 'items.souvenirs', 'rooms'])->latest('id')->firstOrFail();
     }
@@ -195,11 +196,16 @@ class ItineraryGenerationTest extends TestCase
 
     public function test_sunrise_and_sunset_activities_are_scheduled_at_their_time_of_day(): void
     {
-        $itinerary = $this->generate();
+        // A sunrise (before breakfast) only when the tourist asks for an early start.
+        $itinerary = $this->generate(notes: 'We would love to catch the sunrise.');
 
         [$start, $end] = $this->activityOn($itinerary, 2, 'Sunrise Viewing');
         $this->assertGreaterThanOrEqual(300, $start);
         $this->assertLessThanOrEqual(390, $end);
+        // Breakfast is the packed one, right after sunrise and over by 8:00 AM.
+        [$start, $end] = $this->activityOn($itinerary, 2, 'packed breakfast');
+        $this->assertGreaterThanOrEqual(360, $start);
+        $this->assertLessThanOrEqual(480, $end);
 
         [$start, $end] = $this->activityOn($itinerary, 3, 'Sunset Watching');
         $this->assertGreaterThanOrEqual(990, $start);
@@ -274,9 +280,9 @@ class ItineraryGenerationTest extends TestCase
 
     public function test_the_pace_sets_breakfast_activity_length_and_a_merienda(): void
     {
-        $moderate = $this->generate();
+        $moderate = $this->generate(notes: 'Early start, we want the sunrise.');
         $breakfast = $moderate->items->first(fn ($i) => $i->day_number === 3 && str_starts_with((string) $i->notes, 'Breakfast'));
-        $this->assertSame(450, $this->minutes($breakfast->time_slot)[0], 'Moderate breakfast is at 7:30 AM.');
+        $this->assertSame(420, $this->minutes($breakfast->time_slot)[0], 'Moderate breakfast is at 7:00 AM.');
         [$start, $end] = $this->activityOn($moderate, 2, 'Sunrise Viewing');
         $this->assertSame(60, $end - $start);
 
@@ -291,7 +297,7 @@ class ItineraryGenerationTest extends TestCase
         foreach (['Snack Corner' => 12.672, 'Kakanin Stall' => 12.673] as $name => $lat) {
             FoodBeverage::create($this->listing($name, $lat, 123.886) + ['cuisine_type' => 'Snacks & Desserts', 'price_range' => 'budget', 'status' => 'approved']);
         }
-        $packed = $this->generate(pace: 'packed');
+        $packed = $this->generate(pace: 'packed', notes: 'Early start, we want the sunrise.');
         [$start, $end] = $this->activityOn($packed, 2, 'Sunrise Viewing');
         $this->assertSame(45, $end - $start);
         $this->assertTrue($packed->items->contains(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda')));

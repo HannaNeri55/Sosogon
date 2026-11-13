@@ -24,6 +24,7 @@ import { dishOptions, souvenirOptions, roomOptions, picksTotal, itineraryStays, 
 import { costNoteIsEstimate, stayCostIsEstimate, stayCostUnknown } from '../../utils/estimates'
 import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import StayCard from '../../components/itinerary/StayCard'
+import TripReminders from '../../components/itinerary/TripReminders'
 import { transportGuide } from '../../utils/transportGuidance'
 import { refreshOfflineCopy, removeOfflineCopy } from '../../utils/offlineItineraries'
 import { showApiError } from '../../utils/apiErrors'
@@ -86,6 +87,16 @@ function budgetBreakdown(itinerary) {
     row('Entrance fees', 'All destinations, for the whole group', 'destination'),
     row('Meals', 'Recommended dishes for every meal, for the whole group', 'food_beverage'),
     row('Souvenirs', souvenirDetail, 'retail_shop'),
+    // SOSOGON lists no fares or fuel prices, so transport is never guessed.
+    {
+      label: 'Transport',
+      detail: itinerary.transport_preference === 'public_transport'
+        ? 'Jeepney, van and tricycle fares, paid per person: confirm locally'
+        : 'Fuel, rental or fares are not listed on SOSOGON: confirm locally',
+      min: 0,
+      value: 0,
+      note: 'Not estimated',
+    },
   ]
 }
 
@@ -131,7 +142,7 @@ function BudgetCard({ itinerary }) {
               <p className="text-sm font-medium text-gray-800">{row.label}</p>
               <p className="text-xs text-gray-500 truncate">{row.detail}</p>
             </dt>
-            <dd className="text-sm font-semibold text-gray-800 shrink-0">{row.unknown && !row.value ? 'Not listed' : formatPesoRange(row.min, row.value)}</dd>
+            <dd className="text-sm font-semibold text-gray-800 shrink-0">{row.note ?? (row.unknown && !row.value ? 'Not listed' : formatPesoRange(row.min, row.value))}</dd>
           </div>
         ))}
         <div className="flex items-center justify-between gap-4 pt-3">
@@ -142,13 +153,18 @@ function BudgetCard({ itinerary }) {
             {formatPesoRange(itinerary.estimated_cost_min, itinerary.estimated_cost_max)}
           </dd>
         </div>
+        {travelers > 1 && Number(itinerary.estimated_cost_max) > 0 && (
+          <p className="text-right text-xs text-gray-500 pt-1">
+            About {formatPesoRange(Number(itinerary.estimated_cost_min) / travelers, Number(itinerary.estimated_cost_max) / travelers)} per person, rooms shared
+          </p>
+        )}
       </dl>
       {unknownStays.length > 0 && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Not included, rates not listed: {unknownStays.map((stay) => stay.accommodation.name).join(', ')}. {CONTACT_FOR_RATES}
         </p>
       )}
-      <p className="mt-2 text-xs text-gray-500">Transport fares are not included. Listed room rates are indicative; SOSOGON takes no bookings, so confirm rates and availability with each property.</p>
+      <p className="mt-2 text-xs text-gray-500">Transport is not included. Room costs are per room for the nights shown; entrance fees, meals and souvenirs are for the whole group. Listed room rates are indicative; SOSOGON takes no bookings, so confirm rates and availability with each property.</p>
     </div>
   )
 }
@@ -545,6 +561,8 @@ export default function ItineraryView() {
           </p>
           <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">{transportGuide(itinerary.transport_preference).overview}</p>
         </div>
+
+        <TripReminders itinerary={itinerary} />
 
         <div className="space-y-6">
           {dayNumbers.map((dayNumber) => (

@@ -157,7 +157,7 @@ class ItineraryPlanningQualityTest extends TestCase
     /** What the planner's own rule check says about a saved trip. */
     private function problems(Itinerary $itinerary): array
     {
-        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev']))->all();
+        $rows = $itinerary->items->map(fn ($i) => $i->only(['day_number', 'sequence', 'item_type', 'destination_id', 'time_slot', 'notes', 'travel_time_from_prev', 'activities', 'preference_note']))->all();
 
         return app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['start_date' => $this->saturday()->toDateString()]);
     }
@@ -218,21 +218,22 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertSame('8:00 AM – 8:45 AM', $day1->first()->time_slot);
         $this->assertStringContainsString('You arrive around 8:00 AM.', $day1->first()->notes);
         $this->assertTrue($day1->contains(fn ($i) => $i->item_type === 'destination' && $this->minutes($i->time_slot)[0] < 12 * 60), 'A morning attraction.');
-        $this->assertCount(1, $this->startsWith($day1, 'Breakfast'));
-        $this->assertCount(1, $this->startsWith($day1, 'Lunch'));
+        // Breakfast is over by 8:00 AM, so an 8 AM arrival has had it before setting off.
+        $this->assertCount(0, $this->startsWith($day1, 'Breakfast'));
+        $lunch = $this->startsWith($day1, 'Lunch');
+        $this->assertCount(1, $lunch);
+        $this->assertSame([690, 750], $this->minutes($lunch->first()->time_slot), 'Lunch is 11:30 AM – 12:30 PM.');
     }
 
-    public function test_a_noon_arrival_gets_lunch_then_afternoon_sightseeing(): void
+    public function test_a_noon_arrival_has_lunch_on_the_way_then_afternoon_sightseeing(): void
     {
         $day1 = $this->dayOne('12:00');
 
         $this->assertEmpty($this->startsWith($day1, 'Breakfast'), 'No breakfast at noon.');
-        $lunch = $this->startsWith($day1, 'Lunch')->first();
-        $this->assertNotNull($lunch);
-        $this->assertGreaterThanOrEqual(12 * 60 + 45, $this->minutes($lunch->time_slot)[0]);
-        $visits = $day1->where('item_type', 'destination');
-        $this->assertNotEmpty($visits);
-        $this->assertTrue($visits->every(fn ($i) => $i->sequence > $lunch->sequence), 'Sightseeing comes after lunch.');
+        // Lunch is never later than 11:30 AM – 12:30 PM: arriving at noon, the tourist eats on the way.
+        $this->assertEmpty($this->startsWith($day1, 'Lunch'), 'No lunch after 12:30 PM.');
+        $this->assertStringContainsString('have lunch before you arrive or on your way', (string) $day1->first()->preference_note);
+        $this->assertNotEmpty($day1->where('item_type', 'destination'), 'Afternoon sightseeing.');
     }
 
     public function test_a_half_two_arrival_gets_a_visit_that_fits_the_afternoon(): void
@@ -353,10 +354,8 @@ class ItineraryPlanningQualityTest extends TestCase
         $lunches = $itinerary->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Lunch'));
         $this->assertSame([1, 2, 3], $lunches->pluck('day_number')->unique()->sort()->values()->all(), 'Every day has lunch.');
         foreach ($lunches as $lunch) {
-            [$start] = $this->minutes($lunch->time_slot);
-            $this->assertGreaterThanOrEqual(660, $start, "Day {$lunch->day_number}: lunch starts at 11:00 AM or later.");
-            // Around noon (12:15 PM at the latest, after a short drive); Day 1 may wait for a late arrival.
-            $this->assertLessThanOrEqual($lunch->day_number === 1 ? 810 : 735, $start, "Day {$lunch->day_number}: lunch starts around noon.");
+            // Always 11:30 AM – 12:30 PM, on every day (Day 1 included), never later.
+            $this->assertSame([690, 750], $this->minutes($lunch->time_slot), "Day {$lunch->day_number}: lunch is 11:30 AM – 12:30 PM.");
         }
     }
 
@@ -701,9 +700,17 @@ class ItineraryPlanningQualityTest extends TestCase
         $lunch = fn (int $seq, string $slot, int $travel) => ['day_number' => 1, 'sequence' => $seq, 'item_type' => 'food_beverage', 'destination_id' => null, 'time_slot' => $slot, 'notes' => 'Lunch break during your visit.', 'travel_time_from_prev' => $travel];
         $check = fn (array $rows) => app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), []);
 
-        $this->assertSame([], $check([$visit, $lunch(2, '12:00 PM – 12:50 PM', 5)]), 'A proper lunch break.');
-        $this->assertNotSame([], $check([$visit, $lunch(2, '12:00 PM – 12:55 PM', 10)]), 'No time to get back.');
+        // The rest of the day (breakfast before the visit, dinner after it), so only lunch is tested.
+        $breakfast = ['day_number' => 1, 'sequence' => 0, 'item_type' => 'food_beverage', 'destination_id' => null, 'time_slot' => '7:00 AM – 7:45 AM', 'notes' => 'Breakfast near the inn.', 'travel_time_from_prev' => 0];
+        $dinner = ['day_number' => 1, 'sequence' => 9, 'item_type' => 'food_beverage', 'destination_id' => null, 'time_slot' => '6:30 PM – 7:30 PM', 'notes' => 'Dinner near the inn.', 'travel_time_from_prev' => 0];
+        $check = fn (array $rows) => app(ItineraryService::class)->scheduleProblems([$breakfast, ...$rows, $dinner], Destination::all(), []);
+
+        $this->assertSame([], $check([$visit, $lunch(2, '11:30 AM – 12:30 PM', 5)]), 'A proper lunch break.');
+        $this->assertNotSame([], $check([$visit, $lunch(2, '11:30 AM – 12:30 PM', 40)]), 'No time to get back.');
+        $this->assertNotSame([], $check([$visit, $lunch(2, '12:00 PM – 12:50 PM', 5)]), 'Lunch later than 11:30 AM – 12:30 PM.');
+        $this->assertNotSame([], $check([$visit, $lunch(2, '1:00 PM – 2:00 PM', 5)]), 'Lunch at 1 PM is never allowed.');
+        $this->assertNotSame([], $check([$visit]), 'A day without lunch.');
         $snack = ['day_number' => 1, 'sequence' => 2, 'item_type' => 'food_beverage', 'destination_id' => null, 'time_slot' => '1:10 PM – 1:40 PM', 'notes' => 'Coffee stop.', 'travel_time_from_prev' => 10];
-        $this->assertNotSame([], $check([$visit, $snack, $lunch(3, '12:00 PM – 12:30 PM', 5)]), 'A lunch break after another stop.');
+        $this->assertNotSame([], $check([$visit, $snack, $lunch(3, '11:30 AM – 12:30 PM', 5)]), 'A lunch break after another stop.');
     }
 }

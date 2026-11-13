@@ -143,7 +143,7 @@ class ItineraryCheckOutTest extends TestCase
         $free = $day->first(fn ($i) => str_starts_with((string) $i->notes, 'Free time at Quiet Inn'));
         $this->assertNotNull($free, 'A free morning at the inn before check-out.');
         $checkout = $day->first(fn ($i) => str_starts_with((string) $i->notes, 'Check out of Quiet Inn'));
-        $this->assertSame(705, $this->startOf($checkout->time_slot), 'Check out at 11:45 AM, done by the 12:00 noon check-out.');
+        $this->assertSame(660, $this->startOf($checkout->time_slot), 'Check out at 11:00 AM, before the 12:00 noon check-out and in time for lunch at 11:30.');
         $breakfast = $day->first(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast'));
         $this->assertLessThan($checkout->sequence, $breakfast->sequence);
     }
