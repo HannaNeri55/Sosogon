@@ -202,6 +202,12 @@ function dayTheme(stops) {
   return [towns.join(', '), what].filter(Boolean).join(' · ')
 }
 
+// The name of the day's main highlight, when it's still one of the day's stops.
+function highlightName(stops, plan) {
+  if (!plan?.highlight_id) return null
+  return stops.find((stop) => stop.item_type === 'destination' && Number(stop.destination_id) === Number(plan.highlight_id))?.destination?.name || null
+}
+
 // A lunch (or dinner) break is its own food stop, but it happens during the visit listed before it.
 function isLunchBreakDuring(stop, host) {
   if (!host || stop.item_type !== 'food_beverage' || !/^(Lunch|Dinner) break/.test(stop.notes || '')) return false
@@ -291,7 +297,7 @@ function PicksList({ title, options, picks }) {
 }
 
 // action: a button shown beside the place's name.
-function StopDetails({ stop, compact = false, action = null }) {
+function StopDetails({ stop, compact = false, action = null, hideDescription = false }) {
   const { listing, link, badge } = placeFor(stop)
 
   return (
@@ -340,7 +346,7 @@ function StopDetails({ stop, compact = false, action = null }) {
           )}
         </div>
 
-        {listing?.description && (
+        {listing?.description && !hideDescription && (
           <p className={`text-sm text-gray-500 mt-2 leading-relaxed ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>{listing.description}</p>
         )}
 
@@ -526,6 +532,10 @@ export default function ItineraryDayCard({
   overnight = null,
   transportPreference = null,
   backup = null,
+  // This day's title and main highlight ({ title, highlight_id }), when generated with them.
+  plan = null,
+  // Ids of stops at a place already described earlier in the trip.
+  repeatedStops = null,
 }) {
   const stops = day.stops || []
   const rows = groupStops(stops)
@@ -567,8 +577,14 @@ export default function ItineraryDayCard({
               Day {dayNumber}
               {dateLabel && ` — ${dateLabel}`}
             </h3>
+            {plan?.title && <p className="text-base font-heading font-semibold text-gray-800">{plan.title}</p>}
             {stops.length > 0 && dayTheme(stops) && (
               <p className="text-sm font-medium text-primary-700">{dayTheme(stops)}</p>
+            )}
+            {highlightName(stops, plan) && !plan.title?.includes(highlightName(stops, plan)) && (
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-accent-700">Highlight:</span> {highlightName(stops, plan)}
+              </p>
             )}
             {stops.length > 0 && (
               <p className="text-sm text-gray-500">
@@ -636,6 +652,7 @@ export default function ItineraryDayCard({
               <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-5'}`}>
                 <StopDetails
                   stop={stop}
+                  hideDescription={Boolean(repeatedStops?.has(stop.id))}
                   action={
                     roadTravel && !alreadyThere && stop.id != null && navIndexFor(stop) >= 0 ? (
                       <button

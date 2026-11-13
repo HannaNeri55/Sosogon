@@ -325,7 +325,7 @@ class ItineraryDocumentService
             return $facts === [] ? null : ['facts' => $facts, 'url' => null, 'linkLabel' => null];
         }
 
-        $measured = str_contains((string) $to->notes, 'driving time from Google Maps');
+        $measured = str_contains((string) $to->notes, 'Google Maps');
         $facts = [];
         if ($km > 0) {
             $facts[] = $measured ? "{$km} km by road (Google Maps)" : "{$km} km apart (straight line)";

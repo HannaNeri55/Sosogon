@@ -204,10 +204,11 @@ class ItineraryMultiTownTest extends TestCase
 
     public function test_more_towns_than_days_gets_a_polite_message(): void
     {
-        $response = $this->generate(['bulan', 'matnog', 'irosin'], 2)->assertUnprocessable();
+        // Two nearby towns can share a day, three can't.
+        $response = $this->generate(['bulan', 'matnog', 'irosin'], 1)->assertUnprocessable();
 
         $message = $response->json('errors.municipality_ids.0');
-        $this->assertStringContainsString("You've picked 3 municipalities for a 2-day trip", $message);
+        $this->assertStringContainsString("You've picked 3 municipalities for a 1-day trip", $message);
         $this->assertStringContainsString('add 1 more day', $message);
     }
 

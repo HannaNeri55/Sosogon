@@ -119,7 +119,7 @@ class ItineraryCheckOutTest extends TestCase
         $this->assertNotFalse($breakfast);
         $this->assertNotFalse($checkout);
         $this->assertLessThan($checkout, $breakfast, 'Breakfast at the inn, then check out.');
-        $this->assertStringContainsString('Check-out is by 12:00 PM.', $day[$checkout]->reason);
+        $this->assertStringContainsString('Check-out is by 12:00 PM.', $day[$checkout]->preference_note);
     }
 
     public function test_no_meal_back_at_the_stay_after_checking_out(): void

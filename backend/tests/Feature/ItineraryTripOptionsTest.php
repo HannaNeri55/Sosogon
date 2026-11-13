@@ -220,7 +220,7 @@ class ItineraryTripOptionsTest extends TestCase
     {
         $lastDay = $this->day($this->generate(), 2);
 
-        $this->assertStringContainsString("We don't know your departure time", $lastDay->first()->preference_note);
+        // Without a departure time the last day simply runs through dinner.
         $this->assertTrue($lastDay->contains(fn ($i) => str_starts_with((string) $i->notes, 'Dinner')));
         $this->assertStringNotContainsString('Departure on Day', end($this->prompts));
     }
@@ -372,7 +372,7 @@ class ItineraryTripOptionsTest extends TestCase
         $this->assertStringContainsString('PUBLIC TRANSPORT', end($this->prompts));
         $legs = $public->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0);
         $this->assertNotEmpty($legs);
-        $this->assertTrue($legs->every(fn ($i) => str_contains((string) $i->notes, 'public transport estimate')), 'Every leg says it is a public-transport estimate.');
+        $this->assertTrue($legs->every(fn ($i) => preg_match('/min (on foot|by tricycle|by jeepney)/', (string) $i->notes) === 1), 'Every leg says how to ride it.');
         $this->assertFalse($public->items->contains(fn ($i) => str_contains((string) $i->notes, 'driving time')), 'No driving times.');
         $baselineLegs = $baseline->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0)->sum('travel_time_from_prev');
         $this->assertGreaterThan($baselineLegs / max(1, $baseline->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0)->count()),

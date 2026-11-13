@@ -30,11 +30,19 @@ class Destination extends Model
         'website',
         'status',
         'is_featured',
+        'tourism_priority',
+        'setting',
         'average_rating',
         'total_reviews',
         'view_count',
         'created_by',
     ];
+
+    /** How worth a trip a place is, set by the tourism office (empty until classified). */
+    public const PRIORITIES = ['iconic', 'popular', 'recommended', 'hidden_gem'];
+
+    /** Where a visit happens: indoors, in the open air, or partly under cover. */
+    public const SETTINGS = ['indoor', 'outdoor', 'mixed'];
 
     protected function casts(): array
     {

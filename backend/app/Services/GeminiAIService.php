@@ -207,6 +207,9 @@ class GeminiAIService implements ItineraryAI
                         'type' => 'OBJECT',
                         'properties' => [
                             'day_number' => ['type' => 'INTEGER'],
+                            // The day's title and its main highlight (one of its destination IDs).
+                            'title' => ['type' => 'STRING'],
+                            'highlight_id' => ['type' => 'INTEGER'],
                             'destinations' => [
                                 'type' => 'ARRAY',
                                 'items' => [

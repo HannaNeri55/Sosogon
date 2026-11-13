@@ -259,7 +259,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const tooManyDays = numDays !== null && numDays > MAX_TRIP_DAYS
   const townCount = formData.municipality_ids.length
   // Travelling between municipalities takes most of a day, so each one needs a day of its own.
-  const tooManyTowns = numDays !== null && townCount > numDays
+  // Two nearby municipalities can share a day, so up to two per day (the planner checks they're close).
+  const tooManyTowns = numDays !== null && townCount > numDays * 2
+  const sharedDays = numDays !== null && !tooManyTowns && townCount > numDays
   const noInterests = formData.interests.length === 0
   const travelerTotal = Math.min(Math.max(Number(formData.travelers) || 1, 1), MAX_TRAVELERS)
   const stayLists = formData.municipality_ids.map((id) => staysByTown[id])
@@ -584,16 +586,21 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
 
               {tooManyTowns && (
                 <div role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  You've picked {townsLabel(townCount)} for a {numDays}-day trip. Travelling between municipalities takes most of a
-                  day, so each one needs at least one day of its own. Please add {townCount - numDays} more{' '}
-                  {townCount - numDays === 1 ? 'day' : 'days'} to your travel dates or{' '}
+                  You've picked {townsLabel(townCount)} for a {numDays}-day trip. A day can cover at most two nearby
+                  municipalities, so please add {Math.ceil(townCount / 2) - numDays} more{' '}
+                  {Math.ceil(townCount / 2) - numDays === 1 ? 'day' : 'days'} to your travel dates or{' '}
                   <button type="button" onClick={() => setStep(0)} className="font-semibold underline underline-offset-2">
-                    remove {townsLabel(townCount - numDays)}
+                    remove {townsLabel(townCount - numDays * 2)}
                   </button>
                   .
                 </div>
               )}
-              {!tooManyTowns && numDays !== null && !tooManyDays && townCount > 1 && (
+              {sharedDays && !tooManyDays && (
+                <p className="text-xs text-gray-500 mt-2">
+                  {townsLabel(townCount)} in {daysLabel(numDays)}: nearby municipalities will share a day. Municipalities that are far apart need a day each.
+                </p>
+              )}
+              {!tooManyTowns && !sharedDays && numDays !== null && !tooManyDays && townCount > 1 && (
                 <p className="text-xs text-gray-500 mt-2">One municipality per day — {daysLabel(numDays)} for {townsLabel(townCount)}.</p>
               )}
             </div>

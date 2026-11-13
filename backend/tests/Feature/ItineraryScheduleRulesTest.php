@@ -35,6 +35,9 @@ class ItineraryScheduleRulesTest extends TestCase
     /** What the faked AI answers. */
     private array $reply = [];
 
+    /** What the AI was asked. */
+    private array $prompts = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -72,9 +75,11 @@ class ItineraryScheduleRulesTest extends TestCase
         }
 
         Http::preventStrayRequests();
-        Http::fake(['generativelanguage.googleapis.com/*' => fn () => Http::response([
-            'candidates' => [['content' => ['parts' => [['text' => json_encode($this->reply)]]]]],
-        ])]);
+        Http::fake(['generativelanguage.googleapis.com/*' => function ($request) {
+            $this->prompts[] = $request->data()['contents'][0]['parts'][0]['text'] ?? '';
+
+            return Http::response(['candidates' => [['content' => ['parts' => [['text' => json_encode($this->reply)]]]]]]);
+        }]);
     }
 
     private function fields(string $town, string $name, float $lat, float $lng): array
@@ -201,7 +206,7 @@ class ItineraryScheduleRulesTest extends TestCase
         $this->assertMealTimes($itinerary);
         $this->assertSame([], $this->problems($itinerary));
         $legs = $itinerary->items->filter(fn ($i) => (int) $i->travel_time_from_prev > 0);
-        $this->assertTrue($legs->every(fn ($i) => str_contains((string) $i->notes, 'public transport estimate')), 'Every leg is a labelled public-transport estimate.');
+        $this->assertTrue($legs->every(fn ($i) => preg_match('/min (on foot|by tricycle|by jeepney)/', (string) $i->notes) === 1), 'Every leg says how to ride it.');
         $this->assertTrue($legs->contains(fn ($i) => preg_match('/tricycle|jeepney/', (string) $i->notes) === 1), 'Says which ride to take.');
     }
 
@@ -317,6 +322,122 @@ class ItineraryScheduleRulesTest extends TestCase
         $notes = Itinerary::with('items')->find($itinerary->id)->items->firstWhere('id', $break->id)->notes;
         $this->assertStringStartsWith('Lunch near ', $notes);
         $this->assertStringNotContainsString($host->destination->name, $notes, 'It no longer names the removed visit.');
+    }
+
+    public function test_a_must_visit_place_comes_before_closer_ordinary_ones(): void
+    {
+        // The AI picks one Bulan stop; the planner tops the day up. Spot 4 is the farthest from
+        // Spot 1, but the tourism office calls it a must-visit.
+        $this->reply = ['title' => 'Bulan', 'days' => [$this->day(1, 'bulan1'), $this->day(2, 'bulan3')]];
+        $plain = $this->generate(['bulan'], 2);
+        $this->assertFalse($plain->items->contains('destination_id', $this->ids['bulan4']), 'Unclassified, the closer place fills the day.');
+
+        Destination::whereKey($this->ids['bulan4'])->update(['tourism_priority' => 'iconic']);
+        $itinerary = $this->generate(['bulan'], 2);
+
+        $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['bulan4']), 'The must-visit place is in the trip.');
+        $this->assertStringContainsString('Standing: Must-visit', end($this->prompts));
+
+        // Even when the AI fills every day with ordinary places, the must-visit one takes the
+        // place of the weakest stop rather than being left out.
+        $this->reply = ['title' => 'Bulan', 'days' => [$this->day(1, 'bulan1'), $this->day(2, 'bulan3', 'bulan2')]];
+        $full = $this->generate(['bulan'], 2);
+        $this->assertTrue($full->items->contains('destination_id', $this->ids['bulan4']), 'The must-visit place replaces a weaker stop.');
+        $this->assertSame([], $this->problems($itinerary));
+    }
+
+    public function test_three_towns_in_two_days_share_a_day_when_close(): void
+    {
+        // Bulan and Matnog are about 25 km apart and share a day; Gubat keeps its own.
+        $this->reply = ['title' => 'Three towns', 'days' => [$this->day(1, 'bulan1', 'matnog2'), $this->day(2, 'gubat1', 'gubat2')]];
+
+        $itinerary = $this->generate(['bulan', 'matnog', 'gubat'], 2);
+
+        $this->assertSame(2, $itinerary->items->max('day_number'));
+        $this->assertEqualsCanonicalizing([$this->towns['bulan'], $this->towns['matnog'], $this->towns['gubat']], $itinerary->municipalities()->pluck('municipalities.id')->all());
+        $visitedTowns = $itinerary->items->where('item_type', 'destination')->pluck('destination.municipality_id')->unique()->values()->all();
+        $this->assertContains($this->towns['gubat'], $visitedTowns);
+        $this->assertMealTimes($itinerary);
+        $this->assertStringContainsString('share their days as one area', end($this->prompts));
+
+        // Towns too far apart to share a day can't be squeezed in.
+        DB::table('destinations')->where('municipality_id', $this->towns['matnog'])->update(['latitude' => DB::raw('latitude - 1')]);
+        $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', [
+            'municipality_ids' => [$this->towns['bulan'], $this->towns['matnog'], $this->towns['gubat']], 'num_days' => 2,
+            'interests' => ['nature', 'beaches'], 'travel_pace' => 'moderate', 'budget' => 'moderate',
+            'start_date' => now()->addDays(3)->toDateString(), 'end_date' => now()->addDays(4)->toDateString(),
+        ])->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'too far apart to share days'));
+    }
+
+    public function test_an_open_air_place_is_never_a_rainy_day_alternative(): void
+    {
+        DB::table('categories')->insert(['id' => 4, 'name' => 'Historical', 'type' => 'destination', 'created_at' => now(), 'updated_at' => now()]);
+        $make = fn (string $name, float $lng, array $extra = []) => Destination::create($this->fields('bulan', $name, 12.70, $lng) + ['category_id' => 4, 'created_by' => $this->tourist->id, 'status' => 'published'] + $extra);
+        $sports = $make('Balogo Sports Complex', 123.880);
+        $ruins = $make('Old Ruins', 123.881);
+        $museum = $make('Bulan Museum', 123.882);
+        $marked = $make('Covered Market Hall', 123.883, ['setting' => 'indoor']);
+        $this->reply = ['title' => 'Bulan', 'days' => [$this->day(1, 'bulan1'), $this->day(2, 'bulan2')]];
+
+        $itinerary = $this->generate(['bulan'], 2);
+        $options = collect(app(ItineraryService::class)->backupOptions($itinerary))->flatMap(fn ($plan) => $plan['places']);
+
+        $this->assertFalse($options->contains('id', $sports->id), 'A sports complex is open-air, not a shelter.');
+        $this->assertFalse($options->contains('id', $ruins->id), 'Ruins are open-air.');
+        $this->assertTrue($options->contains('id', $museum->id) || $options->contains('id', $marked->id));
+        $this->assertFalse($options->contains(fn ($o) => str_contains($o['why'], 'Mostly under a roof')));
+
+        Destination::whereKey($museum->id)->update(['setting' => 'outdoor']);
+        $options = collect(app(ItineraryService::class)->backupOptions($itinerary->fresh()))->flatMap(fn ($plan) => $plan['places']);
+        $this->assertFalse($options->contains('id', $museum->id), "The tourism office's setting wins over the name.");
+    }
+
+    public function test_a_long_beach_visit_has_lunch_there_instead_of_a_trip_back(): void
+    {
+        // No restaurant in Bulan and the hotel far away: the beach visit keeps a packed lunch.
+        FoodBeverage::where('municipality_id', $this->towns['bulan'])->delete();
+        Accommodation::where('municipality_id', $this->towns['bulan'])->update(['latitude' => 12.80, 'longitude' => 123.80]);
+        $this->reply = ['title' => 'Beach', 'days' => [$this->day(1, 'bulan2'), $this->day(2, 'bulan4')]];
+
+        $itinerary = $this->generate(['bulan'], 2, ['arrival_time' => '08:00']);
+
+        $this->assertMealTimes($itinerary);
+        $visit = $itinerary->items->firstWhere('destination_id', $this->ids['bulan2']);
+        $lunch = collect($visit->activities)->first(fn ($a) => str_contains($a['name'], 'packed lunch'));
+        $this->assertNotNull($lunch, 'Lunch is at the beach.');
+        $this->assertSame([690, 750], $this->minutes($lunch['time']));
+        $this->assertStringContainsString('outside food is allowed', $lunch['description']);
+    }
+
+    public function test_notes_are_short_specific_and_never_repeated(): void
+    {
+        $this->reply = ['title' => 'Notes', 'days' => [$this->day(1, 'bulan2', 'bulan1'), $this->day(2, 'bulan4', 'bulan3'), $this->day(3, 'bulan1')]];
+
+        $itinerary = $this->generate(['bulan'], 3);
+
+        $text = $itinerary->items->flatMap(fn ($i) => [$i->notes, $i->reason, $i->preference_note])->filter();
+        foreach (["We're sorry", 'Please note', 'Keep in mind', 'Your base for this part of the trip', 'without another trip', 'so allow extra time'] as $phrase) {
+            $this->assertFalse($text->contains(fn ($t) => str_contains($t, $phrase)), "No \"{$phrase}\".");
+        }
+        // The swimwear reminder is given once, not at every beach.
+        $this->assertSame(1, $itinerary->items->filter(fn ($i) => str_contains((string) $i->preference_note, 'Bring swimwear'))->count());
+        // Breakfast at the stay needs no explanation.
+        $this->assertTrue($itinerary->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Breakfast at'))->every(fn ($i) => $i->reason === null));
+    }
+
+    public function test_each_day_has_a_title_and_a_highlight(): void
+    {
+        $this->reply = ['title' => 'Titled', 'days' => [
+            ['day_number' => 1, 'title' => 'Bulan beaches and viewpoints', 'highlight_id' => $this->ids['bulan2'], 'destinations' => [['destination_id' => $this->ids['bulan2'], 'reason' => 'Swim.']]],
+            ['day_number' => 2, 'destinations' => [['destination_id' => $this->ids['bulan3'], 'reason' => 'Walk.']]],
+        ]];
+
+        $itinerary = $this->generate(['bulan'], 2);
+        $plans = collect($itinerary->day_plans)->mapWithKeys(fn ($plan, $day) => [(int) $day => $plan]);
+
+        $this->assertSame(['title' => 'Bulan beaches and viewpoints', 'highlight_id' => $this->ids['bulan2']], $plans[1]);
+        $this->assertNotEmpty($plans[2]['title'], 'Without an AI title, the day is named after its highlight.');
+        $this->assertTrue($itinerary->items->where('day_number', 2)->contains('destination_id', $plans[2]['highlight_id']));
     }
 
     public function test_the_check_rejects_a_late_lunch_and_overlaps(): void
