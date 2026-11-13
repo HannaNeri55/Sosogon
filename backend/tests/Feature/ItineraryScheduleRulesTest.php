@@ -571,6 +571,65 @@ class ItineraryScheduleRulesTest extends TestCase
         $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['gubat4']), "Gubat's popular place is in the trip.");
     }
 
+    /**
+     * No municipality, sent from a phone in Bulan or in Gubat: the tourist's location is not
+     * part of the plan, so both trips cover the same best-known towns. Bulan, with no classified
+     * places, is not chosen even though it has the most destinations.
+     */
+    public function test_without_a_municipality_the_current_location_does_not_decide_the_towns(): void
+    {
+        foreach (range(5, 8) as $n) {
+            $this->ids["bulan{$n}"] = $this->destination('bulan', "Bulan Spot {$n}", 12.67 + $n * 0.012, 123.88, 1);
+        }
+        Destination::whereKey($this->ids['matnog1'])->update(['tourism_priority' => 'iconic']);
+        Destination::whereKey($this->ids['gubat2'])->update(['tourism_priority' => 'popular']);
+        $this->reply = ['title' => 'Best of Sorsogon', 'days' => [$this->day(1, 'matnog1'), $this->day(2, 'gubat2')]];
+
+        $towns = [];
+        foreach (['bulan' => [12.67, 123.87], 'gubat' => [12.92, 124.12]] as $here => [$lat, $lng]) {
+            $itinerary = $this->generate([], 2, ['latitude' => $lat, 'longitude' => $lng, 'current_location' => ucfirst($here)]);
+            $towns[$here] = $itinerary->municipalities()->pluck('municipalities.id')->sort()->values()->all();
+            $prompt = end($this->prompts);
+
+            $this->assertNotContains($this->towns['bulan'], $towns[$here], "Not the tourist's town, not a default town.");
+            $this->assertStringContainsString('Matnog Spot 1', $prompt, 'The AI is offered the province\'s best-known places.');
+            $this->assertStringContainsString('Gubat Spot 2', $prompt);
+            $this->assertStringNotContainsString('Bulan Spot', $prompt);
+            $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['matnog1']));
+            $this->assertMealTimes($itinerary);
+        }
+        $this->assertSame($towns['bulan'], $towns['gubat'], 'The same towns wherever the tourist is.');
+    }
+
+    public function test_bulan_selected_keeps_the_trip_in_bulan(): void
+    {
+        Destination::whereKey($this->ids['matnog1'])->update(['tourism_priority' => 'iconic']);
+        $this->reply = ['title' => 'Bulan', 'days' => [$this->day(1, 'bulan1', 'bulan2'), $this->day(2, 'bulan3')]];
+
+        $itinerary = $this->generate(['bulan'], 2, ['latitude' => 12.92, 'longitude' => 124.12]);
+
+        $visited = $itinerary->items->where('item_type', 'destination')->pluck('destination.municipality_id')->unique()->values()->all();
+        $this->assertSame([$this->towns['bulan']], $visited, 'Only Bulan, though a must-visit place is in Matnog.');
+        $this->assertSame([$this->towns['bulan']], $itinerary->municipalities()->pluck('municipalities.id')->all());
+        $this->assertStringNotContainsString('Matnog Spot', end($this->prompts));
+    }
+
+    public function test_matnog_selected_from_bulan_keeps_the_trip_in_matnog(): void
+    {
+        Destination::whereKey($this->ids['gubat2'])->update(['tourism_priority' => 'iconic']);
+        $this->reply = ['title' => 'Matnog', 'days' => [$this->day(1, 'matnog1', 'matnog2'), $this->day(2, 'matnog3')]];
+
+        // Sent from Bulan: the selected municipality decides, not where the tourist is.
+        $itinerary = $this->generate(['matnog'], 2, ['latitude' => 12.67, 'longitude' => 123.87, 'current_location' => 'Bulan']);
+
+        $visited = $itinerary->items->where('item_type', 'destination')->pluck('destination.municipality_id')->unique()->values()->all();
+        $this->assertSame([$this->towns['matnog']], $visited);
+        $this->assertSame([$this->towns['matnog']], $itinerary->municipalities()->pluck('municipalities.id')->all());
+        $prompt = end($this->prompts);
+        $this->assertStringNotContainsString('Bulan Spot', $prompt);
+        $this->assertStringNotContainsString('Gubat Spot', $prompt);
+    }
+
     public function test_the_check_rejects_a_late_lunch_and_overlaps(): void
     {
         $check = fn (array $rows) => app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['num_days' => 1]);
