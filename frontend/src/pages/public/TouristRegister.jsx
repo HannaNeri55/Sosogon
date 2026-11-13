@@ -2,38 +2,18 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { postAuthPath } from '../../utils/pendingItinerary'
-import { FiCompass, FiUser, FiMail, FiPhone, FiLock } from 'react-icons/fi'
+import { FiCompass } from 'react-icons/fi'
 import { showApiError } from '../../utils/apiErrors'
 import { focusFirstInvalid } from '../../utils/formErrors'
-
-function Field({ label, name, type = 'text', value, onChange, error, required = true, icon: Icon, autoComplete = 'off' }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <div className="relative">
-        {Icon && <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />}
-        <input
-          name={name}
-          type={type}
-          autoComplete={autoComplete}
-          className={`input-field ${Icon ? 'pl-10' : ''} ${error ? 'input-error' : ''}`}
-          value={value}
-          onChange={onChange}
-          aria-invalid={!!error}
-        />
-      </div>
-      {error && <p className="field-error">{Array.isArray(error) ? error[0] : error}</p>}
-    </div>
-  )
-}
+import { ACCOUNT_RULES, ACCOUNT_SHOW_NOW } from '../../utils/authValidation'
+import useLiveValidation from '../../hooks/useLiveValidation'
+import useEmailAvailability from '../../hooks/useEmailAvailability'
+import { PasswordFields, PersonalFields } from '../../components/auth/AccountFields'
 
 export default function TouristRegister() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState({})
   const [agreed, setAgreed] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -43,36 +23,26 @@ export default function TouristRegister() {
     password_confirmation: '',
     role: 'tourist',
   })
-
-  const validate = () => {
-    const newErrors = {}
-    if (!formData.name.trim()) newErrors.name = 'Full name is required'
-    if (!formData.email.trim()) newErrors.email = 'Email is required'
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format'
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required'
-    else if (formData.phone.length < 10) newErrors.phone = 'Phone must be at least 10 digits'
-    if (!formData.password) newErrors.password = 'Password is required'
-    else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters'
-    if (formData.password !== formData.password_confirmation) newErrors.password_confirmation = 'Passwords do not match'
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  // Each field is checked while the user types (see useLiveValidation); the server checks again.
+  const live = useLiveValidation(formData, ACCOUNT_RULES, { now: ACCOUNT_SHOW_NOW })
+  useEmailAvailability(formData.email, live)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) {
+    if (!live.submit()) {
       focusFirstInvalid()
       return
     }
 
     setLoading(true)
     try {
-      const user = await register(formData)
+      // The password is sent exactly as typed; name and email lose stray outer spaces.
+      const user = await register({ ...formData, name: formData.name.trim(), email: formData.email.trim() })
       navigate(postAuthPath(user))
     } catch (e) {
-      const serverErrors = e.response?.data?.errors
+      const serverErrors = e.response?.status === 422 && e.response.data?.errors
       if (serverErrors) {
-        setErrors(serverErrors)
+        live.setServerErrors(serverErrors)
         focusFirstInvalid()
       } else {
         showApiError(e, 'Registration failed')
@@ -83,8 +53,8 @@ export default function TouristRegister() {
   }
 
   const handleInputChange = (name, value) => {
-    setFormData({ ...formData, [name]: value })
-    setErrors({ ...errors, [name]: '' })
+    setFormData((current) => ({ ...current, [name]: value }))
+    live.changed(name)
   }
 
   return (
@@ -100,58 +70,9 @@ export default function TouristRegister() {
             <p className="text-gray-500 text-sm">Explore Sorsogon and plan your trips with a free account</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Field
-              label="Full Name"
-              name="name"
-              autoComplete="off"
-              icon={FiUser}
-              value={formData.name}
-              error={errors.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-            />
-            <Field
-              label="Email Address"
-              name="email"
-              type="email"
-              autoComplete="off"
-              icon={FiMail}
-              value={formData.email}
-              error={errors.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-            />
-            <Field
-              label="Phone Number"
-              name="phone"
-              type="tel"
-              autoComplete="off"
-              icon={FiPhone}
-              value={formData.phone}
-              error={errors.phone}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field
-                label="Password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                icon={FiLock}
-                value={formData.password}
-                error={errors.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-              />
-              <Field
-                label="Confirm Password"
-                name="password_confirmation"
-                type="password"
-                autoComplete="new-password"
-                icon={FiLock}
-                value={formData.password_confirmation}
-                error={errors.password_confirmation}
-                onChange={(e) => handleInputChange('password_confirmation', e.target.value)}
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <PersonalFields idPrefix="tourist" values={formData} live={live} onChange={handleInputChange} />
+            <PasswordFields idPrefix="tourist" values={formData} live={live} onChange={handleInputChange} />
 
             <label className="flex items-start gap-2.5 text-sm text-gray-600">
               <input

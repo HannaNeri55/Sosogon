@@ -1,34 +1,40 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { FiShield } from 'react-icons/fi'
+import { FiLock, FiMail, FiShield } from 'react-icons/fi'
 import SessionExpiredNotice from '../../components/common/SessionExpiredNotice'
 import LoginAlert from '../../components/common/LoginAlert'
-import { loginErrors, validateLogin } from '../../utils/loginErrors'
+import { LOGIN_RULES, LOGIN_SHOW_NOW, loginErrors } from '../../utils/loginErrors'
+import useLiveValidation from '../../hooks/useLiveValidation'
+import AuthField, { PasswordField } from '../../components/auth/AuthField'
 
 export default function AdminLogin() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '' })
-  // Messages under each field, and the dialog for a refused sign-in (see utils/loginErrors.js).
-  const [errors, setErrors] = useState({})
+  // Fields are checked while the user types (useLiveValidation); a refused sign-in opens a
+  // dialog (see utils/loginErrors.js).
+  const live = useLiveValidation(formData, LOGIN_RULES, { now: LOGIN_SHOW_NOW })
   const [alert, setAlert] = useState(null)
+  const [wrongCredentials, setWrongCredentials] = useState(false)
   const emailRef = useRef(null)
   const passwordRef = useRef(null)
 
   const change = (name, value) => {
-    setFormData({ ...formData, [name]: value })
-    // Typing again clears the red. A wrong-credentials error belongs to both fields.
-    setErrors((current) => (current.credentials ? {} : { ...current, [name]: undefined }))
+    setFormData((current) => ({ ...current, [name]: value }))
+    live.changed(name)
+    // A wrong-credentials error belongs to both fields: editing either clears it.
+    if (wrongCredentials) {
+      setWrongCredentials(false)
+      live.clearServerErrors()
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const invalid = validateLogin(formData)
-    setErrors(invalid)
-    if (invalid.email || invalid.password) {
-      (invalid.email ? emailRef : passwordRef).current?.focus()
+    if (!live.submit()) {
+      (LOGIN_RULES.email(formData) ? emailRef : passwordRef).current?.focus()
       return
     }
 
@@ -47,7 +53,9 @@ export default function AdminLogin() {
       navigate('/admin')
     } catch (error) {
       const result = loginErrors(error)
-      setErrors(result.fields)
+      const { credentials, ...fields } = result.fields
+      setWrongCredentials(!!credentials)
+      live.setServerErrors(fields)
       setAlert(result.alert)
     } finally {
       setLoading(false)
@@ -68,38 +76,38 @@ export default function AdminLogin() {
         <SessionExpiredNotice />
 
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-          <div>
-            <label htmlFor="admin-email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <input
-              ref={emailRef}
-              id="admin-email"
-              name="email"
-              type="email"
-              autoComplete="username"
-              className={`input-field ${errors.email ? 'input-error' : ''}`}
-              value={formData.email}
-              onChange={(e) => change('email', e.target.value)}
-              aria-invalid={!!errors.email}
-              aria-describedby={typeof errors.email === 'string' ? 'admin-email-error' : errors.credentials ? 'admin-password-error' : undefined}
-            />
-            {typeof errors.email === 'string' && <p id="admin-email-error" className="field-error">{errors.email}</p>}
-          </div>
-          <div>
-            <label htmlFor="admin-password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-            <input
-              ref={passwordRef}
-              id="admin-password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              className={`input-field ${errors.password ? 'input-error' : ''}`}
-              value={formData.password}
-              onChange={(e) => change('password', e.target.value)}
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? 'admin-password-error' : undefined}
-            />
-            {typeof errors.password === 'string' && <p id="admin-password-error" className="field-error">{errors.password}</p>}
-          </div>
+          <AuthField
+            id="admin-email"
+            inputRef={emailRef}
+            label="Email Address"
+            icon={FiMail}
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="name@example.com"
+            hint="Your Tourism Office account email."
+            value={formData.email}
+            error={live.errors.email}
+            describedBy={wrongCredentials ? 'admin-password-error' : undefined}
+            onChange={(e) => change('email', e.target.value)}
+            onBlur={() => live.blurred('email')}
+          />
+          <PasswordField
+            id="admin-password"
+            inputRef={passwordRef}
+            label="Password"
+            icon={FiLock}
+            name="password"
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            value={formData.password}
+            error={live.errors.password}
+            onChange={(e) => change('password', e.target.value)}
+            onBlur={() => live.blurred('password')}
+          />
           <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
             {loading ? 'Authenticating...' : 'Login as Admin'}
           </button>
@@ -109,7 +117,7 @@ export default function AdminLogin() {
           alert={alert}
           onClose={() => {
             setAlert(null)
-            if (errors.credentials) passwordRef.current?.select()
+            if (wrongCredentials) passwordRef.current?.select()
           }}
         />
 

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { FiMail, FiCheckCircle } from 'react-icons/fi'
 import { forgotPassword } from '../../api/auth'
 import { showApiError } from '../../utils/apiErrors'
-import { validateLogin } from '../../utils/loginErrors'
+import { validateEmail } from '../../utils/authValidation'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -16,7 +16,7 @@ export default function ForgotPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     // Same email check as the login form.
-    const invalid = validateLogin({ email, password: 'x' }).email
+    const invalid = validateEmail(email)
     setEmailError(invalid ?? null)
     if (invalid) {
       emailRef.current?.focus()

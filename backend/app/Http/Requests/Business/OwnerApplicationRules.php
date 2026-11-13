@@ -22,7 +22,8 @@ class OwnerApplicationRules
             'business_name' => "{$owner}|string|max:255",
             'business_address' => "{$owner}|string|max:500",
             'municipality_id' => "{$owner}|integer|exists:municipalities,id",
-            'barangay_id' => ['nullable', 'integer', 'exists:barangays,id', self::barangayInMunicipality()],
+            // The registration form asks for the barangay too.
+            'barangay_id' => ['required_if:role,business_owner', 'nullable', 'integer', 'exists:barangays,id', self::barangayInMunicipality()],
             'business_permit_number' => "{$owner}|string|max:100",
             'business_permit_file' => "{$owner}|".self::PERMIT_RULE,
         ];

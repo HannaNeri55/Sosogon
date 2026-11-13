@@ -43,7 +43,7 @@ class OwnerRegistrationTest extends TestCase
     {
         return array_merge([
             'name' => 'Ana Reyes', 'email' => 'ana@example.com', 'phone' => '09170000000',
-            'password' => 'password123', 'password_confirmation' => 'password123',
+            'password' => 'Password123!', 'password_confirmation' => 'Password123!',
             'role' => 'business_owner', 'business_type' => 'accommodation',
             'business_name' => 'Hot Spring Inn', 'business_address' => 'Purok 1, San Benon, Irosin',
             'municipality_id' => $this->town, 'barangay_id' => $this->barangay,
@@ -90,7 +90,7 @@ class OwnerRegistrationTest extends TestCase
     {
         $application = $this->register();
 
-        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password123'])->assertForbidden();
+        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'Password123!'])->assertForbidden();
         $this->actingAs($application->user)->getJson('/api/v1/business/dashboard')->assertForbidden()->assertJson(['code' => 'owner_not_approved']);
         $this->actingAs($application->user)->postJson('/api/v1/business/submissions', [])->assertForbidden();
         // Their own application stays reachable.
@@ -139,7 +139,7 @@ class OwnerRegistrationTest extends TestCase
 
         $this->app['auth']->forgetGuards(); // a real login request starts unauthenticated
         $this->app['auth']->shouldUse('web');
-        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password123'])->assertOk();
+        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'Password123!'])->assertOk();
         $this->actingAs($application->user->fresh(), 'sanctum')->getJson('/api/v1/business/dashboard')->assertOk();
     }
 
@@ -154,7 +154,7 @@ class OwnerRegistrationTest extends TestCase
         // The rejected owner may sign in, sees the reason, but still can't use business actions.
         $this->app['auth']->forgetGuards(); // a real login request starts unauthenticated
         $this->app['auth']->shouldUse('web');
-        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password123'])->assertOk()->assertJsonPath('user.application_status', 'rejected');
+        $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'Password123!'])->assertOk()->assertJsonPath('user.application_status', 'rejected');
         $owner = $application->user->fresh();
         $this->actingAs($owner)->getJson('/api/v1/business/dashboard')->assertForbidden();
         $this->actingAs($owner)->getJson('/api/v1/business/application')->assertJsonPath('application.rejection_reason', 'The permit is expired. Please upload the 2026 permit.');

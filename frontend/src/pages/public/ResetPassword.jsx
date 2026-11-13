@@ -1,10 +1,16 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { FiLock, FiEye, FiEyeOff, FiAlertTriangle } from 'react-icons/fi'
+import { FiAlertTriangle } from 'react-icons/fi'
 import { resetPassword } from '../../api/auth'
 import toast from 'react-hot-toast'
 import { showApiError } from '../../utils/apiErrors'
 import { focusFirstInvalid } from '../../utils/formErrors'
+import { ACCOUNT_RULES, ACCOUNT_SHOW_NOW } from '../../utils/authValidation'
+import useLiveValidation from '../../hooks/useLiveValidation'
+import { PasswordFields } from '../../components/auth/AccountFields'
+
+const RULES = { password: ACCOUNT_RULES.password, password_confirmation: ACCOUNT_RULES.password_confirmation }
+const SHOW_NOW = { password: ACCOUNT_SHOW_NOW.password, password_confirmation: ACCOUNT_SHOW_NOW.password_confirmation }
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -13,10 +19,10 @@ export default function ResetPassword() {
   const email = searchParams.get('email')
 
   const [loading, setLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
   const [expired, setExpired] = useState(false)
   const [formData, setFormData] = useState({ password: '', password_confirmation: '' })
-  const [errors, setErrors] = useState({})
+  // The same requirements as registration, checked while the user types.
+  const live = useLiveValidation(formData, RULES, { now: SHOW_NOW })
 
   if (!token || !email) {
     return (
@@ -35,23 +41,14 @@ export default function ResetPassword() {
     )
   }
 
-  const validate = () => {
-    const newErrors = {}
-    if (!formData.password) newErrors.password = 'Password is required'
-    else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters'
-    if (formData.password !== formData.password_confirmation) newErrors.password_confirmation = 'Passwords do not match'
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
   const handleInputChange = (name, value) => {
-    setFormData({ ...formData, [name]: value })
-    setErrors({ ...errors, [name]: '' })
+    setFormData((current) => ({ ...current, [name]: value }))
+    live.changed(name)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!validate()) {
+    if (!live.submit()) {
       focusFirstInvalid()
       return
     }
@@ -62,9 +59,9 @@ export default function ResetPassword() {
       toast.success(data.message || 'Your password has been reset successfully.')
       navigate('/login')
     } catch (e) {
-      const serverErrors = e.response?.data?.errors
+      const serverErrors = e.response?.status === 422 && e.response.data?.errors
       if (serverErrors) {
-        setErrors(serverErrors)
+        live.setServerErrors(serverErrors)
         focusFirstInvalid()
         if (serverErrors.email) setExpired(true)
       } else {
@@ -95,48 +92,14 @@ export default function ResetPassword() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-            <div className="relative">
-              <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                className={`input-field pl-9 pr-9 ${errors.password ? 'input-error' : ''}`}
-                aria-invalid={!!errors.password}
-                value={formData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                tabIndex={-1}
-              >
-                {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-              </button>
-            </div>
-            {errors.password && <p className="field-error">{Array.isArray(errors.password) ? errors.password[0] : errors.password}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-            <div className="relative">
-              <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                name="password_confirmation"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                className={`input-field pl-9 ${errors.password_confirmation ? 'input-error' : ''}`}
-                aria-invalid={!!errors.password_confirmation}
-                value={formData.password_confirmation}
-                onChange={(e) => handleInputChange('password_confirmation', e.target.value)}
-              />
-            </div>
-            {errors.password_confirmation && <p className="field-error">{Array.isArray(errors.password_confirmation) ? errors.password_confirmation[0] : errors.password_confirmation}</p>}
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <PasswordFields
+            idPrefix="reset"
+            values={formData}
+            live={live}
+            onChange={handleInputChange}
+            labels={['New Password', 'Confirm New Password']}
+          />
 
           <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
             {loading ? 'Resetting...' : 'Reset Password'}

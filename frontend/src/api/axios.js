@@ -125,7 +125,8 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const dialog = dialogFor(error, isAuthAttempt)
+    // Background checks (config.quiet) fail silently: the form still checks on submit.
+    const dialog = error.config?.quiet ? null : dialogFor(error, isAuthAttempt)
     if (dialog) {
       // Marked first, so the page's own error handling (showApiError) doesn't repeat it as a toast.
       error.errorDialogShown = true
