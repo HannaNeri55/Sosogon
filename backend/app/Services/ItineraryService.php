@@ -4286,7 +4286,7 @@ class ItineraryService
         return "{$article} {$type}".($priceRange ? " ({$priceRange} price)" : '');
     }
 
-    /** "Bulan", "Bulan and Matnog", "Bulan, Matnog and Irosin" (or $conjunction instead of "and"). */
+    /** "Bulan", "Bulan and Matnog", "Bulan, Matnog and Irosin" (or $conjunction instead of "and"); "Sorsogon" without a town. */
     private function townNames(array $preferences, string $conjunction = 'and'): string
     {
         $ids = $preferences['all_town_ids'] ?? $preferences['municipality_ids'] ?? $this->townIds($preferences);
@@ -4294,7 +4294,7 @@ class ItineraryService
         $ordered = collect($ids)->map(fn ($id) => $names[$id] ?? null)->filter()->values();
 
         if ($ordered->isEmpty()) {
-            return 'Bulan';
+            return 'Sorsogon';
         }
 
         return $ordered->count() === 1
