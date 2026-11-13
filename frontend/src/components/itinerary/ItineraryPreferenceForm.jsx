@@ -278,7 +278,8 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
 
   // What stops each step from being complete (null when it's fine).
   const problems = [
-    townCount === 0 ? 'Pick at least one municipality to continue.' : null,
+    // No municipality is fine: SOSOGON then chooses them, province-wide.
+    null,
     !formData.start_date || !formData.end_date
       ? 'Choose your arrival and departure dates.'
       : !numDays
@@ -464,7 +465,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-gray-600">Your destinations</p>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${townCount ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                  {townCount} selected
+                  {townCount ? `${townCount} selected` : 'SOSOGON chooses'}
                 </span>
               </div>
               {selectedTowns.length > 0 ? (
@@ -483,7 +484,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-gray-500 mt-1.5">Nothing selected yet. Tap a municipality below to add it.</p>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Tap a municipality below to add it, or leave this empty and SOSOGON will choose the best-known destinations across Sorsogon for you.
+                </p>
               )}
             </div>
 
@@ -962,7 +965,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   {selectedTowns.map((m) => <Chip key={m.id}>{m.name}</Chip>)}
                 </div>
               ) : (
-                <p className="text-sm text-red-600">No municipality selected.</p>
+                <p className="text-sm text-gray-700">Anywhere in Sorsogon — SOSOGON chooses the municipalities with the best-known destinations for your interests.</p>
               )}
             </ReviewSection>
 

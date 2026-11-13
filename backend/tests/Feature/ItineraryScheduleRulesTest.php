@@ -526,6 +526,51 @@ class ItineraryScheduleRulesTest extends TestCase
         $this->assertFalse($itinerary->items->contains('item_type', 'accommodation'));
     }
 
+    public function test_without_a_municipality_the_province_best_known_towns_are_chosen(): void
+    {
+        // Matnog has the must-visit place, Gubat a popular one, Bulan nothing classified.
+        Destination::whereKey($this->ids['matnog1'])->update(['tourism_priority' => 'iconic']);
+        Destination::whereKey($this->ids['gubat2'])->update(['tourism_priority' => 'popular']);
+        $this->reply = ['title' => 'Best of Sorsogon', 'days' => [$this->day(1, 'matnog1'), $this->day(2, 'gubat2')]];
+
+        $itinerary = $this->generate([], 2);
+
+        $towns = $itinerary->municipalities()->pluck('municipalities.id')->all();
+        $this->assertEqualsCanonicalizing([$this->towns['matnog'], $this->towns['gubat']], $towns, 'The towns with the best-known places, never a default town.');
+        $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['matnog1']));
+        $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['gubat2']));
+        $this->assertStringContainsString('You let SOSOGON choose the municipalities', (string) $itinerary->items->sortBy(['day_number', 'sequence'])->first()->preference_note);
+        $this->assertStringContainsString("didn't choose any municipality", end($this->prompts));
+        $this->assertMealTimes($itinerary);
+        $this->assertSame([], $this->problems($itinerary));
+    }
+
+    public function test_a_one_day_trip_without_a_municipality_goes_to_the_top_town_only(): void
+    {
+        Destination::whereKey($this->ids['matnog1'])->update(['tourism_priority' => 'iconic']);
+        Destination::whereKey($this->ids['gubat2'])->update(['tourism_priority' => 'popular']);
+        $this->reply = ['title' => 'One day', 'days' => [$this->day(1, 'matnog1')]];
+
+        $itinerary = $this->generate([], 1);
+
+        $this->assertSame([$this->towns['matnog']], $itinerary->municipalities()->pluck('municipalities.id')->all());
+        $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['matnog1']), 'The must-visit place, not nearby filler.');
+        $this->assertMealTimes($itinerary);
+    }
+
+    public function test_chosen_municipalities_are_kept_and_their_best_places_come_first(): void
+    {
+        Destination::whereKey($this->ids['matnog1'])->update(['tourism_priority' => 'iconic']);
+        Destination::whereKey($this->ids['gubat4'])->update(['tourism_priority' => 'popular']);
+        $this->reply = ['title' => 'Gubat', 'days' => [$this->day(1, 'gubat1'), $this->day(2, 'gubat3')]];
+
+        $itinerary = $this->generate(['gubat'], 2);
+
+        $visited = $itinerary->items->where('item_type', 'destination')->pluck('destination.municipality_id')->unique()->values()->all();
+        $this->assertSame([$this->towns['gubat']], $visited, 'Only the chosen municipality, even with a must-visit place elsewhere.');
+        $this->assertTrue($itinerary->items->contains('destination_id', $this->ids['gubat4']), "Gubat's popular place is in the trip.");
+    }
+
     public function test_the_check_rejects_a_late_lunch_and_overlaps(): void
     {
         $check = fn (array $rows) => app(ItineraryService::class)->scheduleProblems($rows, Destination::all(), ['num_days' => 1]);

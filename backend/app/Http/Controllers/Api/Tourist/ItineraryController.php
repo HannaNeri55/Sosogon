@@ -205,7 +205,7 @@ class ItineraryController extends Controller
     {
         $validated = $request->validate($this->preferenceRules());
 
-        $ids = $validated['municipality_ids'] ?? [$validated['municipality_id']];
+        $ids = $validated['municipality_ids'] ?? (isset($validated['municipality_id']) ? [$validated['municipality_id']] : []);
         $validated['municipality_ids'] = array_values(array_unique(array_map('intval', $ids)));
         unset($validated['municipality_id']);
 
@@ -259,7 +259,8 @@ class ItineraryController extends Controller
         if (! $stay) {
             throw ValidationException::withMessages(['accommodation_id' => 'This accommodation is not available on SOSOGON. Please choose another.']);
         }
-        if (! in_array((int) $stay->municipality_id, $validated['municipality_ids'], true)) {
+        // With no municipality chosen, the stay's own municipality becomes part of the trip.
+        if ($validated['municipality_ids'] !== [] && ! in_array((int) $stay->municipality_id, $validated['municipality_ids'], true)) {
             throw ValidationException::withMessages(['accommodation_id' => "{$stay->name} isn't in one of the municipalities you selected. Choose a stay in one of them."]);
         }
         if (empty($validated['room_id'])) {
@@ -283,7 +284,8 @@ class ItineraryController extends Controller
     private function preferenceRules(): array
     {
         return [
-            'municipality_ids' => 'required_without:municipality_id|array|min:1|max:30',
+            // Empty (or left out): the tourist lets SOSOGON choose the municipalities, province-wide.
+            'municipality_ids' => 'nullable|array|max:30',
             'municipality_ids.*' => 'integer|distinct|exists:municipalities,id',
             'municipality_id' => 'nullable|integer|exists:municipalities,id',
             'num_days' => 'required|integer|min:1|max:30',
