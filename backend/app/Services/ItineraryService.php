@@ -244,6 +244,14 @@ class ItineraryService
     /** Each stay's breakfast arrangement for this trip (see breakfastAtStay()). */
     private array $breakfastCache = [];
 
+    /** The towns the planner chose when the tourist chose none: ['towns' => ids, 'note' => why, 'highlights' => names]. */
+    private ?array $chosenTowns = null;
+
+    /** Towns more than this far from the rest of the trip cost a day's worth of travel by public transport. */
+    private const TOWN_GAP_KM_PUBLIC = 1.5;
+
+    private const TOWN_GAP_KM_CAR = 0.8;
+
     public function __construct(
         private ItineraryAI $ai,
         private GoogleMapsService $maps
@@ -256,6 +264,13 @@ class ItineraryService
     public function generate(?User $user, array $preferences, ?string $claimTokenHash = null): Itinerary
     {
         $preferences['municipality_ids'] = $this->townIds($preferences);
+        // No municipality chosen: the tourist leaves it to us, so the province's best-known
+        // attractions decide which towns the trip covers.
+        $this->chosenTowns = null;
+        if ($preferences['municipality_ids'] === []) {
+            $this->chosenTowns = $this->chooseTowns($preferences);
+            $preferences['municipality_ids'] = $this->chosenTowns['towns'];
+        }
         // More towns than days: nearby towns share days, planned as one area.
         $preferences['all_town_ids'] = $preferences['municipality_ids'];
         $this->townOf = $this->shareDays($preferences['municipality_ids'], (int) $preferences['num_days']);
@@ -367,6 +382,9 @@ class ItineraryService
             $dropped[$day] = array_merge($dropped[$day] ?? [], $names);
         }
         $items = $this->noteDroppedStops($items, $dropped);
+        if ($this->chosenTowns !== null && $items !== []) {
+            $items[0]['preference_note'] = $this->joinNotes($this->chosenTowns['note'], $items[0]['preference_note'] ?? null);
+        }
         $dayPlans = $this->dayPlans($items, $destinations, $parsedItinerary['titles'] ?? []);
 
         $stays = $this->bookNights($plan['stays'], $dayTowns, $preferences);
@@ -766,7 +784,7 @@ class ItineraryService
      */
     private function townIds(array $preferences): array
     {
-        $ids = $preferences['municipality_ids'] ?? [$preferences['municipality_id'] ?? 1];
+        $ids = $preferences['municipality_ids'] ?? (isset($preferences['municipality_id']) ? [$preferences['municipality_id']] : []);
 
         return array_values(array_unique(array_map('intval', $ids)));
     }
@@ -850,6 +868,10 @@ class ItineraryService
         $roadTimes = ($distanceMatrix[0]['source'] ?? 'estimate') === 'google';
 
         $prompt = "You are an experienced local tour planner for {$townNames}, Sorsogon, Philippines.\n\n";
+        if ($this->chosenTowns !== null) {
+            $prompt .= "The tourist didn't choose any municipality, so the planner chose {$townNames} for the province's best-known attractions that match their interests ("
+                .implode(', ', $this->chosenTowns['highlights'])."). Build the trip around those highlights, visiting the towns in that order (a sensible route).\n\n";
+        }
         $prompt .= "Create a {$numDays}-day travel itinerary. Each day visits up to {$perDay} tourist destinations ({$firstDay} on Day 1, the arrival day), listed in the order the tourist should visit them.\n";
         $prompt .= $firstDay === 0
             ? "The tourist arrives too late on Day 1 for sightseeing: give Day 1 an empty \"destinations\" list.\n"
@@ -1197,8 +1219,11 @@ class ItineraryService
                 // more strongly an interest the trip doesn't cover yet, and most a place the
                 // tourist asked for.
                 $preferred = $this->preferredIds($preferences);
+                // A day built around a highlight isn't padded with unranked places just to add stops.
+                $hasHighlight = collect($ids)->contains(fn ($id) => $this->priorityScore($byId[$id]) >= self::PRIORITY_POINTS['popular']);
                 $pick = $destinations
                     ->reject(fn ($d) => in_array((int) $d->id, $used, true))
+                    ->reject(fn ($d) => $hasHighlight && count($ids) >= 2 && $this->priorityScore($d) < self::PRIORITY_POINTS['hidden_gem'])
                     ->filter(fn ($d) => (int) $d->municipality_id === $town && $fits($ids, $d, $n))
                     // Worth counts as much as closeness: a must-visit place is worth ~100 minutes more.
                     ->sortBy(fn ($d) => ($near->isEmpty() ? 0 : $near->min(fn ($s) => $this->travelMinutes($s, $d)))
@@ -1263,11 +1288,18 @@ class ItineraryService
                         continue;
                     }
                     $kept = array_values(array_diff($ids, [$weakest]));
+                    // Still no room (a short arrival day): the highlight keeps only the stops the
+                    // tourist asked for, and the weaker ones make way.
                     if (! $this->fitsDay($kept, $best, $n, $byId, $preferences)) {
-                        continue;
+                        $kept = array_values(array_filter($ids, fn ($id) => in_array($id, $asked, true)));
+                        if (! $this->fitsDay($kept, $best, $n, $byId, $preferences)) {
+                            continue;
+                        }
+                    }
+                    foreach (array_diff($ids, $kept) as $gone) {
+                        unset($days[$n]['reasons'][$gone]);
                     }
                     $days[$n]['destination_ids'] = [...$kept, (int) $best->id];
-                    unset($days[$n]['reasons'][$weakest]);
                 }
                 $days[$n]['reasons'][(int) $best->id] = $this->addedReason($best, $before);
                 break;
@@ -3437,6 +3469,91 @@ class ItineraryService
         }
 
         return $problems;
+    }
+
+    /**
+     * The towns to visit when the tourist chose none: the province's best places for their
+     * interests decide. Each town is rated by its two highest-ranked matching attractions (the
+     * tourism office's classification, featured status, visitor ratings; see priorityScore()),
+     * plus a little for having several; the best town comes first, then each next one is the
+     * best remaining after a cost for its distance from the towns already chosen (higher by
+     * public transport), so the trip doesn't zigzag across the province. One town per day (at
+     * most six), never more towns than have something to offer, in route order. A stay the
+     * tourist picked puts its town in the trip. Food- or shopping-only trips go to the towns
+     * with the most listed restaurants and souvenir shops.
+     *
+     * @return array{towns: array<int, int>, note: string, highlights: array<int, string>}
+     */
+    private function chooseTowns(array $preferences): array
+    {
+        $days = max(1, (int) $preferences['num_days']);
+        $categoryIds = array_values(array_unique(array_merge(...array_map(fn ($i) => self::INTEREST_CATEGORIES[$i] ?? [], array_values($preferences['interests'] ?? [])))));
+        $picked = ! empty($preferences['accommodation_id']) ? Accommodation::find($preferences['accommodation_id']) : null;
+
+        if ($categoryIds === []) {
+            $counts = FoodBeverage::approved()->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id');
+            foreach ($this->souvenirShopQuery()->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id') as $town => $n) {
+                $counts[$town] = ($counts[$town] ?? 0) + $n;
+            }
+            $towns = collect($counts)->sortDesc()->keys()->map(fn ($t) => (int) $t)->take(min($days, 2))->values()->all();
+            if ($picked && ! in_array((int) $picked->municipality_id, $towns, true)) {
+                array_unshift($towns, (int) $picked->municipality_id);
+            }
+            $towns = array_slice($towns, 0, max(1, min($days, 2)));
+            if ($towns === []) {
+                throw new ItineraryNotPossibleException('There are no listed restaurants or souvenir shops in Sorsogon yet. Please pick a sightseeing interest.');
+            }
+            $names = Municipality::whereIn('id', $towns)->pluck('name', 'id');
+
+            return ['towns' => $towns, 'highlights' => [], 'note' => 'You let SOSOGON choose the municipalities: '.$this->naturalList(array_map(fn ($t) => $names[$t] ?? '', $towns)).' have the most listed places to eat and shop.'];
+        }
+
+        $places = Destination::published()->whereIn('category_id', $categoryIds)->whereNotNull('latitude')->whereNotNull('longitude')
+            ->get(['id', 'name', 'municipality_id', 'latitude', 'longitude', 'is_featured', 'tourism_priority', 'average_rating', 'total_reviews', 'view_count']);
+        if ($places->isEmpty()) {
+            throw new ItineraryNotPossibleException('No published destinations in Sorsogon match those interests yet. Please pick other interests.');
+        }
+        $byTown = $places->groupBy('municipality_id');
+        $worth = $byTown->map(function ($group) {
+            $scores = $group->map(fn ($d) => $this->priorityScore($d))->sortDesc()->values();
+
+            return $scores->take(2)->sum() + min(3, $group->count()) * 5;
+        });
+        $centers = $byTown->map(fn ($group) => $this->centroid($group));
+        $perKm = ($preferences['transport_preference'] ?? null) === 'public_transport' ? self::TOWN_GAP_KM_PUBLIC : self::TOWN_GAP_KM_CAR;
+        $gap = fn ($town, array $chosen) => $chosen === [] ? 0 : collect($chosen)->min(fn ($c) => $this->haversineDistance($centers[$town][0], $centers[$town][1], $centers[$c][0], $centers[$c][1]));
+
+        $want = min($days, 6, $byTown->count());
+        $chosen = $picked && isset($byTown[(int) $picked->municipality_id]) ? [(int) $picked->municipality_id] : [];
+        while (count($chosen) < $want) {
+            $next = $worth->keys()->map(fn ($t) => (int) $t)
+                ->reject(fn ($t) => in_array($t, $chosen, true))
+                ->sortByDesc(fn ($t) => $worth[$t] - $gap($t, $chosen) * $perKm)
+                ->first();
+            if ($next === null) {
+                break;
+            }
+            $chosen[] = $next;
+        }
+
+        // Route order: start from the end of the chosen line, then always the nearest next town.
+        $start = collect($chosen)->sortByDesc(fn ($t) => collect($chosen)->max(fn ($o) => $this->haversineDistance($centers[$t][0], $centers[$t][1], $centers[$o][0], $centers[$o][1])))->first();
+        $route = [$start];
+        while (count($route) < count($chosen)) {
+            $last = end($route);
+            $route[] = collect($chosen)->reject(fn ($t) => in_array($t, $route, true))
+                ->sortBy(fn ($t) => $this->haversineDistance($centers[$t][0], $centers[$t][1], $centers[$last][0], $centers[$last][1]))->first();
+        }
+
+        $names = Municipality::whereIn('id', $route)->pluck('name', 'id');
+        $highlights = collect($route)->map(fn ($t) => $byTown[$t]->sortByDesc(fn ($d) => $this->priorityScore($d))->first()?->name)->filter()->values()->all();
+
+        return [
+            'towns' => array_values($route),
+            'highlights' => $highlights,
+            'note' => 'You let SOSOGON choose the municipalities, so this trip covers '.$this->naturalList(array_map(fn ($t) => $names[$t] ?? '', $route))
+                .' for some of the province\'s best-known places: '.$this->naturalList($highlights).'.',
+        ];
     }
 
     /**
