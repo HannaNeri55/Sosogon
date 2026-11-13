@@ -72,7 +72,7 @@ const sidebarLinks = [
     // New rooms/dishes/products and proposed changes to approved ones.
     to: '/admin/item-reviews',
     icon: FiLayers,
-    label: 'Rooms, Menus & Products',
+    label: 'Offerings',
   },
   {
     section: 'Community',
