@@ -503,7 +503,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                       type="button"
                       aria-pressed={isSelected}
                       onClick={() => toggleMunicipality(m.id)}
-                      className={`${optionClass(isSelected)} flex items-center gap-3 px-3.5 py-3.5`}
+                      className={`${optionClass(isSelected)} flex flex-col items-start gap-2 p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:gap-3 min-[420px]:px-3.5 min-[420px]:py-3.5`}
                     >
                       <span
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${

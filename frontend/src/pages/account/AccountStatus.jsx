@@ -161,7 +161,7 @@ function ViolationItem({ violation, onAppeal }) {
       <p className="mt-1 text-sm text-gray-800"><span className="font-semibold">Reason:</span> {violation.reason}</p>
       <p className="mt-1 text-sm text-gray-600 whitespace-pre-line">{violation.details}</p>
 
-      <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm text-gray-600 sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-sm text-gray-600 sm:grid-cols-2">
         {violation.action === 'suspension' && (
           <>
             <div><dt className="inline font-semibold text-gray-700">Duration: </dt><dd className="inline">{violation.suspension_days} day{violation.suspension_days === 1 ? '' : 's'}</dd></div>

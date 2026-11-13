@@ -171,7 +171,7 @@ export default function ListingLocations() {
         <>
           <div className={`bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden transition-opacity ${loading ? 'opacity-60' : ''}`}>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[52rem] text-sm">
+              <table className="table-cards w-full min-w-[52rem] text-sm">
                 <thead className="bg-gray-50/80 border-b border-gray-200">
                   <tr>
                     {['Listing', 'Address', 'Coordinates', 'Check', ''].map((heading, i) => (
@@ -192,15 +192,15 @@ export default function ListingLocations() {
                           <a href={`${publicPath}/${item.id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 hover:text-primary-700">{item.name}</a>
                           <p className="text-xs text-gray-500">{item.municipality?.name || '—'} · {item.status}</p>
                         </td>
-                        <td className="px-5 py-3 text-gray-600 max-w-xs">{item.address || '—'}</td>
-                        <td className="px-5 py-3 whitespace-nowrap text-gray-700 tabular-nums">
+                        <td data-label="Address" className="px-5 py-3 text-gray-600 max-w-xs">{item.address || '—'}</td>
+                        <td data-label="Coordinates" className="px-5 py-3 whitespace-nowrap text-gray-700 tabular-nums">
                           {point ? (
                             <a href={googleMapsPlaceUrl(point)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-primary-700">
                               {point.lat.toFixed(5)}, {point.lng.toFixed(5)} <FiExternalLink size={12} aria-hidden="true" />
                             </a>
                           ) : '—'}
                         </td>
-                        <td className="px-5 py-3">
+                        <td data-label="Check" className="px-5 py-3">
                           <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                             check.tone === 'green' ? 'bg-green-50 text-green-700' : check.tone === 'amber' ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700'
                           }`}>
@@ -208,7 +208,7 @@ export default function ListingLocations() {
                             {check.label}
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-right">
+                        <td data-actions className="px-5 py-3 text-right">
                           <button type="button" onClick={() => setEditing(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:border-primary-300 hover:text-primary-700">
                             <FiMapPin size={14} aria-hidden="true" /> Set location
                           </button>

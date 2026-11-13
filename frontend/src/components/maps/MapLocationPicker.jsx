@@ -163,7 +163,7 @@ export default function MapLocationPicker({ latitude, longitude, onChange, onAdd
         </p>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 mb-1">Latitude{required && ' *'}</span>
           <input

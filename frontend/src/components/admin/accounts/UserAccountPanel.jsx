@@ -90,7 +90,7 @@ export default function UserAccountPanel({ userId, initialTab = 'details', refre
           ) : !data ? (
             <LoadingSpinner />
           ) : tab === 'details' ? (
-            <dl className="grid gap-4 rounded-xl border border-gray-200 bg-white p-5 text-sm sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-white p-5 text-sm sm:grid-cols-2">
               {[
                 ['Name', user.name],
                 ['Email', user.email],

@@ -50,7 +50,7 @@ export default function ViolationCard({ violation, showUser = false }) {
         </div>
       )}
 
-      <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-xs text-gray-600 sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs text-gray-600 sm:grid-cols-2">
         <div><dt className="inline font-semibold text-gray-700">Reported: </dt><dd className="inline">{formatDay(violation.reported_at)}</dd></div>
         <div><dt className="inline font-semibold text-gray-700">Reviewed: </dt><dd className="inline">{formatDateTime(violation.reviewed_at)} by {violation.reviewer?.name || 'an administrator'}</dd></div>
         {violation.action === 'suspension' && (

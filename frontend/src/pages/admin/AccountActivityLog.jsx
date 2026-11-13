@@ -77,7 +77,7 @@ export default function AccountActivityLog() {
         <>
           <div className={`bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden transition-opacity ${loading ? 'opacity-60' : ''}`}>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[56rem] text-sm">
+              <table className="table-cards w-full min-w-[56rem] text-sm">
                 <thead className="bg-gray-50/80 border-b border-gray-200">
                   <tr>
                     {['Date and time', 'Action', 'Affected user', 'Status change', 'Reason', 'By'].map((heading) => (
@@ -89,16 +89,16 @@ export default function AccountActivityLog() {
                   {result.data.map((entry) => (
                     <tr key={entry.id} className="border-b border-gray-100 last:border-b-0 align-top">
                       <td className="px-5 py-3 whitespace-nowrap text-gray-600">{formatDateTime(entry.created_at)}</td>
-                      <td className="px-5 py-3 font-medium text-gray-900">{ACTIONS[entry.action] || entry.action}</td>
-                      <td className="px-5 py-3">
+                      <td data-label="Action" className="px-5 py-3 font-medium text-gray-900">{ACTIONS[entry.action] || entry.action}</td>
+                      <td data-label="Affected user" className="px-5 py-3">
                         <p className="text-gray-900">{entry.user_name}</p>
                         <p className="text-xs text-gray-500">{entry.user_email}</p>
                       </td>
-                      <td className="px-5 py-3 whitespace-nowrap text-gray-600">
+                      <td data-label="Status change" className="px-5 py-3 whitespace-nowrap text-gray-600">
                         {entry.previous_status && entry.new_status ? `${entry.previous_status} → ${entry.new_status}` : '—'}
                       </td>
-                      <td className="px-5 py-3 text-gray-700 max-w-xs">{entry.reason || '—'}</td>
-                      <td className="px-5 py-3 whitespace-nowrap text-gray-600">{entry.admin_name || 'System'}</td>
+                      <td data-label="Reason" className="px-5 py-3 text-gray-700 max-w-xs">{entry.reason || '—'}</td>
+                      <td data-label="By" className="px-5 py-3 whitespace-nowrap text-gray-600">{entry.admin_name || 'System'}</td>
                     </tr>
                   ))}
                 </tbody>

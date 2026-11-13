@@ -136,6 +136,81 @@
     }
 }
 
+/* Admin tables (class "table-cards") become one card per row when the space they're given is
+   narrow (phones, and tablets beside the admin sidebar) instead of scrolling sideways: the first
+   cell is the card's title, every other cell shows its column name from data-label, and a cell
+   with data-actions holds the row's buttons. It follows the table's box, not the screen, so it
+   also applies beside the sidebar. Outside a layer so it wins over the cells' utilities. */
+:where(div):has(> .table-cards) {
+    container-type: inline-size;
+}
+@container (max-width: 767px) {
+    .table-cards {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+    .table-cards thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+    .table-cards tbody,
+    .table-cards tr {
+        display: block;
+    }
+    .table-cards tr {
+        padding: 0.875rem 1rem;
+    }
+    /* The label floats left and the value flows to its right, so a value made of several
+       pieces (a date range, a name over an email) stays together. */
+    .table-cards td {
+        display: flow-root;
+        padding: 0.25rem 0;
+        text-align: right;
+        min-width: 0;
+        max-width: none;
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+    .table-cards td > .flex {
+        justify-content: flex-end;
+    }
+    .table-cards td > svg {
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .table-cards td:first-child {
+        padding: 0 0 0.5rem;
+        text-align: left;
+    }
+    .table-cards td:first-child > .flex {
+        justify-content: flex-start;
+    }
+    .table-cards td[data-label]::before {
+        content: attr(data-label);
+        float: left;
+        margin-right: 0.75rem;
+        padding-top: 0.125rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        text-align: left;
+        color: var(--color-gray-500);
+    }
+    .table-cards td[data-actions] {
+        margin-top: 0.375rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--color-gray-100);
+    }
+    .table-cards td:empty {
+        display: none;
+    }
+}
+
 /* Any field marked invalid (aria-invalid, set by useFormErrors and the sign-in forms) turns
    red, whatever classes it has. Outside a layer so it wins over border/background utilities. */
 :is(input, select, textarea)[aria-invalid="true"]:not([type="checkbox"], [type="radio"]) {

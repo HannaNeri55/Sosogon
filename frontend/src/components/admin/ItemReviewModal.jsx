@@ -56,7 +56,7 @@ function ProposedChange({ kind, row }) {
         </div>
       )}
       {hasPhotoChange ? (
-        <div className="grid gap-4 sm:grid-cols-2 mb-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
           <div>
             <p className="text-xs font-medium text-gray-500 mb-2">Photos now (public)</p>
             <Thumbs images={config.images(row)} removedIds={removedIds} label="Current photo" />

@@ -150,7 +150,7 @@ export default function ManageAnnouncements() {
       <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
-          <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
+          <table className="table-cards w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Announcement</th>
@@ -166,15 +166,15 @@ export default function ManageAnnouncements() {
                     <p className="text-sm font-medium text-gray-900">{item.title}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{truncate(item.content, 80)}</p>
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-label="Status" className="px-6 py-4">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                       {item.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td data-label="Pinned" className="px-6 py-4 text-sm text-gray-600">
                     {item.is_pinned ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '—'}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-actions className="px-6 py-4">
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
                         <FiEdit2 size={15} />

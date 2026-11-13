@@ -298,10 +298,10 @@ export default function AdminLayout() {
 
         {/* Desktop header */}
         <header className="hidden md:flex items-center justify-between gap-4 bg-white/90 backdrop-blur border-b border-gray-200 px-8 py-3.5 sticky top-0 z-20">
-          <p className="text-sm font-medium text-gray-500">
+          <p className="min-w-0 truncate text-sm font-medium text-gray-500">
             Tourism Information Management System
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-4 whitespace-nowrap">
             <a
               href="/"
               target="_blank"

@@ -158,7 +158,7 @@ export default function ManageUsers() {
         <div className={`bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden transition-opacity ${loading ? 'opacity-60' : ''}`}>
           <div className="overflow-x-auto">
             {/* Phones: keep columns readable and let the table scroll sideways. */}
-            <table className="w-full min-w-[48rem]">
+            <table className="table-cards w-full min-w-[48rem]">
               <thead className="bg-gray-50/80 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">User</th>
@@ -185,25 +185,25 @@ export default function ManageUsers() {
                         </div>
                       </button>
                     </td>
-                    <td className="px-6 py-4">
+                    <td data-label="Role" className="px-6 py-4">
                       <span className={`whitespace-nowrap text-xs font-medium px-2.5 py-1 rounded-full capitalize ${ROLE_STYLES[user.role?.name] || 'bg-gray-100 text-gray-600'}`}>
                         {user.role?.name?.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td data-label="Account status" className="px-6 py-4">
                       <StatusPill value={user.account_state} withDot />
                       {user.account_state === 'suspended' && user.suspended_until && (
                         <p className="mt-1 text-xs text-gray-500">until {formatDateTime(user.suspended_until)}</p>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td data-label="Violations" className="px-6 py-4 text-sm text-gray-600">
                       {user.violations_count > 0 ? (
                         <button type="button" onClick={() => setDialog({ type: 'panel', user, tab: 'violations' })} className="font-medium text-primary-700 hover:underline">
                           {user.violations_count} on record
                         </button>
                       ) : '—'}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td data-actions className="px-6 py-4 text-right">
                       <ActionMenu items={menuItems(user)} />
                     </td>
                   </tr>

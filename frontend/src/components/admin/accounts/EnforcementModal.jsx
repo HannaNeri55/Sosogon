@@ -150,7 +150,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
         <form id="enforcement-form" onSubmit={goToConfirm} className="space-y-5" noValidate>
           <fieldset>
             <legend className="text-sm font-semibold text-gray-800 mb-2">Enforcement action</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {Object.entries(ENFORCEMENT_ACTIONS).map(([value, meta]) => (
                 <label
                   key={value}
@@ -188,7 +188,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="enf-category" className="block text-sm font-semibold text-gray-800 mb-1.5">Violation category</label>
               <select id="enf-category" name="category" aria-invalid={!!errors.category} className="input-field" value={form.category} onChange={set('category')}>
@@ -264,7 +264,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             </div>
           </div>
 
-          <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <div><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Category</dt><dd className="mt-0.5 text-gray-900">{categoryLabel}</dd></div>
             <div><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Date reported</dt><dd className="mt-0.5 text-gray-900">{formatDay(form.reported_at)}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Reason</dt><dd className="mt-0.5 text-gray-900">{form.reason}</dd></div>

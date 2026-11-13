@@ -23,22 +23,23 @@ export default function OwnerPortalLayout({ portalLabel, homePath, navLinks }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-2 sm:gap-4">
-          <Link to={homePath} className="flex items-center gap-3 shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-wrap sm:flex-nowrap items-center justify-between sm:h-16 gap-x-2 sm:gap-4">
+          <Link to={homePath} className="flex items-center gap-3 shrink-0 h-14 sm:h-auto">
             <img src="/images/Logo.png" alt="Sorsogon" className="h-7 sm:h-9 w-auto" />
             <span className="hidden xl:inline-flex items-center rounded-full bg-primary-50 border border-primary-100 px-3 py-1 text-xs font-semibold text-primary-700">
               {portalLabel}
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1 overflow-x-auto" aria-label={portalLabel}>
+          {/* Phones: the sections get their own full-width row under the logo, like a tab bar. */}
+          <nav className="order-last sm:order-none w-full sm:w-auto flex items-center gap-1 overflow-x-auto border-t border-gray-100 sm:border-0 py-1 sm:py-0" aria-label={portalLabel}>
             {navLinks.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
                 end={link.end}
                 className={({ isActive }) =>
-                  `flex flex-col lg:flex-row items-center gap-1 lg:gap-2 px-1.5 sm:px-4 py-1.5 lg:py-2 rounded-xl lg:rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  `flex-1 sm:flex-none flex flex-col lg:flex-row items-center gap-1 lg:gap-2 px-1.5 sm:px-4 py-1.5 lg:py-2 rounded-xl lg:rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-100 hover:text-primary-700'
                   }`
                 }
