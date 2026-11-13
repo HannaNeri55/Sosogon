@@ -45,6 +45,8 @@ const EMPTY_FORM = {
   website: "",
   status: "published",
   is_featured: false,
+  tourism_priority: "",
+  setting: "",
 
   fees: [],
   rates: [],
@@ -125,6 +127,8 @@ export default function ManageDestinations() {
       website: item.website || "",
       status: item.status || "published",
       is_featured: !!item.is_featured,
+      tourism_priority: item.tourism_priority || "",
+      setting: item.setting || "",
 
       fees: (item.fees || []).map((fee) => ({
         label: fee.label || "",
@@ -254,6 +258,12 @@ export default function ManageDestinations() {
       // Regular destination fields
       Object.keys(formData).forEach((key) => {
         if (["images", "fees", "rates", "amenities", "activities"].includes(key)) return;
+
+        // Sent even when empty, so a classification can be cleared.
+        if (["tourism_priority", "setting"].includes(key)) {
+          payload.append(key, formData[key] || "");
+          return;
+        }
 
         if (formData[key] !== "" && formData[key] !== null) {
           payload.append(
@@ -738,6 +748,41 @@ export default function ManageDestinations() {
             />
             Featured destination (shown on the homepage)
           </label>
+
+          {/* What the itinerary planner relies on instead of guessing. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 mb-1">Tourism priority</span>
+              <select
+                name="tourism_priority"
+                value={formData.tourism_priority}
+                onChange={(e) => setFormData({ ...formData, tourism_priority: e.target.value })}
+                className="input-field"
+              >
+                <option value="">Not classified</option>
+                <option value="iconic">Must-Visit / Iconic</option>
+                <option value="popular">Popular Attraction</option>
+                <option value="recommended">Recommended Attraction</option>
+                <option value="hidden_gem">Hidden Gem</option>
+              </select>
+              <span className="mt-1 block text-xs text-gray-500">The AI trip planner builds days around Must-Visit and Popular places first.</span>
+            </label>
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 mb-1">Setting</span>
+              <select
+                name="setting"
+                value={formData.setting}
+                onChange={(e) => setFormData({ ...formData, setting: e.target.value })}
+                className="input-field"
+              >
+                <option value="">Not specified</option>
+                <option value="indoor">Indoor</option>
+                <option value="outdoor">Open-air / outdoor</option>
+                <option value="mixed">Partly covered</option>
+              </select>
+              <span className="mt-1 block text-xs text-gray-500">Only Indoor places are suggested as rainy-day alternatives.</span>
+            </label>
+          </div>
           <div className="flex gap-3">
             <button
               type="submit"

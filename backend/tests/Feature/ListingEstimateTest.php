@@ -165,13 +165,13 @@ class ListingEstimateTest extends TestCase
         $visit = $items->firstWhere('destination_id', $this->ids['beach']);
         $this->assertSame('Est. entrance fee × 2', $visit->cost_note);
         $this->assertEquals([40, 100], [(float) $visit->cost_min, (float) $visit->cost_max]);
-        $this->assertStringContainsString('typical for this kind of place, not confirmed', $visit->preference_note);
+        $this->assertStringContainsString('Hours shown are typical, not confirmed', $visit->preference_note);
         $this->assertLessThanOrEqual(18 * 60, (int) explode(':', date('G:i', strtotime(trim(explode('–', $visit->time_slot)[1]))))[0] * 60, 'Within the estimated 6 PM closing.');
 
         // The inn lists no check-in: Day 1 waits for its usual one, and says that's typical.
         $arrival = $items->sortBy('sequence')->first();
         $this->assertStringStartsWith('Arrive at Plain Inn.', $arrival->notes);
-        $this->assertStringContainsString('Check-in usually starts around 2:00 PM (a typical time, not one Plain Inn lists)', $arrival->preference_note);
+        $this->assertStringContainsString('Check-in is usually from 2:00 PM (typical, not listed)', $arrival->preference_note);
     }
 
     public function test_without_estimates_the_planner_behaves_as_before(): void
@@ -184,7 +184,7 @@ class ListingEstimateTest extends TestCase
 
         $visit = Itinerary::latest('id')->firstOrFail()->items->firstWhere('destination_id', $this->ids['beach']);
         $this->assertSame('Entrance fee not listed', $visit->cost_note);
-        $this->assertStringContainsString("Opening hours aren't listed", $visit->preference_note);
+        $this->assertStringContainsString("Hours aren't listed", $visit->preference_note);
     }
 
     /** A 1-day trip for 2 visiting the beach, with estimates seeded; returns [itinerary, the beach visit]. */

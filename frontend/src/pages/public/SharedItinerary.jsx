@@ -11,6 +11,7 @@ import { BUDGETS, TRAVEL_PACES } from '../../utils/constants'
 import { formatTripCost } from '../../utils/helpers'
 import { itineraryStays } from '../../utils/selections'
 import { transportGuide } from '../../utils/transportGuidance'
+import { repeatedStopIds } from '../../utils/itineraryStops'
 import { pdfFilename, saveBlobAs } from '../../utils/itineraryExport'
 import { showApiError } from '../../utils/apiErrors'
 
@@ -72,6 +73,7 @@ export default function SharedItinerary() {
 
   const stays = itineraryStays(itinerary)
   const guide = transportGuide(itinerary.transport_preference)
+  const repeatedStops = repeatedStopIds(itinerary.items)
   const grouped = {}
   itinerary.items?.forEach((item) => {
     grouped[item.day_number] = grouped[item.day_number] || { stops: [] }
@@ -142,6 +144,8 @@ export default function SharedItinerary() {
               startDate={itinerary.start_date}
               overnight={stays.find((stay) => stay.night_days?.includes(dayNumber))}
               transportPreference={itinerary.transport_preference}
+              plan={itinerary.day_plans?.[dayNumber] ?? null}
+              repeatedStops={repeatedStops}
               backup={itinerary.backup_options?.[dayNumber]}
             />
           ))}

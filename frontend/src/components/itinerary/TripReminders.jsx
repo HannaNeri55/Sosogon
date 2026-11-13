@@ -46,7 +46,7 @@ function tripReminders(itinerary) {
   if (has(/hours shown are typical|Opening hours aren't listed|isn't listed|doesn't list a check-in/i)) {
     notes.push('Some opening or check-in hours are typical or not listed: confirm them before you go.')
   }
-  if (publicTransport || has(/estimated from the map distance/i)) {
+  if (publicTransport || has(/min by road\)/)) {
     notes.push(publicTransport
       ? 'Travel times are public-transport estimates, including waiting and transfers; real times depend on routes and schedules.'
       : 'Some travel times are estimated from the map distance, so allow extra time.')

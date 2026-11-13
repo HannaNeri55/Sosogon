@@ -82,7 +82,7 @@ export function legGuidance(from, to, preference) {
 
   const guide = transportGuide(preference)
   // The planner notes whether Google Maps measured the leg or it was estimated from the map distance.
-  const measured = /driving time from Google Maps/.test(to.notes || '')
+  const measured = /Google Maps/.test(to.notes || '')
   const facts = []
   const km = Number(to.distance_from_prev_km)
   if (km > 0) facts.push(measured ? `${km} km by road (Google Maps)` : `${km} km apart (straight line)`)

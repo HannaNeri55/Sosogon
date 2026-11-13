@@ -181,7 +181,7 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertSame($this->ids['hotel'], $first->accommodation_id);
         // Central Inn lists no check-in time, so checking in on arrival isn't assumed.
         $this->assertStringStartsWith('Arrive at Central Inn and check in if your room is ready.', $first->notes);
-        $this->assertStringContainsString("doesn't list a check-in time", $first->preference_note);
+        $this->assertStringContainsString("Check-in time isn't listed", $first->preference_note);
         $this->assertStringNotContainsString('hold your bags', $first->preference_note.$first->reason);
     }
 
@@ -287,7 +287,7 @@ class ItineraryPlanningQualityTest extends TestCase
         foreach ([[], ['arrival_time' => null], ['arrival_time' => '']] as $input) {
             $day1 = $this->days($this->generate($input))->first()->values();
             $this->assertSame('10:00 AM – 10:45 AM', $day1->first()->time_slot);
-            $this->assertStringContainsString('Day 1 assumes you arrive around 10:00 AM', $day1->first()->notes);
+            $this->assertStringContainsString('Planned for a 10:00 AM arrival', $day1->first()->notes);
             $this->assertGreaterThanOrEqual(2, $day1->where('item_type', 'destination')->count(), 'Two attractions, as before.');
         }
     }
@@ -299,7 +299,7 @@ class ItineraryPlanningQualityTest extends TestCase
         // Arriving before check-in: arrive first, check in later, at or after 2:00 PM.
         $day1 = $this->dayOne('08:00');
         $this->assertStringStartsWith('Arrive at Central Inn. You arrive around 8:00 AM.', $day1->first()->notes);
-        $this->assertStringContainsString('listed check-in at 2:00 PM', $day1->first()->preference_note);
+        $this->assertStringContainsString('Check-in is from 2:00 PM', $day1->first()->preference_note);
         $checkIn = $this->startsWith($day1, 'Check in at Central Inn')->first();
         $this->assertNotNull($checkIn, 'Day 1 has a check-in stop.');
         $this->assertGreaterThanOrEqual(14 * 60, $this->minutes($checkIn->time_slot)[0]);
@@ -351,11 +351,22 @@ class ItineraryPlanningQualityTest extends TestCase
     {
         $itinerary = $this->generate();
 
-        $lunches = $itinerary->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Lunch'));
-        $this->assertSame([1, 2, 3], $lunches->pluck('day_number')->unique()->sort()->values()->all(), 'Every day has lunch.');
-        foreach ($lunches as $lunch) {
+        // A lunch stop, or lunch at a destination (its dining area, a picnic, a packed lunch).
+        $lunches = collect();
+        foreach ($itinerary->items as $item) {
+            if (str_starts_with((string) $item->notes, 'Lunch')) {
+                $lunches->push([$item->day_number, $item->time_slot]);
+            }
+            foreach ((array) $item->activities as $activity) {
+                if (stripos($activity['name'], 'lunch') !== false) {
+                    $lunches->push([$item->day_number, $activity['time']]);
+                }
+            }
+        }
+        $this->assertSame([1, 2, 3], $lunches->pluck(0)->unique()->sort()->values()->all(), 'Every day has lunch.');
+        foreach ($lunches as [$day, $slot]) {
             // Always 11:30 AM – 12:30 PM, on every day (Day 1 included), never later.
-            $this->assertSame([690, 750], $this->minutes($lunch->time_slot), "Day {$lunch->day_number}: lunch is 11:30 AM – 12:30 PM.");
+            $this->assertSame([690, 750], $this->minutes($slot), "Day {$day}: lunch is 11:30 AM – 12:30 PM.");
         }
     }
 
@@ -412,7 +423,7 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertNotEmpty($legs);
         foreach ($legs as $leg) {
             $this->assertSame((int) (ceil((float) $leg->distance_from_prev_km / 30 * 60 / 5) * 5), $leg->travel_time_from_prev);
-            $this->assertStringContainsString("about {$leg->travel_time_from_prev} min (estimated from the map distance", $leg->notes);
+            $this->assertStringContainsString("(about {$leg->travel_time_from_prev} min by road)", $leg->notes);
         }
     }
 
@@ -435,7 +446,7 @@ class ItineraryPlanningQualityTest extends TestCase
         foreach ($drives as $drive) {
             $this->assertSame(25, $drive->travel_time_from_prev);
             $this->assertEquals(12.3, (float) $drive->distance_from_prev_km);
-            $this->assertStringContainsString('about 25 min (driving time from Google Maps)', $drive->notes);
+            $this->assertStringContainsString('(about 25 min by road, per Google Maps)', $drive->notes);
         }
     }
 
@@ -571,7 +582,8 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertEmpty($itinerary->items->where('item_type', 'food_beverage'));
         foreach ($this->days($itinerary) as $day => $stops) {
             $handled = $stops->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch at Central Inn'))
-                || $stops->contains(fn ($i) => preg_match('/packed lunch|picnic|snacks/', (string) $i->preference_note));
+                || $stops->contains(fn ($i) => preg_match('/packed lunch|picnic|snacks/', (string) $i->preference_note))
+                || $stops->contains(fn ($i) => collect((array) $i->activities)->contains(fn ($a) => stripos($a['name'], 'lunch') !== false));
             $this->assertTrue($handled, "Day {$day}: lunch is neither planned nor explained.");
         }
         $this->assertSame([], $this->problems($itinerary));

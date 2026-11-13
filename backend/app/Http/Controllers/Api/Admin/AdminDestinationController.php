@@ -77,6 +77,8 @@ class AdminDestinationController extends Controller
             'website' => 'nullable|string|max:500',
             'status' => 'required|in:draft,published',
             'is_featured' => 'boolean',
+            'tourism_priority' => 'nullable|in:'.implode(',', Destination::PRIORITIES),
+            'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             // Which of the uploaded photos (0-based) is the cover; defaults to the first.
@@ -236,6 +238,8 @@ class AdminDestinationController extends Controller
             'website' => 'nullable|string|max:500',
             'status' => 'sometimes|in:draft,published,archived',
             'is_featured' => 'boolean',
+            'tourism_priority' => 'nullable|in:'.implode(',', Destination::PRIORITIES),
+            'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'remove_image_ids' => 'sometimes|array',

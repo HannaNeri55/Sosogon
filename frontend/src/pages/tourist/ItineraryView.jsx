@@ -26,6 +26,7 @@ import { CONTACT_FOR_RATES } from '../../utils/accommodationOptions'
 import StayCard from '../../components/itinerary/StayCard'
 import TripReminders from '../../components/itinerary/TripReminders'
 import { transportGuide } from '../../utils/transportGuidance'
+import { repeatedStopIds } from '../../utils/itineraryStops'
 import { refreshOfflineCopy, removeOfflineCopy } from '../../utils/offlineItineraries'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
@@ -429,6 +430,7 @@ export default function ItineraryView() {
   if (loading) return <LoadingSpinner size="lg" />
   if (!itinerary) return <div className="p-6 sm:p-8 text-center text-gray-500">Itinerary not found</div>
 
+  const repeatedStops = repeatedStopIds(itinerary.items)
   const grouped = {}
   itinerary.items?.forEach((item) => {
     if (!grouped[item.day_number]) grouped[item.day_number] = { stops: [] }
@@ -581,6 +583,8 @@ export default function ItineraryView() {
               onSwapStop={handleSwapStop}
               overnight={stays.find((stay) => stay.night_days?.includes(dayNumber))}
               transportPreference={itinerary.transport_preference}
+              plan={itinerary.day_plans?.[dayNumber] ?? null}
+              repeatedStops={repeatedStops}
               backup={itinerary.backup_options?.[dayNumber]}
             />
           ))}

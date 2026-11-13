@@ -127,6 +127,9 @@ class ClaudeAIService implements ItineraryAI
                         'type' => 'object',
                         'properties' => [
                             'day_number' => ['type' => 'integer'],
+                            // The day's title and its main highlight (one of its destination IDs).
+                            'title' => ['type' => 'string'],
+                            'highlight_id' => ['type' => 'integer'],
                             'destinations' => [
                                 'type' => 'array',
                                 'items' => [

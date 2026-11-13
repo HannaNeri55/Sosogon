@@ -230,7 +230,10 @@ class ItineraryGenerationTest extends TestCase
 
         $mealsAtStay = $itinerary->items->filter(fn ($i) => $i->item_type === 'accommodation' && preg_match('/^(Breakfast|Dinner) at/', $i->notes));
         $this->assertNotEmpty($mealsAtStay);
-        $this->assertTrue($mealsAtStay->every(fn ($i) => str_starts_with((string) $i->preference_note, "We're sorry")));
+        // Breakfast at the stay is normal: no note. Nothing apologizes, and nothing is said twice.
+        $this->assertFalse($itinerary->items->contains(fn ($i) => str_contains((string) $i->preference_note, "We're sorry")));
+        $notes = $itinerary->items->pluck('preference_note')->filter()->values();
+        $this->assertSame($notes->unique()->count(), $notes->count(), 'No note is repeated word for word.');
     }
 
     public function test_budget_picks_the_cheapest_dishes_souvenirs_and_rooms_for_the_group(): void

@@ -316,7 +316,7 @@ class ItineraryMealQualityTest extends TestCase
         $itinerary = $this->generate();
         $notes = $itinerary->items->whereNotNull('food_beverage_id')->pluck('preference_note')->filter();
 
-        $explained = $notes->filter(fn ($n) => str_contains($n, 'No verified fast food places are listed in Bulan yet'));
+        $explained = $notes->filter(fn ($n) => str_contains($n, 'No fast food places are listed in Bulan yet'));
         $this->assertCount(1, $explained, 'Said once, not at every meal.');
         $this->assertFalse($notes->contains(fn ($n) => str_contains($n, 'unused verified fast food')), 'No "unused … near X" when none exists.');
 
@@ -327,11 +327,11 @@ class ItineraryMealQualityTest extends TestCase
 
         // A pricier place than the budget is still flagged.
         $note = $this->helper('foodNote', FoodBeverage::find($this->ids['grill']), 'lunch', Destination::find($this->ids['camp']), ['budget' => 'budget', 'food_preference' => 'fast_food'], false, false);
-        $this->assertStringContainsString('in the Budget price range', $note);
+        $this->assertStringContainsString('in your Budget range', $note);
         $this->assertStringNotContainsString('fast food', $note);
-        // A cuisine that is listed in town but used up keeps the per-meal apology.
+        // A cuisine that is listed in town but used up is explained (said once per trip, without apologizing).
         $note = $this->helper('foodNote', FoodBeverage::find($this->ids['eatery']), 'lunch', Destination::find($this->ids['camp']), ['budget' => 'budget', 'food_preference' => 'seafood'], true, false);
-        $this->assertStringContainsString('unused verified seafood place', $note);
+        $this->assertStringContainsString('The closest seafood place near', $note);
     }
 
     public function test_a_stay_with_an_unspecified_type_is_described_honestly(): void
@@ -351,16 +351,20 @@ class ItineraryMealQualityTest extends TestCase
         $lunch = $day2->first(fn ($i) => str_starts_with((string) $i->notes, 'Lunch'));
 
         $this->assertNotNull($lunch);
-        $this->assertNotNull($lunch->food_beverage_id, 'Lunch is at a restaurant near the stay, not at the stay.');
-        $this->assertStringStartsWith('Lunch near Town Hotel.', $lunch->notes);
-        $this->assertStringContainsString('near Kapehan Hill', $lunch->reason);
+        // The stay is far, so lunch is at the nearest restaurant rather than a trip back to it.
+        $this->assertNotNull($lunch->food_beverage_id, 'Lunch is at a restaurant, not back at the stay.');
+        $this->assertSame([690, 750], $this->minutes($lunch->time_slot));
 
-        // With no restaurant left anywhere, lunch is at the stay and the note names where we looked.
+        // With no restaurant left anywhere, lunch is still at 11:30: back at the stay when the
+        // visit is over well before lunch (the tourist heads back anyway), or a packed lunch at
+        // the hill when the visit runs into lunchtime. Nothing apologizes.
         FoodBeverage::query()->delete();
-        $lunchAtStay = $this->generate()->items->first(fn ($i) => $i->day_number === 2 && str_starts_with((string) $i->notes, 'Lunch at'));
-        $this->assertNotNull($lunchAtStay);
-        $this->assertStringContainsString('near Kapehan Hill or near Town Hotel', $lunchAtStay->preference_note);
-        $this->assertStringNotContainsString('in Bulan', $lunchAtStay->preference_note);
+        $day2 = $this->generate()->items->where('day_number', 2);
+        $atStay = $day2->first(fn ($i) => str_starts_with((string) $i->notes, 'Lunch at Town Hotel'));
+        $packed = $day2->flatMap(fn ($i) => (array) $i->activities)->first(fn ($a) => str_contains($a['name'], 'packed lunch'));
+        $this->assertTrue($atStay !== null || $packed !== null, 'Day 2 has lunch.');
+        $this->assertSame([690, 750], $this->minutes($atStay?->time_slot ?? $packed['time']));
+        $this->assertFalse($day2->contains(fn ($i) => str_contains((string) $i->preference_note, "We're sorry")));
     }
 
     public function test_visit_notes_keep_the_travel_line_without_repeating_the_description(): void
@@ -372,6 +376,6 @@ class ItineraryMealQualityTest extends TestCase
             $this->assertStringNotContainsString('is a test listing', (string) $visit->notes, 'The card shows the description already.');
             $this->assertStringStartsWith("Visit {$visit->destination->name}.", (string) $visit->notes);
         }
-        $this->assertTrue($visits->contains(fn ($v) => preg_match('/Leave .+ by \d{1,2}:\d{2} [AP]M: about \d+ min/', (string) $v->notes)));
+        $this->assertTrue($visits->contains(fn ($v) => preg_match('/Leave .+ by \d{1,2}:\d{2} [AP]M \(about \d+ min/', (string) $v->notes)));
     }
 }

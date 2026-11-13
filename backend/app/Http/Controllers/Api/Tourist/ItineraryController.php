@@ -211,11 +211,12 @@ class ItineraryController extends Controller
 
         $days = (int) $validated['num_days'];
         $towns = count($validated['municipality_ids']);
-        if ($towns > $days) {
-            $short = $towns - $days;
+        // Two nearby municipalities can share a day (the planner checks they're close enough).
+        if ($towns > $days * 2) {
+            $short = (int) ceil($towns / 2) - $days;
             throw ValidationException::withMessages([
-                'municipality_ids' => "You've picked {$towns} municipalities for a {$days}-day trip. Since travelling between municipalities takes most of a day, "
-                    .'each one needs at least one day of its own — please add '.$short.' more '.($short === 1 ? 'day' : 'days').' or choose fewer municipalities.',
+                'municipality_ids' => "You've picked {$towns} municipalities for a {$days}-day trip. A day can cover at most two nearby municipalities, "
+                    .'so please add '.$short.' more '.($short === 1 ? 'day' : 'days').' or choose fewer municipalities.',
             ]);
         }
 

@@ -19,6 +19,7 @@ class Itinerary extends Model
         'accommodation_cost_min',
         'accommodation_cost_max',
         'title',
+        'day_plans',
         'num_days',
         'interests',
         'travel_pace',
@@ -43,6 +44,7 @@ class Itinerary extends Model
     {
         return [
             'interests' => 'array',
+            'day_plans' => 'array',
             'saved_at' => 'datetime',
             'start_date' => 'date',
             'end_date' => 'date',
