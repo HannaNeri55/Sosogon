@@ -107,10 +107,10 @@ export default function OwnerReply({ review, canReply, onSaved }) {
         <button
           type="button"
           onClick={startEditing}
-          className="mt-2 ml-4 sm:ml-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
+          className="mt-2 ml-4 sm:ml-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-primary-700"
         >
           {reply ? <FiEdit2 size={14} aria-hidden="true" /> : <FiMessageSquare size={14} aria-hidden="true" />}
-          {reply ? 'Edit response' : 'Reply to review'}
+          {reply ? 'Edit response' : 'Respond'}
         </button>
       )}
     </>

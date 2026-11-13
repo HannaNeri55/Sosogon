@@ -5,6 +5,7 @@ import { getMyFoodBeverage } from '../../../api/foodBeverageOwner'
 import { getImageUrl } from '../../../utils/helpers'
 import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import ListingInsights from '../../../components/business/ListingInsights'
 
 const STATUS_COPY = {
   approved: { label: 'Approved', style: 'bg-green-100 text-green-700', note: 'Your establishment is live on the Sorsogon platform.' },
@@ -22,7 +23,15 @@ export default function EstablishmentOverview() {
   }, [])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!foodBeverage) return null
+  if (!foodBeverage) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-8 text-center">
+        <h1 className="text-xl font-heading font-semibold text-gray-900">No establishment on SOSOGON right now</h1>
+        <p className="mt-2 text-gray-600">Your listing may still be under review, or it was removed by the Tourism Office.</p>
+        <Link to="/business" className="btn-primary mt-5">Check your listing status</Link>
+      </div>
+    )
+  }
 
   const menuItems = foodBeverage.menu_items || []
   const approvedItems = menuItems.filter((m) => m.status === 'approved')
@@ -48,6 +57,8 @@ export default function EstablishmentOverview() {
         </div>
         <span className={`text-sm font-medium px-3 py-1.5 rounded-full shrink-0 ${status.style}`}>{status.label}</span>
       </div>
+
+      <ListingInsights type="food_beverage" reviewsPath="/business/food-beverage/reviews" />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard icon={FiBook} label="Total Menu Items" value={menuItems.length} accent="primary" />

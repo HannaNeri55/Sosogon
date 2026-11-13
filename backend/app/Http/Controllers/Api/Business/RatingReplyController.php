@@ -21,12 +21,19 @@ class RatingReplyController extends Controller
     private const OWNED_TYPES = [Accommodation::class, FoodBeverage::class, RetailShop::class];
 
     /**
-     * Reviews on the signed-in owner's listings, newest first, with summary
-     * counts. ?filter=unreplied|replied narrows the list.
+     * Reviews on the signed-in owner's listings, with a summary of all of them (average, how
+     * many of each star rating, how many were answered, how many came in the last 30 days).
+     * The list can be narrowed by ?rating=1–5, ?filter=replied|unreplied and ?search= (the
+     * reviewer or the review text), and ordered by ?sort=newest|oldest|highest|lowest.
      */
     public function index(Request $request): JsonResponse
     {
-        $request->validate(['filter' => 'nullable|in:all,unreplied,replied']);
+        $request->validate([
+            'filter' => 'nullable|in:all,unreplied,replied',
+            'rating' => 'nullable|integer|between:1,5',
+            'sort' => 'nullable|in:newest,oldest,highest,lowest',
+            'search' => 'nullable|string|max:100',
+        ]);
 
         $owned = Rating::whereHasMorph(
             'rateable',
@@ -36,21 +43,33 @@ class RatingReplyController extends Controller
 
         $total = (clone $owned)->count();
         $replied = (clone $owned)->has('reply')->count();
+        $byRating = (clone $owned)->selectRaw('score, count(*) as n')->groupBy('score')->pluck('n', 'score');
 
         $reviews = (clone $owned)
             ->when($request->filter === 'unreplied', fn ($query) => $query->doesntHave('reply'))
             ->when($request->filter === 'replied', fn ($query) => $query->has('reply'))
-            ->with(['user:id,name', 'reply', 'rateable:id,name', 'latestReport'])
-            ->latest()
-            ->orderByDesc('id')
-            ->paginate(10);
+            ->when($request->filled('rating'), fn ($query) => $query->where('score', (int) $request->rating))
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $term = '%'.$request->search.'%';
+                $query->where(fn ($q) => $q->where('comment', 'like', $term)->orWhereHas('user', fn ($u) => $u->where('name', 'like', $term)));
+            })
+            ->with(['user:id,name', 'reply', 'rateable:id,name', 'latestReport']);
+        match ($request->input('sort', 'newest')) {
+            'oldest' => $reviews->oldest()->orderBy('id'),
+            'highest' => $reviews->orderByDesc('score')->latest(),
+            'lowest' => $reviews->orderBy('score')->latest(),
+            default => $reviews->latest()->orderByDesc('id'),
+        };
 
-        return response()->json($reviews->toArray() + [
+        return response()->json($reviews->paginate(10)->toArray() + [
             'summary' => [
                 'total' => $total,
                 'replied' => $replied,
                 'unreplied' => $total - $replied,
+                'response_rate' => $total ? (int) round($replied / $total * 100) : 0,
                 'average' => round((float) (clone $owned)->avg('score'), 1),
+                'by_rating' => collect(range(1, 5))->mapWithKeys(fn ($star) => [$star => (int) ($byRating[$star] ?? 0)]),
+                'last_30_days' => (clone $owned)->where('created_at', '>=', now()->subDays(30))->count(),
             ],
         ]);
     }
