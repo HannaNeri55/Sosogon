@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\Admin\AdminEventController;
 use App\Http\Controllers\Api\Admin\AdminFoodBeverageController;
 use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
 use App\Http\Controllers\Api\Admin\AdminItemReviewController;
-use App\Http\Controllers\Api\Admin\AdminListingLocationController;
 use App\Http\Controllers\Api\Admin\AdminMenuItemController;
 use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
 use App\Http\Controllers\Api\Admin\AdminRetailProductController;
@@ -326,10 +325,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::post('/account-appeals/{id}/decision', [AdminViolationController::class, 'decideAppeal']);
         Route::get('/account-appeals/{id}/attachments/{index}', [AdminAccountEnforcementController::class, 'appealAttachment']);
         Route::get('/account-log', [AdminViolationController::class, 'log']);
-
-        // Exact map locations of destinations, accommodations, food places and shops
-        Route::get('/listing-locations/{type}', [AdminListingLocationController::class, 'index']);
-        Route::put('/listing-locations/{type}/{id}', [AdminListingLocationController::class, 'update']);
 
         // Reports
         Route::get('/reports/overview', [ReportController::class, 'overview']);

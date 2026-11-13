@@ -392,19 +392,6 @@ export const updateAdminUser = async (id, data) => {
   return response.data
 }
 
-// ==================== LISTING LOCATIONS ====================
-// type: destination | accommodation | food_beverage | retail_shop
-
-export const getListingLocations = async (type, params = {}) => {
-  const response = await api.get(`/admin/listing-locations/${type}`, { params })
-  return response.data
-}
-
-export const updateListingLocation = async (type, id, data) => {
-  const response = await api.put(`/admin/listing-locations/${type}/${id}`, data)
-  return response.data
-}
-
 // ==================== ACCOUNT ENFORCEMENT ====================
 // Warnings, suspensions, deactivation, reactivation and account closure. There is no
 // instant delete: closing an account is a separate, confirmed step that keeps all data.

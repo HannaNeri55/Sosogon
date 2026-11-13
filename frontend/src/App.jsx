@@ -75,7 +75,6 @@ const ViolationRecords = lazy(() => import('./pages/admin/ViolationRecords'))
 const AccountAppeals = lazy(() => import('./pages/admin/AccountAppeals'))
 const AccountActivityLog = lazy(() => import('./pages/admin/AccountActivityLog'))
 const AccountStatus = lazy(() => import('./pages/account/AccountStatus'))
-const ListingLocations = lazy(() => import('./pages/admin/ListingLocations'))
 const OwnerRegistrations = lazy(() => import('./pages/admin/OwnerRegistrations'))
 const ReviewItems = lazy(() => import('./pages/admin/ReviewItems'))
 const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'))
@@ -170,7 +169,6 @@ export default function App() {
           <Route path="events" element={<ManageEvents />} />
           <Route path="hero-slides" element={<ManageHeroSlides />} />
           <Route path="announcements" element={<ManageAnnouncements />} />
-          <Route path="listing-locations" element={<ListingLocations />} />
           {/* Registration & Approvals: three independent stages, same URLs as before, shared tabs */}
           <Route element={<ApprovalsLayout />}>
             <Route path="owner-registrations" element={<OwnerRegistrations />} />
