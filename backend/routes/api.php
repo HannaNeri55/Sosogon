@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Business\Accommodation\AccommodationOwnerController;
 use App\Http\Controllers\Api\Business\Accommodation\AccommodationRoomController;
 use App\Http\Controllers\Api\Business\BusinessDashboardController;
+use App\Http\Controllers\Api\Business\BusinessInsightsController;
 use App\Http\Controllers\Api\Business\BusinessProfileController;
 use App\Http\Controllers\Api\Business\BusinessSubmissionController;
 use App\Http\Controllers\Api\Business\FoodBeverage\FoodBeverageOwnerController;
@@ -166,6 +167,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         // Everything else requires an approved (active) Business Owner account.
         Route::middleware('owner.approved')->group(function () {
             Route::get('/dashboard', [BusinessDashboardController::class, 'index']);
+            // How the owner's listing is doing: page views, reviews, itineraries that include it
+            Route::get('/insights/{type}', [BusinessInsightsController::class, 'show'])->whereIn('type', ['accommodation', 'food_beverage', 'retail_shop']);
             Route::get('/submissions', [BusinessSubmissionController::class, 'index']);
             Route::post('/submissions', [BusinessSubmissionController::class, 'store']);
             Route::get('/submissions/{id}', [BusinessSubmissionController::class, 'show']);

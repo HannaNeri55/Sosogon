@@ -5,6 +5,7 @@ import { getMyAccommodation } from '../../../api/accommodationOwner'
 import { optionImage, optionName } from '../../../utils/accommodationOptions'
 import StatCard from '../../../components/common/StatCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import ListingInsights from '../../../components/business/ListingInsights'
 
 const STATUS_COPY = {
   approved: { label: 'Approved', style: 'bg-green-100 text-green-700', note: 'Your property is live on the Sorsogon platform.' },
@@ -22,7 +23,15 @@ export default function PropertyOverview() {
   }, [])
 
   if (loading) return <LoadingSpinner size="lg" />
-  if (!accommodation) return null
+  if (!accommodation) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-8 text-center">
+        <h1 className="text-xl font-heading font-semibold text-gray-900">No property on SOSOGON right now</h1>
+        <p className="mt-2 text-gray-600">Your listing may still be under review, or it was removed by the Tourism Office.</p>
+        <Link to="/business" className="btn-primary mt-5">Check your listing status</Link>
+      </div>
+    )
+  }
 
   const rooms = accommodation.rooms || []
   const pendingRooms = rooms.filter((r) => r.status === 'pending').length
@@ -48,6 +57,8 @@ export default function PropertyOverview() {
         </div>
         <span className={`text-sm font-medium px-3 py-1.5 rounded-full shrink-0 ${status.style}`}>{status.label}</span>
       </div>
+
+      <ListingInsights type="accommodation" reviewsPath="/business/accommodation/reviews" />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <StatCard icon={FiGrid} label="Accommodation Options" value={rooms.length} accent="primary" />

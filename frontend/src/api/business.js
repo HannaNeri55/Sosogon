@@ -55,3 +55,8 @@ export const resubmitOwnerApplication = async (formData) => {
   })
   return response.data
 }
+// How the owner's listing is doing: page views, reviews and itineraries (type: accommodation | food_beverage | retail_shop).
+export const getBusinessInsights = async (type) => {
+  const response = await api.get(`/business/insights/${type}`)
+  return response.data
+}
