@@ -32,7 +32,7 @@ function AnnouncementText({ content }) {
           return <p key={block} className="whitespace-pre-line">{block}</p>
         }
         return (
-          <ul key={block} className="grid gap-2 sm:grid-cols-2">
+          <ul key={block} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {lines.map((line) => (
               <li key={line} className="rounded-lg bg-gray-50 border border-gray-200/70 px-3.5 py-2 text-sm font-medium text-gray-800">
                 {line.replace(/^\s*•\s*/, '')}
@@ -56,7 +56,7 @@ export default function AnnouncementBoard({ announcements }) {
 
   return (
     <>
-      <article className="card overflow-hidden grid md:grid-cols-[260px_1fr] mb-6">
+      <article className="card overflow-hidden grid grid-cols-1 md:grid-cols-[260px_1fr] mb-6">
         <div className={`relative overflow-hidden bg-linear-to-br ${leadKind.panel} text-white p-6 sm:p-7 flex flex-col justify-between gap-6`}>
           <LeadIcon className="absolute -right-6 -bottom-6 opacity-15" size={150} aria-hidden="true" />
           <span className="relative text-xs font-semibold uppercase tracking-[0.18em]">
@@ -73,7 +73,7 @@ export default function AnnouncementBoard({ announcements }) {
       </article>
 
       {rest.length > 0 && (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {rest.map((announcement) => {
             const kind = kindOf(announcement)
             const Icon = kind.icon

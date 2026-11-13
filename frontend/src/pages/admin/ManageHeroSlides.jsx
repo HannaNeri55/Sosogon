@@ -183,7 +183,7 @@ export default function ManageHeroSlides() {
       <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
-          <table className="w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
+          <table className="table-cards w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Slide</th>
@@ -206,11 +206,11 @@ export default function ManageHeroSlides() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.sort_order}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td data-label="Sort order" className="px-6 py-4 text-sm text-gray-600">{item.sort_order}</td>
+                  <td data-label="Active" className="px-6 py-4 text-sm text-gray-600">
                     {item.is_active ? <FiCheck className="text-green-600" size={15} /> : <FiX className="text-gray-400" size={15} />}
                   </td>
-                  <td className="px-6 py-4">
+                  <td data-actions className="px-6 py-4">
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
                         <FiEdit2 size={15} />

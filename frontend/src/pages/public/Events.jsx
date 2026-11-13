@@ -118,7 +118,7 @@ export default function Events() {
         </header>
 
         {activeTab === 'events' ? (
-          <div className="grid lg:grid-cols-[340px_1fr] gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8 items-start">
             <div className="lg:sticky lg:top-24">
               <EventCalendar
                 year={year}
@@ -143,7 +143,7 @@ export default function Events() {
                 )}
               </div>
               {calendarLoading ? (
-                <SkeletonGrid count={2} className="grid sm:grid-cols-2 gap-5" />
+                <SkeletonGrid count={2} className="grid grid-cols-1 sm:grid-cols-2 gap-5" />
               ) : calendarFailed ? (
                 <LoadError what="events" onRetry={() => setCalendarAttempt((n) => n + 1)} />
               ) : monthEvents.length === 0 ? (
@@ -151,7 +151,7 @@ export default function Events() {
                   Use the arrows on the calendar to look at other months.
                 </EmptyState>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {monthEvents.map((event) => (
                     <div
                       key={event.id}

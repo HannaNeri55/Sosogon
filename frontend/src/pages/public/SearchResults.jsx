@@ -75,7 +75,7 @@ export default function SearchResults() {
                   <h2 className="mb-4 font-heading text-xl font-semibold text-gray-900">
                     {title} <span className="text-sm font-normal text-gray-500">({items.length})</span>
                   </h2>
-                  <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => (
                       <ListingCard key={item.id} item={item} basePath={basePath} typeLabel={label(item)} />
                     ))}

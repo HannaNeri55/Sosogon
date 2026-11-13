@@ -54,7 +54,7 @@ export default function ViolationRecords() {
         <p className="mt-1 text-sm text-gray-600">Every warning, suspension and deactivation, with its evidence, reviewer, outcome and appeal. Records are never deleted.</p>
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <div className="relative sm:col-span-2">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input className="input-field pl-9" placeholder="Search user name or email…" value={search} onChange={(e) => setSearch(e.target.value)} />

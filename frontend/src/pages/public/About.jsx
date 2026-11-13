@@ -93,7 +93,7 @@ export default function About() {
               intro="What the platform is for, the province it serves, and who keeps its information accurate."
             />
           </Reveal>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {PILLARS.map((pillar, i) => (
               <Reveal key={pillar.title} delay={i * 100} className="h-full">
                 <article className="h-full bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-6 sm:p-7">

@@ -41,7 +41,7 @@ export default function SavedItineraries() {
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2">
             <a href="/offline.html" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors">
               <FiWifiOff size={15} aria-hidden="true" /> Offline Copies
             </a>

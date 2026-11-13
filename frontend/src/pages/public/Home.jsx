@@ -278,7 +278,7 @@ export default function Home() {
           />
         )}
         <div className="absolute inset-0 bg-linear-to-r from-primary-900 via-primary-900/90 to-primary-900/60" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid gap-10 lg:grid-cols-2 lg:items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-center">
           <Reveal>
             <SectionHeader
               tone="dark"
@@ -340,7 +340,7 @@ export default function Home() {
       {/* ==================== TASTE & SHOP LOCAL ==================== */}
       {!loading && (featuredFood.length > 0 || featuredShops.length > 0) && (
         <section className="py-16 sm:py-20 bg-gray-100/70">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 grid gap-12 lg:grid-cols-2">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 gap-12 lg:grid-cols-2">
             {featuredFood.length > 0 && (
               <Reveal>
                 <SectionHeader
@@ -393,7 +393,7 @@ export default function Home() {
             {failed.has('events') ? (
               <LoadError what="events" onRetry={retry} />
             ) : events.length > 0 ? (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {events.map((event, i) => (
                   <Reveal key={event.id} delay={i * 100}>
                     <EventCard event={event} />
@@ -422,7 +422,7 @@ export default function Home() {
                 linkLabel="All announcements"
               />
             </Reveal>
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               {announcements.map((announcement, i) => (
                 <Reveal key={announcement.id} delay={i * 100} className="h-full">
                   <button

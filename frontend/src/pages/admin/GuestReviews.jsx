@@ -231,7 +231,7 @@ export default function GuestReviews() {
               {/* Its own wide row, so both full dates (mm/dd/yyyy) always fit. */}
               <div className="text-sm sm:col-span-2 lg:col-span-6">
                 <span className="block font-medium text-gray-700 mb-1">Submitted</span>
-                <span className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <span className="grid grid-cols-1 min-[420px]:grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <input type="date" value={from} max={to || undefined} onChange={(e) => update(setFrom)(e.target.value)} className="input-field w-full min-w-0" aria-label="From date" />
                   <span className="text-gray-400">to</span>
                   <input type="date" value={to} min={from || undefined} onChange={(e) => update(setTo)(e.target.value)} className="input-field w-full min-w-0" aria-label="To date" aria-invalid={!!dateError} />

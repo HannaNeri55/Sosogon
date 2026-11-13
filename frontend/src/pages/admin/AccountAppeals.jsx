@@ -70,7 +70,7 @@ function DecisionModal({ appeal, onClose, onDone }) {
         </>
       )}
     >
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Original violation</h3>
           <ViolationCard violation={{ ...appeal.violation, latest_appeal: null }} />
@@ -101,7 +101,7 @@ function DecisionModal({ appeal, onClose, onDone }) {
           {pending ? (
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Your decision</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {[
                   { value: 'approved', title: 'Approve', text: 'Reverse the action, correct the record and restore access if nothing else applies.' },
                   { value: 'rejected', title: 'Reject', text: 'Keep the original decision. This is final for this violation.' },

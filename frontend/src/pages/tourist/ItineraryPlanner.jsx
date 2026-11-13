@@ -304,7 +304,7 @@ export default function ItineraryPlanner() {
           <p className="text-white/80 mt-4 max-w-2xl leading-relaxed">
             Enter your travel preferences and we'll generate a personalized itinerary using verified local destinations from your chosen municipalities in Sorsogon.
           </p>
-          <ol className="mt-8 grid gap-3 sm:grid-cols-3">
+          <ol className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {PLANNER_STEPS.map((step, i) => (
               <li key={step} className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-400 text-sm font-bold text-gray-900">
