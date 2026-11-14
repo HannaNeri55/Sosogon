@@ -66,10 +66,11 @@ class MunicipalAdminNotificationTest extends TestCase
         ], ['Accept' => 'application/json'])->assertCreated();
     }
 
-    public function test_registrations_reach_their_municipalitys_admins_and_the_provincial_ones(): void
+    public function test_registrations_reach_their_municipalitys_office_or_else_the_provincial_admins(): void
     {
+        // Bulan has its own tourism office: it alone handles (and hears about) its registrations.
         $this->registerOwner('Bulan', 'bulan.owner@example.com');
-        $this->assertSame(['bulan', 'provincial', 'system'], $this->notified('owner_registered'));
+        $this->assertSame(['bulan'], $this->notified('owner_registered'));
 
         // No municipal admin in Gubat: only the provincial admins hear about it.
         DB::table('notifications')->delete();
@@ -89,11 +90,11 @@ class MunicipalAdminNotificationTest extends TestCase
             'municipality_id' => $this->towns['Matnog'], 'address' => 'Port Rd.', 'latitude' => 12.58, 'longitude' => 124.08, 'status' => 'approved']);
 
         $this->actingAs($owner)->postJson('/api/v1/business/accommodation/rooms', ['room_number' => 'Sea View Room', 'category' => 'Deluxe'])->assertCreated();
-        $this->assertSame(['matnog', 'provincial', 'system'], $this->notified('item_submitted'));
+        $this->assertSame(['matnog'], $this->notified('item_submitted'));
 
         $tourist = User::create(['role_id' => $this->touristRole, 'name' => 'Guest', 'email' => 'guest@example.com', 'password' => 'Secret123!', 'status' => 'active']);
         $this->actingAs($tourist)->postJson('/api/v1/ratings', ['rateable_type' => 'accommodation', 'rateable_id' => $inn->id, 'score' => 5, 'comment' => 'Lovely.'])->assertCreated();
-        $this->assertSame(['matnog', 'provincial', 'system'], $this->notified('review_new'));
+        $this->assertSame(['matnog'], $this->notified('review_new'));
     }
 
     public function test_login_and_the_current_user_carry_the_admin_scope(): void

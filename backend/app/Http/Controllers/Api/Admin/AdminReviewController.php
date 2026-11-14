@@ -55,13 +55,14 @@ class AdminReviewController extends Controller
         $filtered = (clone $withoutRating)->when($validated['rating'] ?? null, fn ($query, $score) => $query->where('score', (int) $score));
 
         $reviews = (clone $filtered)
-            ->with(['user:id,name', 'reply.user:id,name', 'rateable:id,name', 'latestReport'])
+            ->with(['user:id,name', 'reply.user:id,name', 'rateable:id,name,municipality_id', 'latestReport'])
             ->withCount('reports')
             ->latest()
             ->orderByDesc('id')
             ->paginate(15);
 
-        $reviews->getCollection()->each(fn (Rating $rating) => $rating->setAttribute('listing_type', self::typeKey($rating->rateable_type)));
+        $reviews->getCollection()->each(fn (Rating $rating) => $rating->setAttribute('listing_type', self::typeKey($rating->rateable_type))
+            ->forceFill(AdminScope::itemAccess($request->user(), $rating->rateable)));
 
         $counts = AdminScope::applyToRatings(Rating::query(), $request->user())->selectRaw('rateable_type, count(*) as total')
             ->groupBy('rateable_type')

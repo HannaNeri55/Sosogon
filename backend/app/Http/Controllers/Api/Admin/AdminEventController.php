@@ -68,7 +68,7 @@ class AdminEventController extends Controller
         $event = Event::with('municipality')->findOrFail($id);
         // Province-wide events can be read by every admin.
         if ($event->municipality_id !== null) {
-            AdminScope::authorizeRecord($request->user(), $event);
+            AdminScope::authorizeRecordView($request->user(), $event);
         }
         AdminScope::markManageable([$event], $request->user());
 
@@ -109,6 +109,18 @@ class AdminEventController extends Controller
         $event->update($validated);
 
         return response()->json(['message' => 'Event updated.', 'event' => $event->fresh('municipality')]);
+    }
+
+    /**
+     * Featured only (the admin.provincial route): the provincial administrator's ranking across
+     * the province, for any municipality's event, including one managed by its own office.
+     */
+    public function updateRanking(Request $request, int $id): JsonResponse
+    {
+        $event = Event::findOrFail($id);
+        $event->update($request->validate(['is_featured' => 'required|boolean']));
+
+        return response()->json(['message' => 'Event ranking updated.', 'event' => $event->fresh('municipality')]);
     }
 
     public function destroy(Request $request, int $id, ImageOptimizationService $images): JsonResponse

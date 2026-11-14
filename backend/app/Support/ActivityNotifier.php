@@ -127,7 +127,9 @@ class ActivityNotifier
         $type = self::LISTINGS[$listing::class];
 
         if ($revision->status === 'submitted' && ! self::byAdmin()) {
-            Notify::admins(AdminScope::municipalityOf($listing), 'revision_submitted', 'Listing changes to review',
+            // A move to another municipality is the provincial administrator's to approve.
+            $moves = AdminScope::isTransfer($listing, $revision->proposed_data['municipality_id'] ?? null);
+            Notify::admins($moves ? null : AdminScope::municipalityOf($listing), 'revision_submitted', 'Listing changes to review',
                 self::name($revision->submitter ?? $listing->user)." submitted changes to {$listing->name}.",
                 '/admin/listing-reviews', self::actor());
 

@@ -258,6 +258,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::apiResource('/destinations', AdminDestinationController::class)->names('admin.destinations');
         Route::delete('/destinations/{id}/images/{imageId}', [AdminDestinationController::class, 'destroyImage']);
         Route::patch('/destinations/{id}/images/{imageId}/cover', [AdminDestinationController::class, 'setCoverImage']);
+        // Featured and Tourism priority rank places across the province: provincial admins set them
+        // on any municipality's destinations and events, including those managed by a municipal office.
+        Route::patch('/destinations/{id}/ranking', [AdminDestinationController::class, 'updateRanking'])->middleware('admin.provincial');
+        Route::patch('/events/{id}/ranking', [AdminEventController::class, 'updateRanking'])->middleware('admin.provincial');
         Route::apiResource('/accommodations', AdminAccommodationController::class)->names('admin.accommodations');
         Route::apiResource('/food-beverages', AdminFoodBeverageController::class)->names('admin.food-beverages');
         Route::apiResource('/retail-products', AdminRetailProductController::class)->names('admin.retail-products');
@@ -327,6 +331,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::post('/users/{id}/enforcement', [AdminAccountEnforcementController::class, 'enforce'])->middleware('throttle:30,1');
         Route::post('/users/{id}/reactivate', [AdminAccountEnforcementController::class, 'reactivate']);
         Route::post('/users/{id}/close', [AdminAccountEnforcementController::class, 'close']);
+        // A municipal administrator's access (e.g. when they leave the office): provincial admins only.
+        Route::post('/users/{id}/admin-access', [AdminAccountEnforcementController::class, 'adminAccess'])->middleware('admin.provincial');
         Route::get('/account-violations', [AdminViolationController::class, 'violations']);
         Route::get('/account-violations/{id}/evidence/{index}', [AdminAccountEnforcementController::class, 'evidence']);
         Route::get('/account-appeals', [AdminViolationController::class, 'appeals']);

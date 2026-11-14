@@ -44,8 +44,10 @@ class AdminViolationController extends Controller
         }
 
         $perPage = $this->perPage($request, 25, 100);
+        $page = $query->latest('id')->paginate($perPage);
+        $page->getCollection()->each(fn (AccountViolation $violation) => $violation->forceFill(AdminScope::violationAccess($request->user(), $violation)));
 
-        return response()->json($query->latest('id')->paginate($perPage));
+        return response()->json($page);
     }
 
     public function appeals(Request $request): JsonResponse
@@ -64,12 +66,14 @@ class AdminViolationController extends Controller
         $perPage = $this->perPage($request, 25, 100);
 
         // Pending first (oldest waiting longest at the top), then decided ones, newest first.
-        return response()->json(
-            $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
-                ->orderByRaw("CASE WHEN status = 'pending' THEN created_at END ASC")
-                ->latest('id')
-                ->paginate($perPage)
-        );
+        $page = $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN status = 'pending' THEN created_at END ASC")
+            ->latest('id')
+            ->paginate($perPage);
+        $page->getCollection()->each(fn (AccountAppeal $appeal) => $appeal->forceFill(
+            $appeal->violation ? AdminScope::violationAccess($request->user(), $appeal->violation) : ['can_manage' => false, 'managed_by' => null]));
+
+        return response()->json($page);
     }
 
     public function decideAppeal(Request $request, int $id): JsonResponse

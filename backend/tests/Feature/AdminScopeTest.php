@@ -66,8 +66,9 @@ class AdminScopeTest extends TestCase
 
         foreach ([$provincial, $unassigned] as $admin) {
             $this->assertTrue($admin->isProvincialAdmin());
-            $this->assertTrue($admin->managesMunicipality($this->bulan));
-            $this->assertTrue($admin->managesMunicipality($this->matnog));
+            $this->assertFalse($admin->managesMunicipality($this->bulan), 'Bulan has its own tourism office.');
+            $this->assertTrue($admin->seesMunicipality($this->bulan));
+            $this->assertTrue($admin->managesMunicipality($this->matnog), 'Matnog has no office of its own.');
             $this->assertTrue($admin->managesMunicipality(null), 'Province-wide records.');
             $this->assertNull(AdminScope::municipalityIds($admin));
         }
@@ -158,7 +159,7 @@ class AdminScopeTest extends TestCase
         $this->assertNull($unknown->businessMunicipalityId());
     }
 
-    public function test_responsible_admins_are_the_municipalitys_and_the_provincial_ones(): void
+    public function test_responsible_admins_are_the_municipalitys_office_or_else_the_provincial_ones(): void
     {
         $provincial = $this->admin(User::ADMIN_SCOPE_PROVINCIAL);
         $unassigned = $this->admin(null);
@@ -167,8 +168,8 @@ class AdminScopeTest extends TestCase
         User::create(['role_id' => $this->ownerRole, 'name' => 'Owner', 'email' => 'owner@example.com', 'password' => 'Secret123!']);
 
         $ids = fn (?int $town) => AdminScope::adminsFor($town)->pluck('id')->sort()->values()->all();
-        $this->assertSame([$provincial->id, $unassigned->id, $bulanAdmin->id], $ids($this->bulan));
-        $this->assertSame([$provincial->id, $unassigned->id, $matnogAdmin->id], $ids($this->matnog));
+        $this->assertSame([$bulanAdmin->id], $ids($this->bulan), 'Bulan has its own office: its admins only.');
+        $this->assertSame([$matnogAdmin->id], $ids($this->matnog));
         $this->assertSame([$provincial->id, $unassigned->id], $ids(null), 'Province-wide: provincial admins only.');
 
         $gubat = DB::table('municipalities')->insertGetId(['name' => 'Gubat', 'created_at' => now(), 'updated_at' => now()]);
