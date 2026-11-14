@@ -46,7 +46,7 @@ class AccountViolation extends Model
     ];
 
     protected $fillable = [
-        'user_id', 'reviewed_by', 'category', 'reason', 'details', 'evidence_notes', 'evidence_files',
+        'user_id', 'rating_id', 'reviewed_by', 'category', 'reason', 'details', 'evidence_notes', 'evidence_files',
         'action', 'suspension_days', 'starts_at', 'ends_at', 'review_date', 'reported_at', 'reviewed_at',
         'status', 'resolved_at', 'resolved_by', 'resolution_note',
     ];
@@ -82,6 +82,12 @@ class AccountViolation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The review the action was about, if any (its listing's municipality decides who may act). */
+    public function rating(): BelongsTo
+    {
+        return $this->belongsTo(Rating::class);
     }
 
     public function reviewer(): BelongsTo

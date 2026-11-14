@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RetailProduct;
 use App\Models\RetailProductImage;
 use App\Services\ImageOptimizationService;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +18,8 @@ class AdminRetailProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = RetailProduct::with(['municipality', 'barangay', 'images', 'user:id,name', 'shop:id,name,user_id,status', 'shop.user:id,name']);
+        // A product is managed by its own and its shop's municipality.
+        AdminScope::applyToProducts($query, $request->user());
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -67,6 +70,7 @@ class AdminRetailProductController extends Controller
     public function approve(Request $request, int $id): JsonResponse
     {
         $item = RetailProduct::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
 
         $item->update([
             'status' => 'approved',
@@ -83,6 +87,7 @@ class AdminRetailProductController extends Controller
         $request->validate(['notes' => 'required|string|max:1000']);
 
         $item = RetailProduct::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
 
         $item->update([
             'status' => 'rejected',
@@ -111,6 +116,8 @@ class AdminRetailProductController extends Controller
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
 
+        AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
+
         if ($validated['status'] === 'approved') {
             $validated['approved_at'] = now();
             $validated['approved_by'] = $request->user()->id;
@@ -134,14 +141,18 @@ class AdminRetailProductController extends Controller
         return response()->json(['message' => 'Created.', 'retail_product' => $item->load('images')], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return response()->json(RetailProduct::with(['municipality', 'barangay', 'images'])->findOrFail($id));
+        $item = RetailProduct::with(['municipality', 'barangay', 'images'])->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
+
+        return response()->json($item);
     }
 
     public function update(Request $request, int $id, ImageOptimizationService $images): JsonResponse
     {
         $item = RetailProduct::findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
@@ -156,6 +167,9 @@ class AdminRetailProductController extends Controller
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
+
+        // Moving a product to another municipality is a provincial decision.
+        AdminScope::authorizeTransfer($request->user(), $item, $validated['municipality_id'] ?? null);
 
         if (isset($validated['status']) && $validated['status'] === 'approved' && $item->status !== 'approved') {
             $validated['approved_at'] = now();
@@ -181,9 +195,10 @@ class AdminRetailProductController extends Controller
         return response()->json(['message' => 'Updated.', 'retail_product' => $item->fresh('images')]);
     }
 
-    public function destroy(int $id, ImageOptimizationService $images): JsonResponse
+    public function destroy(Request $request, int $id, ImageOptimizationService $images): JsonResponse
     {
         $item = RetailProduct::findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
 
         foreach ($item->images as $img) {
             $images->delete($img->image_path, $img->thumbnail_path);

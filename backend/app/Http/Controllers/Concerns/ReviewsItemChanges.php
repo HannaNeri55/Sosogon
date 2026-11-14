@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Concerns;
 
 use App\Services\ImageOptimizationService;
 use App\Services\ListingEditClassifier;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +34,7 @@ trait ReviewsItemChanges
         $result = DB::transaction(function () use ($request, $modelClass, $id, $applyImages, &$deleteAfter) {
             /** @var Model $item */
             $item = $modelClass::whereKey($id)->lockForUpdate()->firstOrFail();
+            AdminScope::authorizeItem($request->user(), $item);
             $pending = $item->pending_changes;
 
             if (($pending['status'] ?? null) !== 'pending') {
@@ -88,8 +90,9 @@ trait ReviewsItemChanges
     {
         $validated = $request->validate(['notes' => 'required|string|min:5|max:1000']);
 
-        return DB::transaction(function () use ($modelClass, $id, $validated) {
+        return DB::transaction(function () use ($request, $modelClass, $id, $validated) {
             $item = $modelClass::whereKey($id)->lockForUpdate()->firstOrFail();
+            AdminScope::authorizeItem($request->user(), $item);
             $pending = $item->pending_changes;
 
             if (($pending['status'] ?? null) !== 'pending') {

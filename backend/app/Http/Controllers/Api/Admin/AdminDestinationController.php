@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Destination;
 use App\Models\DestinationImage;
 use App\Services\ImageOptimizationService;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -17,7 +18,7 @@ class AdminDestinationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Destination::with([
+        $query = AdminScope::apply(Destination::query(), $request->user())->with([
             'category',
             'municipality',
             'barangay',
@@ -84,6 +85,9 @@ class AdminDestinationController extends Controller
             // Which of the uploaded photos (0-based) is the cover; defaults to the first.
             'cover_new_index' => 'nullable|integer|min:0',
         ]);
+        // A municipal admin adds destinations to their own municipality only.
+        AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
+        AdminScope::guardProvincialFields($request->user(), $validated, null);
 
         $coverNewIndex = (int) ($validated['cover_new_index'] ?? 0);
         unset($validated['cover_new_index']);
@@ -162,25 +166,27 @@ class AdminDestinationController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return response()->json(
-            Destination::with([
-                'category',
-                'municipality',
-                'barangay',
-                'images',
-                'fees',
-                'rates',
-                'amenities',
-                'activities',
-            ])->findOrFail($id)
-        );
+        $destination = Destination::with([
+            'category',
+            'municipality',
+            'barangay',
+            'images',
+            'fees',
+            'rates',
+            'amenities',
+            'activities',
+        ])->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $destination);
+
+        return response()->json($destination);
     }
 
     public function update(Request $request, int $id, ImageOptimizationService $images): JsonResponse
     {
         $destination = Destination::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $destination);
 
         if ($duplicate = $this->rejectRepeatedSave($request)) {
             return $duplicate;
@@ -248,6 +254,9 @@ class AdminDestinationController extends Controller
             'cover_image_id' => 'nullable|integer',
             'cover_new_index' => 'nullable|integer|min:0',
         ]);
+        // Moving a destination to another municipality is a provincial decision.
+        AdminScope::authorizeTransfer($request->user(), $destination, $validated['municipality_id'] ?? null);
+        AdminScope::guardProvincialFields($request->user(), $validated, $destination);
 
         $coverImageId = isset($validated['cover_image_id']) ? (int) $validated['cover_image_id'] : null;
         $coverNewIndex = isset($validated['cover_new_index']) ? (int) $validated['cover_new_index'] : null;
@@ -356,9 +365,10 @@ class AdminDestinationController extends Controller
     }
 
 
-    public function setCoverImage(int $id, int $imageId): JsonResponse
+    public function setCoverImage(Request $request, int $id, int $imageId): JsonResponse
     {
         $destination = Destination::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $destination);
 
         // Only allow an image belonging to this destination.
         $image = $destination->images()
@@ -379,9 +389,10 @@ class AdminDestinationController extends Controller
     }
 
 
-    public function destroyImage(int $id, int $imageId, ImageOptimizationService $images): JsonResponse
+    public function destroyImage(Request $request, int $id, int $imageId, ImageOptimizationService $images): JsonResponse
     {
         $destination = Destination::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $destination);
 
         /** @var DestinationImage $image */
         $image = $destination->images()->where('id', $imageId)->firstOrFail();
@@ -392,9 +403,10 @@ class AdminDestinationController extends Controller
         return response()->json(['message' => 'Image removed.']);
     }
 
-    public function destroy(int $id, ImageOptimizationService $images): JsonResponse
+    public function destroy(Request $request, int $id, ImageOptimizationService $images): JsonResponse
     {
         $destination = Destination::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $destination);
 
         // Delete images (and their thumbnails) from storage
         foreach ($destination->images as $img) {

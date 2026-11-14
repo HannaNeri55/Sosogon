@@ -23,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'business.type' => EnsureBusinessType::class,
             'owner.approved' => \App\Http\Middleware\EnsureOwnerApproved::class,
             'account.active' => \App\Http\Middleware\EnsureAccountActive::class,
+            'admin.provincial' => \App\Http\Middleware\EnsureProvincialAdmin::class,
+            'admin.scope' => \App\Http\Middleware\EnsureValidAdminScope::class,
         ]);
 
         // Hosts like Render terminate HTTPS at their proxy; trusting it lets Laravel see the

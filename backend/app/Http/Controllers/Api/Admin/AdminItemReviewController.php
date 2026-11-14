@@ -8,6 +8,7 @@ use App\Models\AccommodationRoom;
 use App\Models\ActivityLog;
 use App\Models\MenuItem;
 use App\Models\RetailProduct;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,9 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
  * Every decision, single or bulk, goes through the per-type controller's own approve or reject
  * action, so the rules stay in one place: approving an item never publishes its listing, and a
  * proposed change applies only the exact version the admin reviewed.
+ *
+ * A municipal admin's queue, counts and business filter hold only items of their municipality's
+ * listings (AdminScope); a decision on any other item is refused by the per-type action.
  */
 class AdminItemReviewController extends Controller
 {
@@ -201,12 +205,33 @@ class AdminItemReviewController extends Controller
         return $union;
     }
 
+    /**
+     * One kind's items joined to their business, limited to the admin's municipalities: a room's
+     * or dish's listing must be in them, and a product's own municipality and its shop's.
+     */
+    private function scoped(string $kind)
+    {
+        $config = self::KINDS[$kind];
+        $query = DB::table("{$config['table']} as item")
+            ->leftJoin("{$config['business_table']} as business", 'business.id', '=', "item.{$config['business_key']}");
+
+        $ids = AdminScope::municipalityIds(request()->user());
+        if ($ids === null) {
+            return $query;
+        }
+        if ($kind !== 'products') {
+            return $query->whereIn('business.municipality_id', $ids);
+        }
+
+        return $query->whereIn('item.municipality_id', $ids)
+            ->where(fn ($q) => $q->whereNull('business.id')->orWhereIn('business.municipality_id', $ids));
+    }
+
     private function branch(string $kind, string $tab)
     {
         $config = self::KINDS[$kind];
 
-        $query = DB::table("{$config['table']} as item")
-            ->leftJoin("{$config['business_table']} as business", 'business.id', '=', "item.{$config['business_key']}")
+        $query = $this->scoped($kind)
             ->select([
                 DB::raw("'{$kind}' as kind"),
                 'item.id as item_id',
@@ -253,11 +278,11 @@ class AdminItemReviewController extends Controller
     {
         $counts = ['new' => 0, 'changes' => 0, 'rejected' => 0, 'total' => 0];
 
-        foreach (self::KINDS as $config) {
-            $counts['new'] += DB::table($config['table'])->where('status', 'pending')->count();
-            $counts['rejected'] += DB::table($config['table'])->where('status', 'rejected')->count();
-            $counts['changes'] += DB::table($config['table'])->where('pending_changes->status', 'pending')->count();
-            $counts['total'] += DB::table($config['table'])->count();
+        foreach (array_keys(self::KINDS) as $kind) {
+            $counts['new'] += $this->scoped($kind)->where('item.status', 'pending')->count();
+            $counts['rejected'] += $this->scoped($kind)->where('item.status', 'rejected')->count();
+            $counts['changes'] += $this->scoped($kind)->where('item.pending_changes->status', 'pending')->count();
+            $counts['total'] += $this->scoped($kind)->count();
         }
 
         return $counts;

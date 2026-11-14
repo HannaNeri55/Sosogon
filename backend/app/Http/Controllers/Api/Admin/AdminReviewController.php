@@ -9,6 +9,7 @@ use App\Models\FoodBeverage;
 use App\Models\Rating;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,7 +50,8 @@ class AdminReviewController extends Controller
 
         // Every filter applies to the list and to its summary. The rating chips count each rating
         // under the other filters, so each shows how many reviews choosing it would list.
-        $withoutRating = $this->filtered($validated);
+        // A municipal admin's reviews are those of their municipality's listings.
+        $withoutRating = AdminScope::applyToRatings($this->filtered($validated), $request->user());
         $filtered = (clone $withoutRating)->when($validated['rating'] ?? null, fn ($query, $score) => $query->where('score', (int) $score));
 
         $reviews = (clone $filtered)
@@ -61,7 +63,7 @@ class AdminReviewController extends Controller
 
         $reviews->getCollection()->each(fn (Rating $rating) => $rating->setAttribute('listing_type', self::typeKey($rating->rateable_type)));
 
-        $counts = Rating::selectRaw('rateable_type, count(*) as total')
+        $counts = AdminScope::applyToRatings(Rating::query(), $request->user())->selectRaw('rateable_type, count(*) as total')
             ->groupBy('rateable_type')
             ->pluck('total', 'rateable_type');
         $byRating = (clone $withoutRating)->selectRaw('score, count(*) as total')->groupBy('score')->pluck('total', 'score');

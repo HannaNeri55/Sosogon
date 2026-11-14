@@ -156,6 +156,109 @@ class User extends Authenticatable
         return $this->role->name === 'admin';
     }
 
+    // ==================== ADMIN SCOPE (see App\Support\AdminScope) ====================
+    // admin_scope and municipality_id are not fillable: only the admin:create / admin:assign
+    // commands set them.
+
+    /** Manages every municipality (the Provincial Tourism Office, or the system administrator). */
+    public const ADMIN_SCOPE_PROVINCIAL = 'provincial';
+
+    /** Manages one municipality (users.municipality_id). */
+    public const ADMIN_SCOPE_MUNICIPAL = 'municipal';
+
+    /** A municipal admin's municipality. */
+    public function municipality(): BelongsTo
+    {
+        return $this->belongsTo(Municipality::class);
+    }
+
+    /**
+     * An admin with authority over every municipality: scope 'provincial', or not assigned yet
+     * (null), which keeps the full access admins had before scopes existed. Any other value is
+     * not provincial (see hasInvalidAdminScope).
+     */
+    public function isProvincialAdmin(): bool
+    {
+        return $this->isAdmin() && ($this->admin_scope === null || $this->admin_scope === self::ADMIN_SCOPE_PROVINCIAL);
+    }
+
+    public function isMunicipalAdmin(): bool
+    {
+        return $this->isAdmin() && $this->admin_scope === self::ADMIN_SCOPE_MUNICIPAL;
+    }
+
+    /**
+     * An admin whose admin_scope holds something other than null, 'provincial' or 'municipal'
+     * (e.g. a mistyped value written to the database by hand). Fail-closed: such an account has
+     * no admin authority at all until admin:assign sets a valid scope.
+     */
+    public function hasInvalidAdminScope(): bool
+    {
+        return $this->isAdmin() && ! $this->isProvincialAdmin() && ! $this->isMunicipalAdmin();
+    }
+
+    /**
+     * What the admin area needs to know about an admin's authority, returned at login and by
+     * /user; null for other roles. 'assigned' is false while the scope hasn't been set (the
+     * account keeps full access meanwhile). An invalid scope reads 'invalid' (no access).
+     *
+     * @return array{scope: string, assigned: bool, municipality: array{id: int, name: string}|null, designation: string}|null
+     */
+    public function adminProfile(): ?array
+    {
+        if (! $this->isAdmin()) {
+            return null;
+        }
+        $municipality = $this->isMunicipalAdmin() ? $this->municipality : null;
+        if ($this->hasInvalidAdminScope()) {
+            return ['scope' => 'invalid', 'assigned' => true, 'municipality' => null, 'designation' => $this->admin_title ?? 'Administrator'];
+        }
+
+        return [
+            'scope' => $this->isMunicipalAdmin() ? self::ADMIN_SCOPE_MUNICIPAL : self::ADMIN_SCOPE_PROVINCIAL,
+            'assigned' => $this->admin_scope !== null,
+            'municipality' => $municipality ? ['id' => $municipality->id, 'name' => $municipality->name] : null,
+            'designation' => $this->admin_title
+                ?? ($municipality ? "{$municipality->name} Tourism Office" : ($this->isMunicipalAdmin() ? 'Municipal Administrator' : 'Provincial Administrator')),
+        ];
+    }
+
+    /**
+     * Whether this admin may manage a record of $municipalityId. A record without a
+     * municipality (province-wide) belongs to provincial admins only. A municipal admin with no
+     * municipality set, and an admin with an invalid scope, manage nothing.
+     */
+    public function managesMunicipality(?int $municipalityId): bool
+    {
+        if ($this->isProvincialAdmin()) {
+            return true;
+        }
+        if (! $this->isMunicipalAdmin()) {
+            return false;
+        }
+
+        return $municipalityId !== null && $this->municipality_id !== null && (int) $this->municipality_id === $municipalityId;
+    }
+
+    /**
+     * The municipality of a business owner's business: their listing's, else their registration
+     * application's, else their latest business submission's. Null when there is none (such an
+     * owner is managed by provincial admins).
+     */
+    public function businessMunicipalityId(): ?int
+    {
+        foreach ([Accommodation::class, FoodBeverage::class, RetailShop::class] as $listing) {
+            $id = $listing::where('user_id', $this->id)->orderBy('id')->value('municipality_id');
+            if ($id !== null) {
+                return (int) $id;
+            }
+        }
+        $id = $this->ownerApplication()->value('municipality_id')
+            ?? $this->businessSubmissions()->latest('id')->value('municipality_id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
     public function isTourist(): bool
     {
         return $this->role->name === 'tourist';

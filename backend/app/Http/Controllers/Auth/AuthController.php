@@ -123,11 +123,12 @@ class AuthController extends Controller
         }
 
         if ($isOwner) {
-            Notify::admins('owner_registered', 'New business owner registration',
+            Notify::admins((int) $validated['municipality_id'], 'owner_registered', 'New business owner registration',
                 "{$user->name} registered {$validated['business_name']} (".Notify::typeLabel($user->business_type).') and is waiting for approval.',
                 '/admin/owner-registrations');
         } else {
-            Notify::admins('tourist_registered', 'New tourist account', "{$user->name} ({$user->email}) created a tourist account.", '/admin/users');
+            // Tourists aren't tied to a municipality: the provincial admins are told.
+            Notify::admins(null, 'tourist_registered', 'New tourist account', "{$user->name} ({$user->email}) created a tourist account.", '/admin/users');
         }
 
         // If business owner, don't return a token (they can't log in yet)
@@ -207,6 +208,8 @@ class AuthController extends Controller
                 'business_type' => $user->business_type,
                 'status' => $user->status,
                 'application_status' => $user->ownerApplication?->status, 'account_state' => $user->accountState(), 'suspended_until' => $user->suspended_until?->toIso8601String(),
+                // Admins: their scope (provincial or one municipality) and designation.
+                'admin' => $user->adminProfile(),
             ],
             'token' => $token,
         ]);
@@ -334,6 +337,7 @@ class AuthController extends Controller
             'business_type' => $user->business_type,
             'status' => $user->status,
             'application_status' => $user->ownerApplication?->status, 'account_state' => $user->accountState(), 'suspended_until' => $user->suspended_until?->toIso8601String(),
+            'admin' => $user->adminProfile(),
             'created_at' => $user->created_at,
         ]);
     }

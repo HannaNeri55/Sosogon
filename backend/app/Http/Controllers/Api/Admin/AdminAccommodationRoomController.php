@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Business\UpdateAccommodationRoomRequest;
 use App\Models\AccommodationRoom;
 use App\Models\AccommodationRoomImage;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,6 +20,8 @@ class AdminAccommodationRoomController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = AccommodationRoom::with(['images', 'accommodation:id,name,user_id,status,municipality_id', 'accommodation.user:id,name', 'accommodation.municipality:id,name']);
+        // A room is managed by its accommodation's municipality.
+        AdminScope::applyThrough($query, $request->user(), 'accommodation');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -40,6 +43,7 @@ class AdminAccommodationRoomController extends Controller
     public function approve(Request $request, int $id): JsonResponse
     {
         $room = AccommodationRoom::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $room);
 
         $room->update([
             'status' => 'approved',
@@ -56,6 +60,7 @@ class AdminAccommodationRoomController extends Controller
         $request->validate(['notes' => 'required|string|max:1000']);
 
         $room = AccommodationRoom::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $room);
 
         $room->update([
             'status' => 'rejected',
@@ -69,6 +74,7 @@ class AdminAccommodationRoomController extends Controller
     public function update(UpdateAccommodationRoomRequest $request, int $id): JsonResponse
     {
         $room = AccommodationRoom::findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $room);
         $values = array_intersect_key($request->validated(), array_flip(self::FIELDS));
         if (isset($values['name'])) {
             unset($values['room_number']);

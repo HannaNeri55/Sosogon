@@ -14,10 +14,15 @@ use Throwable;
  */
 class Notify
 {
-    /** Every admin account, except the admin who did it. */
-    public static function admins(string $kind, string $title, string $message, ?string $link = null, ?User $except = null): void
+    /**
+     * The admins responsible for something in $municipalityId (AdminScope::adminsFor): that
+     * municipality's admins and every provincial admin. Null (province-wide, e.g. a tourist
+     * account) and municipalities without a municipal admin reach the provincial admins. The
+     * admin who did it is left out.
+     */
+    public static function admins(?int $municipalityId, string $kind, string $title, string $message, ?string $link = null, ?User $except = null): void
     {
-        $admins = User::whereHas('role', fn ($q) => $q->where('name', 'admin'))
+        $admins = AdminScope::adminsFor($municipalityId)
             ->when($except, fn ($q) => $q->whereKeyNot($except->getKey()))
             ->get();
 

@@ -7,12 +7,15 @@ use App\Models\AccountActionLog;
 use App\Models\AccountAppeal;
 use App\Models\AccountViolation;
 use App\Models\ActivityLog;
+use App\Models\Rating;
 use App\Models\User;
 use App\Services\AccountEnforcementService;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -38,11 +41,15 @@ class AdminAccountEnforcementController extends Controller
     }
 
     /** Profile, account state, activity and full enforcement history of one user. */
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
         $user = User::with(['role:id,name', 'ownerApplication:id,user_id,status,business_name'])
             ->withCount(['ratings', 'itineraries', 'businessSubmissions'])
             ->findOrFail($id);
+        // A municipal admin opens only the accounts they work with (their owners, and tourists
+        // who reviewed their municipality's listings).
+        abort_unless(AdminScope::applyToUsers(User::whereKey($user->id), $request->user())->exists(), 403,
+            'This account is managed by another municipality or by the provincial administrator.');
         $user->liftExpiredSuspension();
         $user->refresh();
 
@@ -74,6 +81,11 @@ class AdminAccountEnforcementController extends Controller
                 ->with(['reviewer:id,name', 'resolver:id,name', 'latestAppeal'])
                 ->latest('id')
                 ->get(),
+            // A tourist's reviews this admin manages: a municipal admin acts on a tourist over one
+            // of these (rating_id on enforce).
+            'reviews' => AdminScope::applyToRatings(Rating::where('user_id', $user->id), $request->user())
+                ->with('rateable:id,name')->latest('id')->limit(50)
+                ->get(['id', 'rateable_type', 'rateable_id', 'score', 'comment', 'created_at']),
             'account_log' => AccountActionLog::where('user_id', $user->id)->latest('id')->limit(50)->get(),
             'activity' => ActivityLog::where('user_id', $user->id)->latest('created_at')->limit(50)
                 ->get(['id', 'action', 'description', 'model_type', 'model_id', 'created_at']),
@@ -95,11 +107,19 @@ class AdminAccountEnforcementController extends Controller
             'suspension_days' => 'required_if:action,suspension|nullable|integer|min:1|max:365',
             'review_date' => 'nullable|date|after:today',
             'reported_at' => 'nullable|date|before_or_equal:today',
+            // The review the action is about (lets a municipal admin act on a tourist).
+            'rating_id' => 'nullable|integer|exists:ratings,id',
             'confirmed' => 'accepted',
         ], [
             'confirmed.accepted' => 'Please confirm the action after reading its consequences.',
             'suspension_days.required_if' => 'Enter how many days the suspension lasts.',
         ]);
+
+        $rating = isset($validated['rating_id']) ? Rating::with('rateable')->find($validated['rating_id']) : null;
+        if ($rating && (int) $rating->user_id !== (int) $target->id) {
+            throw ValidationException::withMessages(['rating_id' => 'This review was not written by this user.']);
+        }
+        AdminScope::authorizeUser($request->user(), $target, $rating);
 
         $violation = $this->enforcement->enforce(
             $target,
@@ -122,6 +142,16 @@ class AdminAccountEnforcementController extends Controller
     {
         $target = User::findOrFail($id);
         $validated = $request->validate(['reason' => 'required|string|min:5|max:1000']);
+        // Reactivating lifts every active suspension and deactivation, so a municipal admin needs
+        // authority over each of them (a tourist's: their reviews in that municipality).
+        $restrictions = $target->violations()->with(['user', 'rating.rateable'])
+            ->whereIn('action', [AccountViolation::ACTION_SUSPENSION, AccountViolation::ACTION_DEACTIVATION])
+            ->where('status', AccountViolation::STATUS_ACTIVE)->get();
+        if ($target->isTourist() && $restrictions->isNotEmpty()) {
+            $restrictions->each(fn (AccountViolation $violation) => AdminScope::authorizeViolation($request->user(), $violation));
+        } else {
+            AdminScope::authorizeUser($request->user(), $target);
+        }
 
         $this->enforcement->reactivate($target, $request->user(), $validated['reason'], $request->ip());
 
@@ -135,6 +165,7 @@ class AdminAccountEnforcementController extends Controller
     public function close(Request $request, int $id): JsonResponse
     {
         $target = User::findOrFail($id);
+        AdminScope::authorizeUser($request->user(), $target);
         $validated = $request->validate([
             'reason' => 'required|string|min:10|max:1000',
             'confirm_email' => ['required', 'string', function ($attribute, $value, $fail) use ($target) {
@@ -150,17 +181,21 @@ class AdminAccountEnforcementController extends Controller
     }
 
     /** Download one evidence file of a violation (admins only; files are stored privately). */
-    public function evidence(int $violationId, int $index): StreamedResponse
+    public function evidence(Request $request, int $violationId, int $index): StreamedResponse
     {
-        $file = AccountViolation::findOrFail($violationId)->evidence_files[$index] ?? abort(404);
+        $violation = AccountViolation::with(['user', 'rating.rateable'])->findOrFail($violationId);
+        AdminScope::authorizeViolation($request->user(), $violation);
+        $file = $violation->evidence_files[$index] ?? abort(404);
 
         return $this->stream($file);
     }
 
     /** Download one attachment of an appeal (admins only). */
-    public function appealAttachment(int $appealId, int $index): StreamedResponse
+    public function appealAttachment(Request $request, int $appealId, int $index): StreamedResponse
     {
-        $file = AccountAppeal::findOrFail($appealId)->attachments[$index] ?? abort(404);
+        $appeal = AccountAppeal::with(['violation.user', 'violation.rating.rateable'])->findOrFail($appealId);
+        AdminScope::authorizeViolation($request->user(), $appeal->violation);
+        $file = $appeal->attachments[$index] ?? abort(404);
 
         return $this->stream($file);
     }

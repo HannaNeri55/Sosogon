@@ -99,7 +99,7 @@ class ActivityNotifier
         $owner = $listing->user;
 
         if ($listing->wasChanged('publication_review_status') && $listing->publication_review_status === 'submitted' && ! self::byAdmin()) {
-            Notify::admins('listing_submitted', 'Listing ready for review',
+            Notify::admins(AdminScope::municipalityOf($listing), 'listing_submitted', 'Listing ready for review',
                 self::name($owner)." submitted {$listing->name} (".Notify::typeLabel($type).') for publication review.',
                 '/admin/listing-reviews', self::actor());
         }
@@ -127,7 +127,7 @@ class ActivityNotifier
         $type = self::LISTINGS[$listing::class];
 
         if ($revision->status === 'submitted' && ! self::byAdmin()) {
-            Notify::admins('revision_submitted', 'Listing changes to review',
+            Notify::admins(AdminScope::municipalityOf($listing), 'revision_submitted', 'Listing changes to review',
                 self::name($revision->submitter ?? $listing->user)." submitted changes to {$listing->name}.",
                 '/admin/listing-reviews', self::actor());
 
@@ -157,7 +157,7 @@ class ActivityNotifier
         [$label, , $relation] = self::ITEMS[$item::class];
         $listing = $item->{$relation};
 
-        Notify::admins('item_submitted', 'New '.$label.' to review',
+        Notify::admins(AdminScope::municipalityOf($item), 'item_submitted', 'New '.$label.' to review',
             self::name($listing?->user)." added the {$label} “{$item->name}”".($listing ? " to {$listing->name}" : '').'.',
             '/admin/item-reviews', self::actor());
     }
@@ -176,7 +176,7 @@ class ActivityNotifier
             $wasPending = ($old['status'] ?? null) === 'pending';
 
             if (($new['status'] ?? null) === 'pending' && ! $wasPending && ! self::byAdmin()) {
-                Notify::admins('item_changes_submitted', ucfirst($label).' changes to review',
+                Notify::admins(AdminScope::municipalityOf($item), 'item_changes_submitted', ucfirst($label).' changes to review',
                     self::name($owner)." edited the {$label} “{$item->name}”{$at}.", '/admin/item-reviews', self::actor());
             } elseif ($wasPending && self::byAdmin() && $new === null) {
                 Notify::user($owner, 'item_changes_approved', 'Your changes are live',
@@ -205,7 +205,7 @@ class ActivityNotifier
     private static function submissionCreated(BusinessSubmission $submission): void
     {
         if (! self::byAdmin()) {
-            Notify::admins('submission_new', 'New business submission',
+            Notify::admins((int) $submission->municipality_id, 'submission_new', 'New business submission',
                 self::name($submission->user)." submitted {$submission->business_name}, a new ".Notify::typeLabel($submission->type).' listing.',
                 '/admin/submissions', self::actor());
         }
@@ -217,7 +217,7 @@ class ActivityNotifier
 
         if ($submission->wasChanged('status')) {
             if ($submission->status === 'pending' && ! self::byAdmin()) {
-                Notify::admins('submission_updated', 'Submission updated',
+                Notify::admins((int) $submission->municipality_id, 'submission_updated', 'Submission updated',
                     self::name($owner)." updated {$submission->business_name}; it needs review again.",
                     '/admin/submissions', self::actor());
             } elseif (self::byAdmin()) {
@@ -250,7 +250,7 @@ class ActivityNotifier
         $owner = $application->user;
 
         if ($application->status === 'pending' && ! self::byAdmin()) {
-            Notify::admins('owner_resubmitted', 'Registration resubmitted',
+            Notify::admins((int) $application->municipality_id, 'owner_resubmitted', 'Registration resubmitted',
                 self::name($owner)." corrected and resubmitted the registration for {$application->business_name}.",
                 '/admin/owner-registrations', self::actor());
         } elseif ($application->status === 'approved' && self::byAdmin()) {
@@ -275,7 +275,7 @@ class ActivityNotifier
         $excerpt = $rating->comment ? ': “'.Str::limit(trim($rating->comment), 120).'”' : '.';
         $who = self::name($rating->user);
 
-        Notify::admins('review_new', 'New guest review',
+        Notify::admins(AdminScope::municipalityOf($listing), 'review_new', 'New guest review',
             "{$who} rated {$listing->name} {$rating->score}/5{$excerpt}", '/admin/guest-reviews', self::actor());
 
         if (isset(self::LISTINGS[$listing::class])) {
@@ -298,14 +298,14 @@ class ActivityNotifier
 
     private static function appealCreated(AccountAppeal $appeal): void
     {
-        Notify::admins('appeal_new', 'New account appeal',
+        Notify::admins($appeal->violation ? AdminScope::violationMunicipality($appeal->violation) : null, 'appeal_new', 'New account appeal',
             self::name($appeal->user).' appealed a decision on their account.', '/admin/appeals', self::actor());
     }
 
     private static function reportCreated(ReviewReport $report): void
     {
         $rating = $report->rating;
-        Notify::admins('review_reported', 'Review reported',
+        Notify::admins(AdminScope::municipalityOf($rating?->rateable), 'review_reported', 'Review reported',
             self::name($report->reporter).' reported '.self::name($rating?->user)."'s {$rating?->score}/5 review of ".($rating?->rateable?->name ?? 'their listing')
             .': '.(ReviewReport::REASONS[$report->reason] ?? $report->reason).'.',
             '/admin/guest-reviews?tab=reports', self::actor());

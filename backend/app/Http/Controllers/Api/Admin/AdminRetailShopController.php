@@ -10,6 +10,7 @@ use App\Services\ImageOptimizationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Support\AdminScope;
 use App\Support\RevisionBase;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +21,7 @@ class AdminRetailShopController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = RetailShop::with([
+        $query = AdminScope::apply(RetailShop::query(), $request->user())->with([
             'municipality',
             'barangay',
             'images',
@@ -51,7 +52,7 @@ class AdminRetailShopController extends Controller
         );
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
         $shop = RetailShop::with([
             'municipality',
@@ -67,6 +68,7 @@ class AdminRetailShopController extends Controller
                 ])
                 ->latest('id'),
         ])->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $shop);
 
         return response()->json([
             'data' => $shop,
@@ -80,6 +82,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::pending()->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $shop);
 
         if ($shop->publication_review_status !== 'submitted') {
             throw ValidationException::withMessages([
@@ -125,6 +128,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::pending()->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $shop);
 
         if ($shop->publication_review_status !== 'submitted') {
             throw ValidationException::withMessages([
@@ -161,6 +165,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $shop);
 
         if ($shop->status !== 'approved') {
             throw ValidationException::withMessages([
@@ -177,6 +182,7 @@ class AdminRetailShopController extends Controller
         $proposedData = $revision->proposed_data ?? [];
 
         // Never overwrite values that changed on the live listing since the owner started editing.
+        AdminScope::authorizeTransfer($request->user(), $shop, $proposedData['municipality_id'] ?? null);
         if ($conflict = RevisionBase::prepareForApproval($revision, $shop, $request->user()->id, $proposedData, $gallery)) {
             return $conflict;
         }
@@ -320,6 +326,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $shop);
 
         if ($shop->status !== 'approved') {
             throw ValidationException::withMessages([

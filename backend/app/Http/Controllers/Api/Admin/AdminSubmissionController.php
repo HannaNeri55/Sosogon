@@ -12,6 +12,7 @@ use App\Models\FoodBeverage;
 use App\Models\Rating;
 use App\Models\RetailShop;
 use App\Services\ImageOptimizationService;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,16 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Business submissions: verification, warnings and removal. A municipal admin sees and acts on
+ * the submissions of businesses in their municipality only (AdminScope); the rest is 403.
+ */
 class AdminSubmissionController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
         $query = BusinessSubmission::with(['user:id,name,email', 'municipality', 'barangay']);
+        AdminScope::apply($query, $request->user());
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -74,9 +80,10 @@ class AdminSubmissionController extends Controller
         };
     }
 
-    public function downloadPermit(int $id): StreamedResponse
+    public function downloadPermit(Request $request, int $id): StreamedResponse
     {
         $submission = BusinessSubmission::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $submission);
 
         abort_unless($submission->business_permit_path, 404);
 
@@ -87,6 +94,7 @@ class AdminSubmissionController extends Controller
     {
         $submission = DB::transaction(function () use ($request, $id) {
             $submission = BusinessSubmission::where('id', $id)->lockForUpdate()->findOrFail($id);
+            AdminScope::authorizeRecord($request->user(), $submission);
 
             if ($submission->status !== 'pending') {
                 abort(409, 'This submission has already been reviewed.');
@@ -209,6 +217,7 @@ class AdminSubmissionController extends Controller
 
         $submission = DB::transaction(function () use ($request, $id) {
             $submission = BusinessSubmission::where('id', $id)->lockForUpdate()->findOrFail($id);
+            AdminScope::authorizeRecord($request->user(), $submission);
 
             if ($submission->status !== 'pending') {
                 abort(409, 'This submission has already been reviewed.');
@@ -234,6 +243,7 @@ class AdminSubmissionController extends Controller
         $request->validate(['notes' => 'nullable|string|max:1000']);
 
         $submission = BusinessSubmission::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $submission);
 
         if ($submission->status !== 'approved') {
             abort(409, 'Only approved businesses can be warned.');
@@ -273,6 +283,7 @@ class AdminSubmissionController extends Controller
     public function clearWarning(Request $request, int $id): JsonResponse
     {
         $submission = BusinessSubmission::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $submission);
 
         $submission->update(['warned_at' => null, 'warning_notes' => null]);
 
@@ -292,6 +303,7 @@ class AdminSubmissionController extends Controller
 
         $submission = DB::transaction(function () use ($request, $id, $images) {
             $submission = BusinessSubmission::where('id', $id)->lockForUpdate()->findOrFail($id);
+            AdminScope::authorizeRecord($request->user(), $submission);
 
             if ($submission->status !== 'approved') {
                 abort(409, 'Only approved businesses can be removed.');

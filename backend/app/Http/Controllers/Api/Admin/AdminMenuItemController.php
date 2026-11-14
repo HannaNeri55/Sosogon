@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Concerns\ReviewsItemChanges;
 use App\Http\Controllers\Controller;
 use App\Models\MenuItem;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,8 @@ class AdminMenuItemController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = MenuItem::with(['foodBeverage:id,name,user_id,status,municipality_id', 'foodBeverage.user:id,name', 'foodBeverage.municipality:id,name']);
+        // A dish is managed by its restaurant's municipality.
+        AdminScope::applyThrough($query, $request->user(), 'foodBeverage');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -56,6 +59,7 @@ class AdminMenuItemController extends Controller
     public function approve(Request $request, int $id): JsonResponse
     {
         $item = MenuItem::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
 
         $item->update([
             'status' => 'approved',
@@ -72,6 +76,7 @@ class AdminMenuItemController extends Controller
         $request->validate(['notes' => 'required|string|max:1000']);
 
         $item = MenuItem::pending()->findOrFail($id);
+        AdminScope::authorizeItem($request->user(), $item);
 
         $item->update([
             'status' => 'rejected',

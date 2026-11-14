@@ -242,7 +242,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
     });
 
     // ---------- ADMIN ROUTES ----------
-    Route::middleware('role:admin')->prefix('admin')->group(function () {
+    // admin.scope: an admin account with an invalid admin_scope gets no admin access (fail-closed).
+    Route::middleware(['role:admin', 'admin.scope'])->prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
 
         // Read-only overview of guest reviews and owner replies across all listing types
@@ -262,7 +263,9 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::apiResource('/retail-products', AdminRetailProductController::class)->names('admin.retail-products');
         Route::apiResource('/events', AdminEventController::class)->names('admin.events');
         Route::apiResource('/announcements', AdminAnnouncementController::class)->names('admin.announcements');
-        Route::apiResource('/hero-slides', AdminHeroSlideController::class)->names('admin.hero-slides');
+        // Hero slides are the whole site's: every admin may view them, only provincial admins change them.
+        Route::apiResource('/hero-slides', AdminHeroSlideController::class)->only(['index', 'show'])->names('admin.hero-slides');
+        Route::apiResource('/hero-slides', AdminHeroSlideController::class)->except(['index', 'show'])->names('admin.hero-slides')->middleware('admin.provincial');
 
         // Submissions
         Route::get('/submissions', [AdminSubmissionController::class, 'index']);
