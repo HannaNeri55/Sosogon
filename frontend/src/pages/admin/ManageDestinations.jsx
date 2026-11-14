@@ -32,7 +32,6 @@ import { confirmDialog } from "../../utils/dialogs";
 import useFormErrors from "../../hooks/useFormErrors";
 import FieldError, { FormErrorSummary } from "../../components/common/FieldError";
 import useAdminScope from "../../hooks/useAdminScope";
-import ManagedBy from "../../components/admin/ManagedBy";
 
 const PRIORITY_LABELS = {
   iconic: "Must-Visit / Iconic",
@@ -98,12 +97,24 @@ export default function ManageDestinations() {
     );
   }, [items, search]);
 
+  // The list grouped by each destination's municipality, municipalities in name order.
+  const groups = useMemo(() => {
+    const byTown = new Map();
+    for (const item of filteredItems) {
+      const key = item.municipality_id ?? "none";
+      if (!byTown.has(key)) byTown.set(key, { key, name: item.municipality?.name || "No municipality", items: [] });
+      byTown.get(key).items.push(item);
+    }
+    return [...byTown.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredItems]);
+
   const formRef = useScrollToForm(showForm ? editingId ?? "new" : null);
   const form = useFormErrors(formRef);
 
   const loadData = async () => {
     try {
-      const data = await getAdminDestinations({ per_page: 100 });
+      // Every destination at once (the server allows up to 200), so each municipality's group is complete.
+      const data = await getAdminDestinations({ per_page: 200 });
       setItems(data.data || []);
     } finally {
       setLoading(false);
@@ -902,8 +913,20 @@ export default function ManageDestinations() {
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {filteredItems.map((item) => (
+            {groups.map((group) => (
+            <tbody key={group.key} className="border-b border-gray-200 last:border-b-0">
+              <tr className="bg-gray-50/70">
+                <th scope="colgroup" colSpan={6} className="px-6 py-2.5 text-left">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <FiMapPin size={14} className="text-primary-600" aria-hidden="true" />
+                    {group.name}
+                    <span className="text-xs font-medium text-gray-500">
+                      {group.items.length} destination{group.items.length === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                </th>
+              </tr>
+              {group.items.map((item) => (
                 <tr
                   key={item.id}
                   className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150"
@@ -956,10 +979,10 @@ export default function ManageDestinations() {
                   </td>
                   <td data-actions className="px-6 py-4">
                     {item.can_manage === false ? (
-                      <div className="flex flex-col items-end gap-2">
-                        <ManagedBy office={item.managed_by} className="ml-auto" />
-                        {scope.isProvincial && (
-                          <div className="flex items-center gap-3">
+                      // Managed by its municipality's own tourism office: no edit or delete here; a
+                      // provincial admin keeps Featured and Tourism priority.
+                      scope.isProvincial && (
+                          <div className="flex flex-wrap items-center justify-end gap-3">
                             <button
                               type="button"
                               onClick={() => updateRanking(item, { is_featured: !item.is_featured })}
@@ -980,8 +1003,7 @@ export default function ManageDestinations() {
                               ))}
                             </select>
                           </div>
-                        )}
-                      </div>
+                      )
                     ) : (
                     <div className="flex gap-3 justify-end">
                       <button
@@ -1004,6 +1026,7 @@ export default function ManageDestinations() {
                 </tr>
               ))}
             </tbody>
+            ))}
           </table>
         </div>
       </div>
