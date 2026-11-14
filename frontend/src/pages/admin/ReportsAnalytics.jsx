@@ -16,12 +16,17 @@ import { getReportOverview, getReportVisitors, getReportPopular, getReportSearch
 import StatCard from '../../components/common/StatCard'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { showApiError } from '../../utils/apiErrors'
+import useAdminScope from '../../hooks/useAdminScope'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend)
 // Charts use the site's body font instead of Chart.js's default Helvetica.
 ChartJS.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font-body') || 'Inter, sans-serif'
 
 export default function ReportsAnalytics() {
+  // A municipal admin's reports cover their municipality (its listings' page views and its
+  // destinations). Site searches aren't tied to a municipality, so they're the provincial admins'.
+  const scope = useAdminScope()
+  const town = scope.municipality?.name
   const [overview, setOverview] = useState(null)
   const [visitorData, setVisitorData] = useState([])
   const [popularData, setPopularData] = useState([])
@@ -91,6 +96,9 @@ export default function ReportsAnalytics() {
         <div>
           <p className="text-primary-600 font-medium mb-2">Admin</p>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Reports and Analytics</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            {scope.isMunicipal ? `${town}: page views of its destination, listing and event pages, and its destinations.` : 'The whole province.'}
+          </p>
         </div>
         <button
           type="button"
@@ -103,9 +111,11 @@ export default function ReportsAnalytics() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <StatCard icon={FiEye} label="Views (Last 30 Days)" value={overview?.monthly_views || 0} accent="primary" />
-        <StatCard icon={FiSearch} label="Searches (Last 30 Days)" value={overview?.monthly_searches || 0} accent="secondary" />
+      <div className={`grid grid-cols-1 gap-4 mb-8 ${scope.isProvincial ? 'sm:grid-cols-2' : ''}`}>
+        <StatCard icon={FiEye} label={scope.isMunicipal ? `Views of ${town} Pages (Last 30 Days)` : 'Views (Last 30 Days)'} value={overview?.monthly_views || 0} accent="primary" />
+        {overview?.monthly_searches != null && (
+          <StatCard icon={FiSearch} label="Searches (Last 30 Days)" value={overview.monthly_searches} accent="secondary" />
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-8">
@@ -119,7 +129,11 @@ export default function ReportsAnalytics() {
 
         <div className="bg-white rounded-xl p-6 border border-gray-100">
           <h2 className="text-xl font-heading font-semibold mb-6">Popular Destinations</h2>
-          <Bar data={popularChartData} />
+          {popularData.length === 0 ? (
+            <p className="text-gray-500">No published destinations{scope.isMunicipal ? ` in ${town}` : ''} yet.</p>
+          ) : (
+            <Bar data={popularChartData} />
+          )}
           <div className="mt-6 space-y-2">
             {popularData.map((d, i) => (
               <div key={d.id} className="flex items-center justify-between py-2 border-t border-gray-50 first:border-t-0">
@@ -135,8 +149,12 @@ export default function ReportsAnalytics() {
 
         <div className="bg-white rounded-xl p-6 border border-gray-100">
           <h2 className="text-xl font-heading font-semibold mb-6">Popular Searches</h2>
-          {searchData.length === 0 ? (
-            <p className="text-gray-500">No search data available.</p>
+          {overview?.monthly_searches == null ? (
+            <p className="text-gray-500">
+              Site searches aren't tied to a municipality, so they're reported to the provincial administrator only.
+            </p>
+          ) : searchData.length === 0 ? (
+            <p className="text-gray-500">No one has searched the site in the last 30 days.</p>
           ) : (
             <div className="space-y-3">
               {searchData.map((item, idx) => (

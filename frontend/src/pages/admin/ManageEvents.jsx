@@ -9,6 +9,7 @@ import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
 import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
+import useAdminScope from '../../hooks/useAdminScope'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
@@ -20,6 +21,10 @@ const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 export default function ManageEvents() {
+  // A municipal admin manages their municipality's events and sees the province-wide ones
+  // read-only; Featured events show across the province, so only provincial admins set it.
+  const scope = useAdminScope()
+  const blankForm = () => ({ ...EMPTY_FORM, municipality_id: scope.municipality ? String(scope.municipality.id) : '' })
   const [items, setItems] = useState([])
   const [municipalities, setMunicipalities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -110,7 +115,7 @@ export default function ManageEvents() {
     form.setErrors({})
     setShowForm(false)
     setEditingId(null)
-    setFormData(EMPTY_FORM)
+    setFormData(blankForm())
     setImageFile(null)
     setImagePreview(null)
     setCurrentImage(null)
@@ -127,7 +132,7 @@ export default function ManageEvents() {
     payload.append('municipality_id', formData.municipality_id || '')
     payload.append('start_date', formData.start_date)
     payload.append('end_date', formData.end_date || '')
-    payload.append('is_featured', formData.is_featured ? '1' : '0')
+    if (scope.isProvincial) payload.append('is_featured', formData.is_featured ? '1' : '0')
     payload.append('status', formData.status)
     if (imageFile) payload.append('image', imageFile)
     else if (editingId && removeImage) payload.append('remove_image', '1')
@@ -166,7 +171,17 @@ export default function ManageEvents() {
           <p className="text-primary-600 font-medium mb-2">Admin</p>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Events</h1>
         </div>
-        <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
+        <button
+          onClick={() => {
+            if (showForm) {
+              closeForm()
+            } else {
+              setFormData(blankForm())
+              setShowForm(true)
+            }
+          }}
+          className="btn-primary"
+        >
           {showForm ? 'Close Form' : 'Add Event'}
         </button>
       </div>
@@ -186,10 +201,11 @@ export default function ManageEvents() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <select name="municipality_id" className="input-field" aria-label="Municipality" value={formData.municipality_id} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
-                <option value="">Province-wide (no specific municipality)</option>
-                {municipalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <select name="municipality_id" className="input-field disabled:bg-gray-50 disabled:text-gray-600" aria-label="Municipality" value={formData.municipality_id} disabled={scope.isMunicipal} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
+                {scope.isProvincial && <option value="">Province-wide (no specific municipality)</option>}
+                {municipalities.filter((m) => scope.canManage(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+              {scope.isMunicipal && <p className="mt-1 text-xs text-gray-500">Your office manages events in {scope.municipality?.name} only.</p>}
               <FieldError form={form} name="municipality_id" />
             </div>
             <div>
@@ -246,10 +262,16 @@ export default function ManageEvents() {
             <FieldError form={form} name="image" />
           </div>
           <div className="flex items-center gap-6">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" name="is_featured" checked={formData.is_featured} onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })} />
-              Featured event
-            </label>
+            {scope.isProvincial ? (
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" name="is_featured" checked={formData.is_featured} onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })} />
+                Featured event
+              </label>
+            ) : (
+              <p className="text-sm text-gray-600" title="Featured events show across the province, so the provincial administrator sets this.">
+                Featured: <span className="font-medium text-gray-800">{formData.is_featured ? 'Yes' : 'No'}</span>
+              </p>
+            )}
             <select name="status" className="input-field w-auto" aria-label="Status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
               <option value="published">Published</option>
               <option value="draft">Draft</option>
@@ -323,6 +345,9 @@ export default function ManageEvents() {
                     {item.is_featured ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '\u2014'}
                   </td>
                   <td data-actions className="px-6 py-4">
+                    {item.can_manage === false ? (
+                      <p className="text-right text-xs text-gray-400">Managed by the provincial administrator</p>
+                    ) : (
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
                         <FiEdit2 size={15} />
@@ -331,6 +356,7 @@ export default function ManageEvents() {
                         <FiTrash2 size={15} />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}

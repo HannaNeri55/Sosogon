@@ -42,6 +42,7 @@ import {
   IMAGE_FALLBACK_SVG,
 } from '../../utils/helpers'
 import { showApiError } from '../../utils/apiErrors'
+import useAdminScope from '../../hooks/useAdminScope'
 
 const BUSINESS_TYPES = [
   { key: 'accommodation', label: 'Accommodations' },
@@ -422,12 +423,18 @@ function ReviewModal({
   const [decision, setDecision] = useState(null)
   const [notes, setNotes] = useState('')
   const [notesError, setNotesError] = useState('')
+  const scope = useAdminScope()
 
   const revision = useMemo(
     () => getRevision(listing, type),
     [listing, type]
   )
   const isRevision = Boolean(revision)
+  // Moving a listing to another municipality is approved by a provincial admin only.
+  const movesMunicipality =
+    isRevision &&
+    Boolean(revision?.proposed_data?.municipality_id) &&
+    Number(revision.proposed_data.municipality_id) !== Number(listing.municipality_id)
 
   const images = useMemo(
     () => getProposedImages(listing, type),
@@ -588,14 +595,17 @@ function ReviewModal({
               <InformationField
                 label="Municipality"
                 value={
-                  isRevision &&
-                  revision?.proposed_data?.municipality_id &&
-                  Number(revision.proposed_data.municipality_id) !==
-                    Number(listing.municipality_id)
+                  movesMunicipality
                     ? `Municipality ID: ${revision.proposed_data.municipality_id}`
                     : listing.municipality?.name
                 }
               />
+              {movesMunicipality && scope.isMunicipal && (
+                <p className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  These changes move the listing out of {scope.municipality?.name}. Only the provincial administrator can
+                  approve that; you can still return the changes to the owner.
+                </p>
+              )}
               <div className="sm:col-span-2">
                 <InformationField
                   label="Address"

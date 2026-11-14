@@ -19,6 +19,7 @@ import {
 import { getAdminDashboard } from '../../api/admin'
 import { useAuth } from '../../contexts/AuthContext'
 import StatCard from '../../components/common/StatCard'
+import useAdminScope from '../../hooks/useAdminScope'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 function VisitorTrendChart({ data }) {
@@ -81,6 +82,8 @@ const QUICK_LINKS = [
 
 export default function AdminDashboard() {
   const { user } = useAuth()
+  // A municipal admin's figures are their municipality's (the server scopes them).
+  const scope = useAdminScope()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -103,7 +106,11 @@ export default function AdminDashboard() {
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900 mt-1">
             Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
-          <p className="text-gray-600 mt-1">Here&apos;s what&apos;s happening across Sorsogon tourism today.</p>
+          <p className="text-gray-600 mt-1">
+            {scope.isMunicipal
+              ? `Here's what's happening in ${scope.municipality?.name} tourism today.`
+              : 'Here’s what’s happening across Sorsogon tourism today.'}
+          </p>
         </div>
         {pending > 0 && (
           <Link

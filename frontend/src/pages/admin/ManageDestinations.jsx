@@ -30,6 +30,14 @@ import { showApiError } from "../../utils/apiErrors";
 import { confirmDialog } from "../../utils/dialogs";
 import useFormErrors from "../../hooks/useFormErrors";
 import FieldError, { FormErrorSummary } from "../../components/common/FieldError";
+import useAdminScope from "../../hooks/useAdminScope";
+
+const PRIORITY_LABELS = {
+  iconic: "Must-Visit / Iconic",
+  popular: "Popular Attraction",
+  recommended: "Recommended Attraction",
+  hidden_gem: "Hidden Gem",
+};
 
 const EMPTY_FORM = {
   name: "",
@@ -55,6 +63,11 @@ const EMPTY_FORM = {
 };
 
 export default function ManageDestinations() {
+  // A municipal admin adds and edits their own municipality's destinations; Featured and Tourism
+  // priority rank places across the province, so only provincial admins set them.
+  const scope = useAdminScope();
+  const ownTown = scope.municipality ? String(scope.municipality.id) : null;
+  const blankForm = () => ({ ...EMPTY_FORM, municipality_id: ownTown ?? EMPTY_FORM.municipality_id });
   const [items, setItems] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -196,7 +209,7 @@ export default function ManageDestinations() {
     releaseActivityPreviews(formData.activities);
     setShowForm(false);
     setEditingId(null);
-    setFormData(EMPTY_FORM);
+    setFormData(blankForm());
     setExistingImages([]);
     resetPhotoChanges();
   };
@@ -258,6 +271,7 @@ export default function ManageDestinations() {
       // Regular destination fields
       Object.keys(formData).forEach((key) => {
         if (["images", "fees", "rates", "amenities", "activities"].includes(key)) return;
+        if (scope.isMunicipal && ["is_featured", "tourism_priority"].includes(key)) return;
 
         // Sent even when empty, so a classification can be cleared.
         if (["tourism_priority", "setting"].includes(key)) {
@@ -363,7 +377,14 @@ export default function ManageDestinations() {
           </h1>
         </div>
         <button
-          onClick={() => (showForm ? closeForm() : setShowForm(true))}
+          onClick={() => {
+            if (showForm) {
+              closeForm();
+            } else {
+              setFormData(blankForm());
+              setShowForm(true);
+            }
+          }}
           disabled={saving}
           className="btn-primary disabled:opacity-60"
         >
@@ -442,18 +463,22 @@ export default function ManageDestinations() {
           </div>
           <div>
             <select name="municipality_id" aria-label="Municipality" required
-              className="input-field"
+              className="input-field disabled:bg-gray-50 disabled:text-gray-600"
               value={formData.municipality_id}
+              disabled={scope.isMunicipal}
               onChange={(e) =>
                 setFormData({ ...formData, municipality_id: e.target.value })
               }
             >
-              {municipalities.map((m) => (
+              {municipalities.filter((m) => scope.canManage(m.id)).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </select>
+            {scope.isMunicipal && (
+              <p className="mt-1 text-xs text-gray-500">Your office manages destinations in {scope.municipality?.name} only.</p>
+            )}
             <FieldError form={form} name="municipality_id" />
           </div>
           <fieldset className="rounded-xl border border-gray-200 p-4 sm:p-5">
@@ -737,20 +762,32 @@ export default function ManageDestinations() {
             form={form}
           />
 
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              name="is_featured"
-              checked={formData.is_featured}
-              onChange={(e) =>
-                setFormData({ ...formData, is_featured: e.target.checked })
-              }
-            />
-            Featured destination (shown on the homepage)
-          </label>
+          {scope.isProvincial ? (
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                name="is_featured"
+                checked={formData.is_featured}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_featured: e.target.checked })
+                }
+              />
+              Featured destination (shown on the homepage)
+            </label>
+          ) : (
+            <p className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+              Featured: <span className="font-medium text-gray-800">{formData.is_featured ? "Yes" : "No"}</span>
+              {" · "}Tourism priority:{" "}
+              <span className="font-medium text-gray-800">{PRIORITY_LABELS[formData.tourism_priority] || "Not classified"}</span>
+              <span className="mt-1 block text-xs text-gray-500">
+                These rank places across the whole province, so the provincial administrator sets them.
+              </span>
+            </p>
+          )}
 
           {/* What the itinerary planner relies on instead of guessing. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {scope.isProvincial && (
             <label className="block">
               <span className="block text-sm font-medium text-gray-700 mb-1">Tourism priority</span>
               <select
@@ -760,13 +797,13 @@ export default function ManageDestinations() {
                 className="input-field"
               >
                 <option value="">Not classified</option>
-                <option value="iconic">Must-Visit / Iconic</option>
-                <option value="popular">Popular Attraction</option>
-                <option value="recommended">Recommended Attraction</option>
-                <option value="hidden_gem">Hidden Gem</option>
+                {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
               <span className="mt-1 block text-xs text-gray-500">The AI trip planner builds days around Must-Visit and Popular places first.</span>
             </label>
+            )}
             <label className="block">
               <span className="block text-sm font-medium text-gray-700 mb-1">Setting</span>
               <select

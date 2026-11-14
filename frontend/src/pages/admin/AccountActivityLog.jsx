@@ -18,6 +18,8 @@ const ACTIONS = {
   appeal_approved: 'Appeal approved',
   appeal_rejected: 'Appeal rejected',
   activated_legacy_owner: 'Owner account activated',
+  admin_created: 'Admin account created',
+  admin_scope_changed: 'Admin scope changed',
 }
 
 /** Read-only audit trail of account management actions. Entries cannot be edited or deleted. */

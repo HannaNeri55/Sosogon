@@ -1,11 +1,13 @@
 // frontend/src/components/admin/accounts/EnforcementModal.jsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { FiAlertTriangle, FiArrowLeft, FiPaperclip, FiX } from 'react-icons/fi'
 import Modal from '../../common/Modal'
-import { enforceUser } from '../../../api/admin'
+import { enforceUser, getUserAccount } from '../../../api/admin'
 import { ACTION_CONSEQUENCES, ENFORCEMENT_ACTIONS, formatDay, roleLabel } from '../../../utils/accountStates'
 import { showApiError } from '../../../utils/apiErrors'
+import useAdminScope from '../../../hooks/useAdminScope'
+import { parseReview } from '../../../utils/helpers'
 
 const FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const FILE_MAX = 5 * 1024 * 1024
@@ -16,8 +18,16 @@ const today = () => new Date().toISOString().slice(0, 10)
  * Warn, temporarily suspend or deactivate an account: a complete, reviewed case
  * (category, reason, explanation, evidence), then a confirmation step that spells out
  * the consequences before anything is applied.
+ *
+ * For a tourist, the case can name the review it is about. A municipal admin must: they act on
+ * tourists only over a review of their municipality's listing (the server checks it).
  */
 export default function EnforcementModal({ user, initialAction = 'warning', categories, onClose, onDone }) {
+  const scope = useAdminScope()
+  const isTourist = (user.role?.name || user.role) === 'tourist'
+  const reviewRequired = isTourist && scope.isMunicipal
+  // The tourist's reviews this admin manages (null while loading).
+  const [reviews, setReviews] = useState(isTourist ? null : [])
   const [step, setStep] = useState('form')
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState({})
@@ -32,7 +42,16 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
     suspension_days: 7,
     review_date: '',
     reported_at: today(),
+    rating_id: '',
   })
+
+  useEffect(() => {
+    if (!isTourist) return
+    getUserAccount(user.id)
+      .then((data) => setReviews(data.reviews || []))
+      .catch(() => setReviews([]))
+  }, [isTourist, user.id])
+  const chosenReview = reviews?.find((r) => String(r.id) === String(form.rating_id))
   // Editing a field clears its error.
   const set = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }))
@@ -62,6 +81,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
 
   const validate = () => {
     const found = {}
+    if (reviewRequired && !form.rating_id) found.rating_id = 'Choose the review this action is about.'
     if (!form.category) found.category = 'Choose a violation category.'
     if (form.reason.trim().length < 5) found.reason = 'Give a short reason (at least 5 characters).'
     if (form.details.trim().length < 20) found.details = 'Explain what happened (at least 20 characters).'
@@ -92,6 +112,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
     if (form.action === 'suspension') payload.append('suspension_days', String(form.suspension_days))
     if (form.review_date) payload.append('review_date', form.review_date)
     if (form.reported_at) payload.append('reported_at', form.reported_at)
+    if (form.rating_id) payload.append('rating_id', String(form.rating_id))
     files.forEach((file) => payload.append('evidence_files[]', file))
     payload.append('confirmed', '1')
 
@@ -188,6 +209,36 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             </div>
           )}
 
+          {isTourist && (
+            <div>
+              <label htmlFor="enf-rating" className="block text-sm font-semibold text-gray-800 mb-1.5">
+                Review this is about {reviewRequired ? '' : <span className="font-normal text-gray-500">(optional)</span>}
+              </label>
+              {reviews === null ? (
+                <p className="text-sm text-gray-500">Loading the tourist's reviews…</p>
+              ) : reviews.length === 0 ? (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                  {reviewRequired
+                    ? `This tourist has no reviews of ${scope.municipality?.name} listings, so your office can't act on this account. Other cases are handled by the provincial administrator.`
+                    : 'This tourist has no reviews.'}
+                </p>
+              ) : (
+                <select id="enf-rating" name="rating_id" aria-invalid={!!errors.rating_id} className="input-field" value={form.rating_id} onChange={set('rating_id')}>
+                  <option value="">{reviewRequired ? 'Choose a review…' : 'Not about a specific review'}</option>
+                  {reviews.map((r) => {
+                    const { comment } = parseReview(r)
+                    return (
+                      <option key={r.id} value={r.id}>
+                        {r.score}/5 on {r.rateable?.name || 'a listing'} · {formatDay(r.created_at)}{comment ? ` · “${comment.slice(0, 50)}${comment.length > 50 ? '…' : ''}”` : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              )}
+              {fieldError('rating_id')}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="enf-category" className="block text-sm font-semibold text-gray-800 mb-1.5">Violation category</label>
@@ -266,6 +317,9 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
 
           <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <div><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Category</dt><dd className="mt-0.5 text-gray-900">{categoryLabel}</dd></div>
+            {chosenReview && (
+              <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">About the review</dt><dd className="mt-0.5 text-gray-900">{chosenReview.score}/5 on {chosenReview.rateable?.name || 'a listing'}, {formatDay(chosenReview.created_at)}</dd></div>
+            )}
             <div><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Date reported</dt><dd className="mt-0.5 text-gray-900">{formatDay(form.reported_at)}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Reason</dt><dd className="mt-0.5 text-gray-900">{form.reason}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">Explanation</dt><dd className="mt-0.5 text-gray-900 whitespace-pre-line">{form.details}</dd></div>
