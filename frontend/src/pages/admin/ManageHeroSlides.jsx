@@ -9,10 +9,13 @@ import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
 import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
+import useAdminScope from '../../hooks/useAdminScope'
 
 const EMPTY_FORM = { title: '', subtitle: '', eyebrow: '', sort_order: 0, is_active: true, image: null }
 
 export default function ManageHeroSlides() {
+  // The home page's slides are the whole province's: a municipal admin only sees them.
+  const { isProvincial } = useAdminScope()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -113,12 +116,20 @@ export default function ManageHeroSlides() {
           <p className="text-primary-600 font-medium mb-2">Admin</p>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Hero Slides</h1>
         </div>
-        <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
-          {showForm ? 'Close Form' : 'Add Hero Slide'}
-        </button>
+        {isProvincial && (
+          <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
+            {showForm ? 'Close Form' : 'Add Hero Slide'}
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {!isProvincial && (
+        <p className="mb-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+          The home page slides are shown across the whole province, so only the provincial administrator can change them.
+        </p>
+      )}
+
+      {isProvincial && showForm && (
         <form
           ref={formRef} noValidate onChange={form.onChange} onSubmit={handleSubmit} className="bg-white rounded-xl p-5 sm:p-8 border border-gray-100 mb-8 space-y-5">
           <p className="text-sm font-medium text-gray-500">{editingId ? 'Editing hero slide' : 'New hero slide'}</p>
@@ -211,7 +222,7 @@ export default function ManageHeroSlides() {
                     {item.is_active ? <FiCheck className="text-green-600" size={15} /> : <FiX className="text-gray-400" size={15} />}
                   </td>
                   <td data-actions className="px-6 py-4">
-                    <div className="flex gap-3 justify-end">
+                    <div className={`flex gap-3 justify-end ${isProvincial ? '' : 'hidden'}`}>
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
                         <FiEdit2 size={15} />
                       </button>

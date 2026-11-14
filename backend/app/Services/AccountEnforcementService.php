@@ -55,6 +55,8 @@ class AccountEnforcementService
 
                 $violation = AccountViolation::create([
                     'user_id' => $target->id,
+                    // The review this is about, if any (see App\Support\AdminScope::managesUser).
+                    'rating_id' => $data['rating_id'] ?? null,
                     'reviewed_by' => $admin->id,
                     'category' => $data['category'],
                     'reason' => $data['reason'],

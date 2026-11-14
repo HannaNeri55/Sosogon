@@ -21,13 +21,15 @@
 <body>
 <h1>Reports and Analytics</h1>
 <div class="meta">
-    Sorsogon Tourism &middot; Generated {{ $generatedAt->format('F j, Y g:i A') }}@if($generatedBy) by {{ $generatedBy }}@endif &middot; Period: last {{ $days }} days
+    Sorsogon Tourism &middot; {{ $scopeLabel }} &middot; Generated {{ $generatedAt->format('F j, Y g:i A') }}@if($generatedBy) by {{ $generatedBy }}@endif &middot; Period: last {{ $days }} days
 </div>
 
 <table class="stats">
     <tr>
         <td class="stat"><div>Views (last {{ $days }} days)</div><div class="n">{{ number_format($monthlyViews) }}</div></td>
+        @if($monthlySearches !== null)
         <td class="stat"><div>Searches (last {{ $days }} days)</div><div class="n">{{ number_format($monthlySearches) }}</div></td>
+        @endif
     </tr>
 </table>
 
@@ -66,8 +68,10 @@
 @endif
 
 <h2>Popular Searches</h2>
-@if($searches->isEmpty())
-    <p class="empty">No search data available.</p>
+@if($monthlySearches === null)
+    <p class="empty">Site searches aren't tied to a municipality, so they're reported to the provincial administrator only.</p>
+@elseif($searches->isEmpty())
+    <p class="empty">No one searched the site in this period.</p>
 @else
     <table class="data">
         <thead><tr><th>Search term</th><th class="r">Searches</th></tr></thead>

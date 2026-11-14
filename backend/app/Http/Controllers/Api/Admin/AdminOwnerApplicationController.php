@@ -6,12 +6,16 @@ use App\Http\Controllers\Concerns\StreamsBusinessPermit;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\BusinessOwnerApplication;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/** Admin review of Business Owner registrations and their business permits. */
+/**
+ * Admin review of Business Owner registrations and their business permits. A municipal admin
+ * sees and decides only the registrations of businesses in their municipality (AdminScope).
+ */
 class AdminOwnerApplicationController extends Controller
 {
     use StreamsBusinessPermit;
@@ -19,6 +23,7 @@ class AdminOwnerApplicationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = BusinessOwnerApplication::with(['user:id,name,email,phone,status,created_at', 'municipality:id,name', 'barangay:id,name', 'reviewer:id,name']);
+        AdminScope::apply($query, $request->user());
 
         if (in_array($request->input('status'), ['pending', 'approved', 'rejected'], true)) {
             $query->where('status', $request->input('status'));
@@ -27,16 +32,18 @@ class AdminOwnerApplicationController extends Controller
         return response()->json($query->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END")->latest('updated_at')->get());
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return response()->json(
-            BusinessOwnerApplication::with(['user:id,name,email,phone,status,created_at', 'municipality:id,name', 'barangay:id,name', 'reviewer:id,name'])->findOrFail($id)
-        );
+        $application = BusinessOwnerApplication::with(['user:id,name,email,phone,status,created_at', 'municipality:id,name', 'barangay:id,name', 'reviewer:id,name'])->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $application);
+
+        return response()->json($application);
     }
 
-    public function permit(int $id): StreamedResponse
+    public function permit(Request $request, int $id): StreamedResponse
     {
         $application = BusinessOwnerApplication::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $application);
 
         return $this->streamPermit($application->business_permit_path, "business-permit-application-{$application->id}");
     }
@@ -45,6 +52,7 @@ class AdminOwnerApplicationController extends Controller
     {
         $application = DB::transaction(function () use ($request, $id) {
             $application = BusinessOwnerApplication::whereKey($id)->lockForUpdate()->firstOrFail();
+            AdminScope::authorizeRecord($request->user(), $application);
             abort_if($application->status !== 'pending', 409, 'Only a pending application can be approved.');
 
             $application->forceFill(['status' => 'approved', 'reviewed_by' => $request->user()->id, 'reviewed_at' => now()])->save();
@@ -63,6 +71,7 @@ class AdminOwnerApplicationController extends Controller
 
         $application = DB::transaction(function () use ($request, $id, $validated) {
             $application = BusinessOwnerApplication::whereKey($id)->lockForUpdate()->firstOrFail();
+            AdminScope::authorizeRecord($request->user(), $application);
             abort_if($application->status !== 'pending', 409, 'Only a pending application can be rejected.');
 
             // The account stays pending (it was never activated); the owner can sign in to correct and resubmit.

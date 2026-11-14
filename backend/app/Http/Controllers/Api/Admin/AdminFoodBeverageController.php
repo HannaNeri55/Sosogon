@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\AdminScope;
 use App\Support\RevisionBase;
 use Illuminate\Validation\ValidationException;
 
@@ -21,7 +22,7 @@ class AdminFoodBeverageController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = FoodBeverage::with([
+        $query = AdminScope::apply(FoodBeverage::query(), $request->user())->with([
             'municipality',
             'barangay',
             'images',
@@ -78,6 +79,8 @@ class AdminFoodBeverageController extends Controller
             'images' => 'nullable|array|max:100',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
+        // A municipal admin adds establishments to their own municipality only.
+        AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
 
         $uploadedFiles = $request->file('images', []);
         $uploadedFiles = is_array($uploadedFiles)
@@ -132,23 +135,24 @@ class AdminFoodBeverageController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return response()->json(
-            FoodBeverage::with([
-                'municipality',
-                'barangay',
-                'images',
-                'user:id,name',
-                'revisions' => fn ($query) => $query
-                    ->whereIn('status', [
-                        'draft',
-                        'submitted',
-                        'needs_revision',
-                    ])
-                    ->latest('id'),
-            ])->findOrFail($id)
-        );
+        $item = FoodBeverage::with([
+            'municipality',
+            'barangay',
+            'images',
+            'user:id,name',
+            'revisions' => fn ($query) => $query
+                ->whereIn('status', [
+                    'draft',
+                    'submitted',
+                    'needs_revision',
+                ])
+                ->latest('id'),
+        ])->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $item);
+
+        return response()->json($item);
     }
 
     public function update(
@@ -157,6 +161,7 @@ class AdminFoodBeverageController extends Controller
         ImageOptimizationService $images
     ): JsonResponse {
         $item = FoodBeverage::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $item);
 
         $validated = $request->validate([
             'revision_action' => 'sometimes|required|in:approve,needs_revision',
@@ -286,6 +291,7 @@ class AdminFoodBeverageController extends Controller
         FoodBeverage $item,
         array $validated
     ): JsonResponse {
+        AdminScope::authorizeRecord($request->user(), $item);
         if ($item->status !== 'approved') {
             throw ValidationException::withMessages([
                 'revision_action' => 'Revision review is only available for published listings.',
@@ -340,6 +346,7 @@ class AdminFoodBeverageController extends Controller
         }
 
         // Never overwrite values that changed on the live listing since the owner started editing.
+        AdminScope::authorizeTransfer($request->user(), $item, $data['municipality_id'] ?? null);
         if ($conflict = RevisionBase::prepareForApproval($revision, $item, $request->user()->id, $data, $gallery)) {
             return $conflict;
         }
@@ -545,10 +552,12 @@ class AdminFoodBeverageController extends Controller
     }
 
     public function destroy(
+        Request $request,
         int $id,
         ImageOptimizationService $images
     ): JsonResponse {
         $item = FoodBeverage::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $item);
 
         foreach ($item->images as $img) {
             $images->delete(

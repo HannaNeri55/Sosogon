@@ -15,6 +15,7 @@ import UserAccountPanel from '../../components/admin/accounts/UserAccountPanel'
 import { formatDateTime } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import useAdminScope from '../../hooks/useAdminScope'
 
 const ROLE_STYLES = {
   admin: 'bg-primary-50 text-primary-700',
@@ -37,6 +38,8 @@ const ROLE_FILTERS = [
 ]
 
 export default function ManageUsers() {
+  // A municipal admin sees their municipality's owners and the tourists who reviewed its listings.
+  const scope = useAdminScope()
   const [items, setItems] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [page, setPage] = useState(1)
@@ -122,8 +125,11 @@ export default function ManageUsers() {
     if (state === 'suspended' || state === 'deactivated') {
       items.push({ label: 'Reactivate account', icon: FiRotateCcw, tone: 'good', onClick: () => setDialog({ type: 'reactivate', user, from }) })
     }
-    items.push({ divider: true })
-    items.push({ label: 'Close account…', icon: FiArchive, tone: 'danger', onClick: () => setDialog({ type: 'close', user, from }) })
+    // Closing a tourist account isn't tied to one municipality: provincial admins only.
+    if (scope.isProvincial || role !== 'tourist') {
+      items.push({ divider: true })
+      items.push({ label: 'Close account…', icon: FiArchive, tone: 'danger', onClick: () => setDialog({ type: 'close', user, from }) })
+    }
     return items
   }
 
@@ -134,6 +140,12 @@ export default function ManageUsers() {
           <p className="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2">Admin</p>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Users</h1>
           <p className="mt-1 text-sm text-gray-600">Account actions are recorded, logged and sent to the user. Nothing is deleted with one click.</p>
+          {scope.isMunicipal && (
+            <p className="mt-1 text-sm text-gray-600">
+              Showing {scope.municipality?.name}'s business owners, and tourists who reviewed its listings. You can act on a tourist over
+              one of those reviews; other cases go to the provincial administrator.
+            </p>
+          )}
         </div>
       </div>
 

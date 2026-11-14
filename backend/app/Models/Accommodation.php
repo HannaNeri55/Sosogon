@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
+use App\Models\Concerns\KeepsSubmissionMunicipality;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +11,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Accommodation extends Model
 {
-    use HasEstimates;
+    use HasEstimates, KeepsSubmissionMunicipality;
+
+    /** business_submissions.type for this kind of listing. */
+    public const SUBMISSION_TYPE = 'accommodation';
 
     /** Whether the stay rents units, the entire property, or both. Empty means not stated. */
     public const ARRANGEMENTS = ['units', 'entire_property', 'both'];

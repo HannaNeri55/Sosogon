@@ -18,13 +18,14 @@ class PageView extends Model
 
     /**
      * Page views per day for the $days days ending today, oldest first, with days that had none
-     * as 0: [['date' => 'Y-m-d', 'views' => int], …].
+     * as 0: [['date' => 'Y-m-d', 'views' => int], …]. $paths limits it to those pages (null: all).
      */
-    public static function daily(int $days): Collection
+    public static function daily(int $days, ?array $paths = null): Collection
     {
         $today = now(config('app.local_timezone'))->startOfDay();
         $dates = collect(range($days - 1, 0))->map(fn ($back) => $today->copy()->subDays($back)->toDateString());
         $counts = static::query()
+            ->when($paths !== null, fn ($q) => $q->whereIn('path', $paths))
             ->whereBetween('date', [$dates->first(), $dates->last()])
             ->selectRaw('date, SUM(views) as total')
             ->groupBy('date')
@@ -34,9 +35,9 @@ class PageView extends Model
         return $dates->map(fn ($date) => ['date' => $date, 'views' => $counts[$date] ?? 0])->values();
     }
 
-    /** Total page views from $from (a Y-m-d date) up to today. */
-    public static function totalSince(string $from): int
+    /** Total page views from $from (a Y-m-d date) up to today; $paths limits it to those pages (null: all). */
+    public static function totalSince(string $from, ?array $paths = null): int
     {
-        return (int) static::where('date', '>=', $from)->sum('views');
+        return (int) static::where('date', '>=', $from)->when($paths !== null, fn ($q) => $q->whereIn('path', $paths))->sum('views');
     }
 }

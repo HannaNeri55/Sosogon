@@ -9,7 +9,7 @@ import ListingInsights from '../../../components/business/ListingInsights'
 
 const STATUS_COPY = {
   approved: { label: 'Approved', style: 'bg-green-100 text-green-700', note: 'Your shop is live on the Sorsogon platform.' },
-  pending: { label: 'Pending Review', style: 'bg-yellow-100 text-yellow-700', note: 'The Bulan Tourism Office is reviewing your latest submission.' },
+  pending: { label: 'Pending Review', style: 'bg-yellow-100 text-yellow-700', note: "Your municipality's tourism office is reviewing your latest submission." },
   rejected: { label: 'Rejected', style: 'bg-red-100 text-red-700', note: 'Your last update was rejected. Edit your shop details and resubmit.' },
   archived: { label: 'Archived', style: 'bg-gray-100 text-gray-700', note: 'This shop is archived and not visible to tourists.' },
 }

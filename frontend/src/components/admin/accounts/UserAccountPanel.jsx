@@ -24,6 +24,8 @@ const LOG_LABELS = {
   appeal_approved: 'Appeal approved',
   appeal_rejected: 'Appeal rejected',
   activated_legacy_owner: 'Owner account activated',
+  admin_created: 'Admin account created',
+  admin_scope_changed: 'Admin scope changed',
 }
 
 /** Side panel: profile and state, account activity, and full violation history of one user. */

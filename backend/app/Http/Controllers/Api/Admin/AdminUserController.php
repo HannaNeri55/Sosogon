@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountViolation;
 use App\Models\User;
 use App\Services\AccountEnforcementService;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,6 +25,10 @@ class AdminUserController extends Controller
                 'violations',
                 'violations as current_warnings_count' => fn ($q) => $q->where('action', AccountViolation::ACTION_WARNING)->current(),
             ]);
+
+        // A municipal admin lists the business owners of their municipality and the tourists who
+        // reviewed its listings (see AdminScope::applyToUsers).
+        AdminScope::applyToUsers($query, $request->user());
 
         if ($request->filled('role')) {
             $query->whereHas('role', fn ($q) => $q->where('name', $request->role));
@@ -61,6 +66,7 @@ class AdminUserController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $user = User::findOrFail($id);
+        AdminScope::authorizeUser($request->user(), $user);
 
         if ($request->has('status')) {
             // The one direct status change kept: activating an owner who registered before

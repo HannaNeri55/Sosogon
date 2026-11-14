@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FiSearch, FiEdit2, FiTrash2, FiStar } from 'react-icons/fi'
-import { getAdminAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../../api/admin'
+import { getAdminAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, getMunicipalities } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { truncate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -9,10 +9,17 @@ import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
 import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
+import useAdminScope from '../../hooks/useAdminScope'
 
-const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published' }
+// municipality_id: '' is province-wide.
+const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published', municipality_id: '' }
 
 export default function ManageAnnouncements() {
+  // An announcement is for one municipality or the whole province. A municipal admin writes for
+  // their municipality and sees the province-wide ones read-only.
+  const scope = useAdminScope()
+  const blankForm = () => ({ ...EMPTY_FORM, municipality_id: scope.municipality ? String(scope.municipality.id) : '' })
+  const [municipalities, setMunicipalities] = useState([])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -40,6 +47,7 @@ export default function ManageAnnouncements() {
 
   useEffect(() => {
     loadData()
+    getMunicipalities().then(setMunicipalities).catch(() => {})
   }, [])
 
   const startEdit = (item) => {
@@ -49,6 +57,7 @@ export default function ManageAnnouncements() {
       content: item.content || '',
       is_pinned: !!item.is_pinned,
       status: item.status || 'published',
+      municipality_id: item.municipality_id ? String(item.municipality_id) : '',
     })
     setShowForm(true)
   }
@@ -57,18 +66,19 @@ export default function ManageAnnouncements() {
     form.setErrors({})
     setShowForm(false)
     setEditingId(null)
-    setFormData(EMPTY_FORM)
+    setFormData(blankForm())
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.check()) return
+    const payload = { ...formData, municipality_id: formData.municipality_id || null }
     try {
       if (editingId) {
-        await updateAnnouncement(editingId, formData)
+        await updateAnnouncement(editingId, payload)
         toast.success('Announcement updated')
       } else {
-        await createAnnouncement(formData)
+        await createAnnouncement(payload)
         toast.success('Announcement created')
       }
       closeForm()
@@ -98,7 +108,17 @@ export default function ManageAnnouncements() {
           <p className="text-primary-600 font-medium mb-2">Admin</p>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-gray-900">Manage Announcements</h1>
         </div>
-        <button onClick={() => (showForm ? closeForm() : setShowForm(true))} className="btn-primary">
+        <button
+          onClick={() => {
+            if (showForm) {
+              closeForm()
+            } else {
+              setFormData(blankForm())
+              setShowForm(true)
+            }
+          }}
+          className="btn-primary"
+        >
           {showForm ? 'Close Form' : 'Add Announcement'}
         </button>
       </div>
@@ -115,6 +135,14 @@ export default function ManageAnnouncements() {
           <div>
             <textarea name="content" className="input-field" rows={4} placeholder="Content" aria-label="Content" value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} required />
             <FieldError form={form} name="content" />
+          </div>
+          <div>
+            <select name="municipality_id" className="input-field disabled:bg-gray-50 disabled:text-gray-600" aria-label="For which municipality" value={formData.municipality_id} disabled={scope.isMunicipal} onChange={(e) => setFormData({ ...formData, municipality_id: e.target.value })}>
+              {scope.isProvincial && <option value="">The whole province</option>}
+              {municipalities.filter((m) => scope.canManage(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            {scope.isMunicipal && <p className="mt-1 text-xs text-gray-500">Your office's announcements are for {scope.municipality?.name}.</p>}
+            <FieldError form={form} name="municipality_id" />
           </div>
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -164,6 +192,7 @@ export default function ManageAnnouncements() {
                 <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
                   <td className="px-6 py-3">
                     <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{item.municipality?.name || 'Province-wide'}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{truncate(item.content, 80)}</p>
                   </td>
                   <td data-label="Status" className="px-6 py-4">
@@ -175,6 +204,9 @@ export default function ManageAnnouncements() {
                     {item.is_pinned ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '—'}
                   </td>
                   <td data-actions className="px-6 py-4">
+                    {item.can_manage === false ? (
+                      <p className="text-right text-xs text-gray-400">Managed by the provincial administrator</p>
+                    ) : (
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
                         <FiEdit2 size={15} />
@@ -183,6 +215,7 @@ export default function ManageAnnouncements() {
                         <FiTrash2 size={15} />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}

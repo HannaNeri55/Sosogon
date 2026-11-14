@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Accommodation;
 use App\Models\AccommodationImage;
 use App\Services\ImageOptimizationService;
+use App\Support\AdminScope;
 use App\Support\RevisionBase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class AdminAccommodationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Accommodation::with([
+        $query = AdminScope::apply(Accommodation::query(), $request->user())->with([
             'municipality',
             'barangay',
             'images',
@@ -87,6 +88,8 @@ class AdminAccommodationController extends Controller
             'images' => 'nullable|array|max:100',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
+        // A municipal admin adds accommodations to their own municipality only.
+        AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
 
         $uploadedFiles = $request->file('images', []);
 
@@ -142,23 +145,24 @@ class AdminAccommodationController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        return response()->json(
-            Accommodation::with([
-                'municipality',
-                'barangay',
-                'images',
-                'user',
-                'revisions' => fn ($query) => $query
-                    ->whereIn('status', [
-                        'draft',
-                        'submitted',
-                        'needs_revision',
-                    ])
-                    ->latest('id'),
-            ])->findOrFail($id)
-        );
+        $accommodation = Accommodation::with([
+            'municipality',
+            'barangay',
+            'images',
+            'user',
+            'revisions' => fn ($query) => $query
+                ->whereIn('status', [
+                    'draft',
+                    'submitted',
+                    'needs_revision',
+                ])
+                ->latest('id'),
+        ])->findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $accommodation);
+
+        return response()->json($accommodation);
     }
 
     public function update(
@@ -167,6 +171,7 @@ class AdminAccommodationController extends Controller
         ImageOptimizationService $images
     ): JsonResponse {
         $accommodation = Accommodation::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $accommodation);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -197,6 +202,9 @@ class AdminAccommodationController extends Controller
          * Published accommodation revisions are reviewed
          * separately from initial publication approval.
          */
+        // Moving the listing to another municipality is a provincial decision.
+        AdminScope::authorizeTransfer($request->user(), $accommodation, $validated['municipality_id'] ?? null);
+
         if (isset($validated['revision_action'])) {
             return $this->reviewRevision(
                 $accommodation,
@@ -320,6 +328,7 @@ class AdminAccommodationController extends Controller
         array $validated,
         Request $request
     ): JsonResponse {
+        AdminScope::authorizeRecord($request->user(), $accommodation);
         if ($accommodation->status !== 'approved') {
             throw ValidationException::withMessages([
                 'revision_action' => 'Revision review is only available for published accommodations.',
@@ -380,6 +389,7 @@ class AdminAccommodationController extends Controller
         }
 
         // Never overwrite values that changed on the live listing since the owner started editing.
+        AdminScope::authorizeTransfer($request->user(), $accommodation, $data['municipality_id'] ?? null);
         if ($conflict = RevisionBase::prepareForApproval($revision, $accommodation, $request->user()->id, $data, $gallery)) {
             return $conflict;
         }
@@ -737,10 +747,12 @@ class AdminAccommodationController extends Controller
     }
 
     public function destroy(
+        Request $request,
         int $id,
         ImageOptimizationService $images
     ): JsonResponse {
         $accommodation = Accommodation::findOrFail($id);
+        AdminScope::authorizeRecord($request->user(), $accommodation);
 
         foreach ($accommodation->images as $img) {
             $images->delete(

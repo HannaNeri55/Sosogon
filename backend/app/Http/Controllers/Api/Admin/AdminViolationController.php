@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountActionLog;
 use App\Models\AccountAppeal;
 use App\Models\AccountViolation;
+use App\Models\User;
 use App\Services\AccountEnforcementService;
+use App\Support\AdminScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,6 +23,7 @@ class AdminViolationController extends Controller
     public function violations(Request $request): JsonResponse
     {
         $query = AccountViolation::with(['user:id,name,email,role_id', 'user.role:id,name', 'reviewer:id,name', 'resolver:id,name', 'latestAppeal.decider:id,name']);
+        AdminScope::applyToViolations($query, $request->user());
 
         if ($request->filled('q')) {
             $search = $request->q;
@@ -48,6 +51,7 @@ class AdminViolationController extends Controller
     public function appeals(Request $request): JsonResponse
     {
         $query = AccountAppeal::with(['user:id,name,email,role_id', 'user.role:id,name', 'violation.reviewer:id,name', 'decider:id,name']);
+        $query->whereHas('violation', fn ($violations) => AdminScope::applyToViolations($violations, $request->user()));
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -75,8 +79,11 @@ class AdminViolationController extends Controller
             'note' => 'required|string|min:10|max:2000',
         ]);
 
+        $pending = AccountAppeal::with(['violation.user', 'violation.rating.rateable'])->findOrFail($id);
+        AdminScope::authorizeViolation($request->user(), $pending->violation);
+
         $appeal = $this->enforcement->decideAppeal(
-            AccountAppeal::findOrFail($id),
+            $pending,
             $request->user(),
             $validated['decision'],
             $validated['note'],
@@ -95,6 +102,11 @@ class AdminViolationController extends Controller
     public function log(Request $request): JsonResponse
     {
         $query = AccountActionLog::query();
+        // A municipal admin's log: actions on their municipality's business owners, and their own.
+        if (AdminScope::municipalityIds($request->user()) !== null) {
+            $owners = AdminScope::applyToUsers(User::whereHas('role', fn ($r) => $r->where('name', 'business_owner')), $request->user())->select('users.id');
+            $query->where(fn ($q) => $q->whereIn('user_id', $owners)->orWhere('admin_id', $request->user()->id));
+        }
 
         if ($request->filled('q')) {
             $search = $request->q;

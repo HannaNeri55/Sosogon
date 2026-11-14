@@ -21,9 +21,11 @@ import {
   FiShield,
   FiInbox,
   FiClipboard,
+  FiAlertTriangle,
 } from 'react-icons/fi'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
 import NotificationBell from '../components/notifications/NotificationBell'
+import useAdminScope from '../hooks/useAdminScope'
 
 const linkClass = ({ isActive }) =>
   `relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -52,9 +54,11 @@ const sidebarLinks = [
     label: 'Events',
   },
   {
+    // The home page's slides are the whole province's: provincial admins only.
     to: '/admin/hero-slides',
     icon: FiImage,
     label: 'Hero Slides',
+    provincialOnly: true,
   },
   {
     to: '/admin/announcements',
@@ -112,6 +116,8 @@ export default function AdminLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const scope = useAdminScope()
+  const links = sidebarLinks.filter((link) => !link.provincialOnly || scope.isProvincial)
 
   // The approvals group is open while one of its pages is showing; it can also be toggled.
   const inApprovals = isApprovalPath(pathname)
@@ -168,7 +174,7 @@ export default function AdminLayout() {
             <img src="/images/Logo.png" alt="" className="h-9 w-auto brightness-0 invert" />
             <div className="min-w-0">
               <p className="font-heading text-base font-bold leading-tight">STIM Admin</p>
-              <p className="text-white/60 text-xs mt-0.5 truncate">Tourism Office</p>
+              <p className="text-white/60 text-xs mt-0.5 truncate" title={scope.designation}>{scope.designation}</p>
             </div>
           </div>
 
@@ -184,7 +190,7 @@ export default function AdminLayout() {
 
         {/* Admin navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Admin">
-          {sidebarLinks.map((link) => [
+          {links.map((link) => [
             link.section && (
               <p key={`section-${link.section}`} className="px-3 pt-4 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40 first:pt-0">
                 {link.section}
@@ -310,13 +316,37 @@ export default function AdminLayout() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-700 font-semibold">
                 {user?.name?.charAt(0)?.toUpperCase() || 'A'}
               </span>
-              {user?.name}
+              <span className="flex flex-col leading-tight">
+                {user?.name}
+                <span className="text-xs font-normal text-gray-500">{scope.designation}</span>
+              </span>
             </span>
           </div>
         </header>
 
         {/* Page content */}
         <div className="p-4 md:p-8">
+          {scope.invalid && (
+            <div role="alert" className="mb-6 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+              <FiAlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">Admin access is blocked for this account</p>
+                <p className="mt-1">Its administrative scope isn't valid. Ask the system administrator to assign its scope.</p>
+              </div>
+            </div>
+          )}
+          {!scope.assigned && !scope.invalid && (
+            <div role="alert" className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <FiAlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">Your administrative scope hasn't been set up yet</p>
+                <p className="mt-1">
+                  This account isn't assigned to the province or to a municipality yet, so it still has full access to every
+                  municipality. Ask the system administrator to assign its scope.
+                </p>
+              </div>
+            </div>
+          )}
           <Outlet />
         </div>
       </div>

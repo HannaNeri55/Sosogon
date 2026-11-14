@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Rating;
 use App\Models\ReviewReport;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,8 @@ class AdminReviewReportController extends Controller
         $validated = $request->validate(['status' => ['nullable', Rule::in(['all', ...array_keys(ReviewReport::STATUSES)])]]);
         $status = $validated['status'] ?? 'pending';
 
-        $reports = ReviewReport::query()
+        // A municipal admin decides reports on reviews of their municipality's listings.
+        $reports = AdminScope::applyToRatings(ReviewReport::query(), $request->user(), 'rating')
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->with(['rating.user:id,name', 'rating.reply', 'rating.rateable:id,name', 'reporter:id,name', 'decider:id,name'])
             ->latest()
@@ -36,7 +38,7 @@ class AdminReviewReportController extends Controller
 
         $reports->getCollection()->each(fn (ReviewReport $report) => $report->rating?->setAttribute('listing_type', AdminReviewController::typeKey($report->rating->rateable_type)));
 
-        $counts = ReviewReport::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $counts = AdminScope::applyToRatings(ReviewReport::query(), $request->user(), 'rating')->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
         return response()->json($reports->toArray() + [
             'counts' => collect(ReviewReport::STATUSES)->map(fn ($label, $key) => (int) ($counts[$key] ?? 0)),
@@ -47,6 +49,7 @@ class AdminReviewReportController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $report = ReviewReport::with('rating.rateable')->findOrFail($id);
+        AdminScope::authorizeRating($request->user(), $report->rating);
         $validated = $request->validate([
             'status' => ['required', Rule::in(['reviewed', 'action_taken', 'dismissed'])],
             // Action and dismissal are explained to the owner who reported the review.
@@ -67,9 +70,10 @@ class AdminReviewReportController extends Controller
         return response()->json(['message' => 'Report updated.', 'report' => $report->fresh(['decider:id,name'])]);
     }
 
-    public function evidence(int $id): StreamedResponse
+    public function evidence(Request $request, int $id): StreamedResponse
     {
-        $report = ReviewReport::findOrFail($id);
+        $report = ReviewReport::with('rating.rateable')->findOrFail($id);
+        AdminScope::authorizeRating($request->user(), $report->rating);
         abort_unless($report->evidence_path && Storage::disk('local')->exists($report->evidence_path), 404, 'No evidence was attached.');
 
         return Storage::disk('local')->response($report->evidence_path, 'report-'.$report->id.'-evidence.'.pathinfo($report->evidence_path, PATHINFO_EXTENSION),
