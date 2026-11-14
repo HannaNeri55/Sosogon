@@ -35,7 +35,8 @@ export default function ManageEvents() {
   // A municipal admin manages their municipality's events and sees the province-wide ones
   // read-only; Featured events show across the province, so only provincial admins set it.
   const scope = useAdminScope()
-  // The selected workspace (?municipality=<id> or "province", so it survives a reload).
+  // The selected workspace (?municipality=<id> or "province", so it survives a reload and the
+  // browser's Back returns to the overview); none selected: the municipality overview.
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   // A new event starts in the workspace being viewed, when this admin manages it.
@@ -106,14 +107,19 @@ export default function ManageEvents() {
     const towns = (scope.isMunicipal ? (scope.municipality ? [scope.municipality] : []) : [...municipalities])
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((town) => ({ key: String(town.id), name: town.name, count: counts[town.id] || 0 }))
-    const province = { key: PROVINCE, name: 'Province-wide', count: counts[PROVINCE] || 0 }
+    const province = { key: PROVINCE, name: 'Province-wide', count: counts[PROVINCE] || 0, provinceWide: true }
     return scope.isMunicipal ? [...towns, province] : [province, ...towns]
   }, [items, municipalities, scope.isMunicipal, scope.municipality])
   const requested = searchParams.get('municipality')
-  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas[0]?.key ?? null
+  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas.length === 1 ? areas[0].key : null
   const selectedArea = areas.find((area) => area.key === selectedKey)
   const selectArea = (key) => {
-    setSearchParams((params) => { params.set('municipality', key); return params }, { replace: true })
+    setSearchParams((params) => { params.set('municipality', key); return params })
+    setSearch('')
+    setPage(1)
+  }
+  const showOverview = () => {
+    setSearchParams((params) => { params.delete('municipality'); return params })
     setSearch('')
     setPage(1)
   }
@@ -351,7 +357,7 @@ export default function ManageEvents() {
         </form>
       )}
 
-      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} noun="event">
+      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} onBack={showOverview} noun="event">
       {selectedArea && (
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
