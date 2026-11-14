@@ -103,7 +103,7 @@ export default function ItemReviewModal({ entry, tab, busy, onClose, onDecide, o
   const isChange = tab === 'changes'
   // Another office decides it (e.g. a municipality's own tourism office): view only.
   const viewOnly = entry.can_manage === false
-  const decidable = tab !== 'rejected' && !viewOnly
+  const decidable = (tab === 'new' || tab === 'changes') && !viewOnly
   const [rejecting, setRejecting] = useState(false)
   const [notes, setNotes] = useState('')
   const [notesError, setNotesError] = useState('')
@@ -155,7 +155,7 @@ export default function ItemReviewModal({ entry, tab, busy, onClose, onDecide, o
         </p>
       )}
 
-      {tab === 'rejected' && (
+      {(tab === 'rejected' || (tab === 'all' && row.status === 'rejected')) && (
         <div className="bg-red-50 text-red-800 rounded-lg p-3 mb-4 text-sm">
           <p className="font-semibold">Rejection reason</p>
           <p className="whitespace-pre-line wrap-anywhere">{row.admin_notes || 'No reason was recorded.'}</p>

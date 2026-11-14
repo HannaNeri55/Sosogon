@@ -450,11 +450,10 @@ class MunicipalAdminAccessTest extends TestCase
         $this->actingAs($this->bulanAdmin);
 
         $rows = collect($this->getJson($base)->assertOk()->json('data'))->keyBy('id');
-        $this->assertEqualsCanonicalizing([$bulan->id, $province->id], $rows->keys()->all(), 'Their own and the province-wide ones.');
+        $this->assertSame([$bulan->id], $rows->keys()->all(), 'Their own only: not the province-wide ones.');
         $this->assertTrue($rows[$bulan->id]['can_manage']);
-        $this->assertFalse($rows[$province->id]['can_manage']);
 
-        $this->getJson("{$base}/{$province->id}")->assertOk()->assertJsonPath('can_manage', false);
+        $this->getJson("{$base}/{$province->id}")->assertForbidden();
         $this->getJson("{$base}/{$matnog->id}")->assertForbidden();
         foreach ([$matnog, $province] as $event) {
             $this->putJson("{$base}/{$event->id}", ['title' => 'Renamed'])->assertForbidden();
@@ -487,8 +486,8 @@ class MunicipalAdminAccessTest extends TestCase
         $bulanId = $created->json('announcement.id');
         $this->assertSame($this->bulan, (int) $created->json('announcement.municipality_id'));
 
-        $this->assertEqualsCanonicalizing([$province->id, $bulanId], $this->getJson($base)->assertOk()->json('data.*.id'));
-        $this->getJson("{$base}/{$province->id}")->assertOk()->assertJsonPath('can_manage', false);
+        $this->assertSame([$bulanId], $this->getJson($base)->assertOk()->json('data.*.id'), 'Their own only: not the province-wide ones.');
+        $this->getJson("{$base}/{$province->id}")->assertForbidden();
         $this->getJson("{$base}/{$matnog->id}")->assertForbidden();
         foreach ([$province, $matnog] as $item) {
             $this->putJson("{$base}/{$item->id}", ['title' => 'Changed'])->assertForbidden();

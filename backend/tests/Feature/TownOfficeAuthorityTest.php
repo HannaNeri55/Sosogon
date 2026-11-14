@@ -360,4 +360,21 @@ class TownOfficeAuthorityTest extends TestCase
         $this->actingAs($this->provincial)->getJson("/api/v1/admin/users/{$this->bulanAdmin->id}/account")->assertOk()
             ->assertJsonPath('user.admin.scope', 'municipal')->assertJsonPath('user.admin.municipality.name', 'Bulan');
     }
+
+    public function test_the_offerings_queue_lists_every_item_behind_the_total(): void
+    {
+        $bulanInn = $this->publishedInn($this->bulan, 'Bulan Inn');
+        $matnogInn = $this->publishedInn($this->matnog, 'Matnog Inn');
+        foreach (['pending' => 'Suite', 'approved' => 'Twin', 'rejected' => 'Dorm'] as $status => $name) {
+            AccommodationRoom::forceCreate(['accommodation_id' => $bulanInn->id, 'name' => "Bulan {$name}", 'status' => $status]);
+        }
+        AccommodationRoom::forceCreate(['accommodation_id' => $matnogInn->id, 'name' => 'Matnog Suite', 'status' => 'approved']);
+
+        $all = $this->actingAs($this->bulanAdmin)->getJson('/api/v1/admin/item-reviews?tab=all')->assertOk();
+        $this->assertEqualsCanonicalizing(['Bulan Suite', 'Bulan Twin', 'Bulan Dorm'], $all->json('data.*.name'), 'Every status, Bulan only.');
+        $all->assertJsonPath('counts.total', 3)->assertJsonPath('total', 3);
+        $this->assertSame(['Bulan Suite'], $this->getJson('/api/v1/admin/item-reviews?tab=new')->json('data.*.name'));
+        $this->assertSame(['Bulan Dorm'], $this->getJson('/api/v1/admin/item-reviews?tab=rejected')->json('data.*.name'));
+        $this->getJson('/api/v1/admin/item-reviews?tab=approved')->assertUnprocessable();
+    }
 }

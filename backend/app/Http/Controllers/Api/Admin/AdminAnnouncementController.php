@@ -10,15 +10,15 @@ use Illuminate\Http\Request;
 
 /**
  * Announcements belong to a municipality, or to the whole province (no municipality). A
- * municipal admin manages their municipality's and reads the province-wide ones; those, like
- * every existing announcement, are the provincial admin's.
+ * municipal admin sees and manages their municipality's only; the province-wide ones are the
+ * provincial admin's.
  */
 class AdminAnnouncementController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
         $perPage = $this->perPage($request, 100, 200);
-        $page = AdminScope::applyWithProvinceWide(Announcement::query(), $request->user())
+        $page = AdminScope::apply(Announcement::query(), $request->user())
             ->with('municipality:id,name')->orderByDesc('created_at')->paginate($perPage);
         AdminScope::markManageable($page->getCollection(), $request->user());
 
@@ -45,10 +45,7 @@ class AdminAnnouncementController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $item = Announcement::with('municipality:id,name')->findOrFail($id);
-        // Province-wide announcements can be read by every admin.
-        if ($item->municipality_id !== null) {
-            AdminScope::authorizeRecordView($request->user(), $item);
-        }
+        AdminScope::authorizeRecordView($request->user(), $item);
         AdminScope::markManageable([$item], $request->user());
 
         return response()->json($item);

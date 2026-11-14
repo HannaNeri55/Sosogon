@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import Modal from '../../common/Modal'
 import { closeUserAccount, reactivateUser, setAdminAccess } from '../../../api/admin'
 import useFormErrors from '../../../hooks/useFormErrors'
+import { displayName } from '../../../utils/accountStates'
 import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
 const MODES = {
@@ -107,7 +108,7 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
   return (
     <Modal
       title={config.title}
-      subtitle={`${user.name} · ${user.email}`}
+      subtitle={`${displayName(user.name)} · ${user.email}`}
       onClose={onClose}
       busy={busy}
       footer={

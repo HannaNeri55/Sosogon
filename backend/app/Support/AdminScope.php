@@ -114,18 +114,6 @@ class AdminScope
     }
 
     /**
-     * For content that can be province-wide (events, announcements): the admin's municipalities
-     * plus the province-wide records (no municipality), which a municipal admin may read but not
-     * change.
-     */
-    public static function applyWithProvinceWide(QueryBuilder $query, User $admin, string $column = 'municipality_id'): QueryBuilder
-    {
-        $ids = self::municipalityIds($admin);
-
-        return $ids === null ? $query : $query->where(fn ($q) => $q->whereIn($column, $ids)->orWhereNull($column));
-    }
-
-    /**
      * The municipality a new record gets when the request names none: a municipal admin's own
      * (they can only add to it), otherwise null (province-wide, a provincial admin's choice).
      */
