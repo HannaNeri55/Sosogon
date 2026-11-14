@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { FiSearch, FiEdit2, FiTrash2, FiStar, FiImage, FiUpload, FiX, FiMapPin } from 'react-icons/fi'
 import { getAdminEvents, createEvent, updateEvent, updateEventRanking, deleteEvent, getMunicipalities } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -11,11 +12,20 @@ import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 import useAdminScope from '../../hooks/useAdminScope'
 import ManagedBy from '../../components/admin/ManagedBy'
+import MunicipalityWorkspace from '../../components/admin/MunicipalityWorkspace'
+import Pagination from '../../components/common/Pagination'
+import EmptyState from '../../components/common/EmptyState'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
   start_date: '', end_date: '', is_featured: false, status: 'published',
 }
+
+/** Events per page inside a municipality's workspace. */
+const PAGE_SIZE = 10
+
+/** The workspace of the events without a municipality. */
+const PROVINCE = 'province'
 
 // Same limits the server enforces (AdminEventController::IMAGE_RULE).
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -25,7 +35,16 @@ export default function ManageEvents() {
   // A municipal admin manages their municipality's events and sees the province-wide ones
   // read-only; Featured events show across the province, so only provincial admins set it.
   const scope = useAdminScope()
-  const blankForm = () => ({ ...EMPTY_FORM, municipality_id: scope.municipality ? String(scope.municipality.id) : '' })
+  // The selected workspace (?municipality=<id> or "province", so it survives a reload).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [page, setPage] = useState(1)
+  // A new event starts in the workspace being viewed, when this admin manages it.
+  const blankForm = () => ({
+    ...EMPTY_FORM,
+    municipality_id: scope.municipality
+      ? String(scope.municipality.id)
+      : selectedKey && selectedKey !== PROVINCE && scope.canManage(selectedKey) ? selectedKey : '',
+  })
   const [items, setItems] = useState([])
   const [municipalities, setMunicipalities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -78,16 +97,33 @@ export default function ManageEvents() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
-  // The list grouped by each event's municipality: province-wide events first, then municipalities in name order.
-  const groups = useMemo(() => {
-    const byTown = new Map()
-    for (const item of filteredItems) {
-      const key = item.municipality_id ?? 'province'
-      if (!byTown.has(key)) byTown.set(key, { key, name: item.municipality?.name || 'Province-wide', provinceWide: item.municipality_id == null, items: [] })
-      byTown.get(key).items.push(item)
-    }
-    return [...byTown.values()].sort((a, b) => Number(b.provinceWide) - Number(a.provinceWide) || a.name.localeCompare(b.name))
-  }, [filteredItems])
+  // One workspace per municipality plus the province-wide events, each with its event count. A
+  // provincial admin starts at the province-wide events; a municipal admin at their municipality.
+  const keyOf = (item) => (item.municipality_id == null ? PROVINCE : String(item.municipality_id))
+  const areas = useMemo(() => {
+    const counts = {}
+    items.forEach((item) => { counts[keyOf(item)] = (counts[keyOf(item)] || 0) + 1 })
+    const towns = (scope.isMunicipal ? (scope.municipality ? [scope.municipality] : []) : [...municipalities])
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((town) => ({ key: String(town.id), name: town.name, count: counts[town.id] || 0 }))
+    const province = { key: PROVINCE, name: 'Province-wide', count: counts[PROVINCE] || 0 }
+    return scope.isMunicipal ? [...towns, province] : [province, ...towns]
+  }, [items, municipalities, scope.isMunicipal, scope.municipality])
+  const requested = searchParams.get('municipality')
+  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas[0]?.key ?? null
+  const selectedArea = areas.find((area) => area.key === selectedKey)
+  const selectArea = (key) => {
+    setSearchParams((params) => { params.set('municipality', key); return params }, { replace: true })
+    setSearch('')
+    setPage(1)
+  }
+
+  // The selected workspace's events matching the search, a page at a time.
+  const townItems = filteredItems.filter((item) => keyOf(item) === selectedKey)
+  const lastPage = Math.max(1, Math.ceil(townItems.length / PAGE_SIZE))
+  const currentPage = Math.min(page, lastPage)
+  const pageItems = townItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const canAddHere = selectedKey === PROVINCE ? scope.isProvincial : Boolean(selectedKey) && scope.canManage(selectedKey)
 
 
   const loadData = async () => {
@@ -156,6 +192,9 @@ export default function ManageEvents() {
       } else {
         await createEvent(payload)
         toast.success('Event created')
+        // Open the workspace it was added to.
+        const addedTo = formData.municipality_id ? String(formData.municipality_id) : PROVINCE
+        if (addedTo !== selectedKey) selectArea(addedTo)
       }
       closeForm()
       loadData()
@@ -312,43 +351,57 @@ export default function ManageEvents() {
         </form>
       )}
 
-      <div className="relative mb-5 max-w-sm">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-        <input
-          className="input-field pl-9"
-          placeholder="Search events..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} noun="event">
+      {selectedArea && (
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-xl font-heading font-bold text-gray-900">
+              <FiMapPin size={18} className="text-primary-600" aria-hidden="true" />
+              {selectedArea.name}
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500">{selectedArea.count} event{selectedArea.count === 1 ? '' : 's'}</p>
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="search"
+              className="input-field pl-9"
+              placeholder={selectedKey === PROVINCE ? 'Search province-wide events' : `Search ${selectedArea.name} events`}
+              aria-label={selectedKey === PROVINCE ? 'Search province-wide events' : `Search ${selectedArea.name} events`}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            />
+          </div>
+        </div>
+      )}
 
+      {pageItems.length === 0 ? (
+        <EmptyState
+          icon={FiMapPin}
+          title={search.trim()
+            ? `No events here match “${search.trim()}”`
+            : selectedKey === PROVINCE ? 'No province-wide events yet' : `No events in ${selectedArea?.name ?? 'this municipality'} yet`}
+        >
+          {!search.trim() && canAddHere && 'Use Add Event to add the first one.'}
+        </EmptyState>
+      ) : (
       <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
           <table className="table-cards w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Event</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Dates</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Featured</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Event</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Dates</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Featured</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
               </tr>
             </thead>
-            {groups.map((group) => (
-            <tbody key={group.key} className="border-b border-gray-200 last:border-b-0">
-              <tr className="bg-gray-50/70">
-                <th scope="colgroup" colSpan={5} className="px-6 py-2.5 text-left">
-                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <FiMapPin size={14} className="text-primary-600" aria-hidden="true" />
-                    {group.name}
-                    <span className="text-xs font-medium text-gray-500">{group.items.length} event{group.items.length === 1 ? '' : 's'}</span>
-                  </span>
-                </th>
-              </tr>
-              {group.items.map((item) => (
+            <tbody>
+              {pageItems.map((item) => (
                 <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {item.image_path ? (
                         <img src={getImageUrl(item.image_path)} alt="" className="h-10 w-14 shrink-0 rounded-md object-cover bg-gray-100" loading="lazy" />
@@ -357,41 +410,41 @@ export default function ManageEvents() {
                           <FiImage size={15} aria-hidden="true" />
                         </span>
                       )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{item.municipality?.name || 'Province-wide'}</p>
-                      </div>
+                      <p className="min-w-0 text-sm font-medium text-gray-900">{item.title}</p>
                     </div>
                   </td>
-                  <td data-label="Dates" className="px-6 py-4 text-sm text-gray-600">
+                  <td data-label="Dates" className="px-4 py-4 text-sm text-gray-600">
                     {/* Each date stays whole; a range may wrap only between the two dates. */}
                     <span className="whitespace-nowrap">{item.start_date}</span>
                     {item.end_date && item.end_date !== item.start_date && (
                       <> <span className="whitespace-nowrap">{`\u2013 ${item.end_date}`}</span></>
                     )}
                   </td>
-                  <td data-label="Status" className="px-6 py-4">
+                  <td data-label="Status" className="px-4 py-4">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                       {item.status}
                     </span>
                   </td>
-                  <td data-label="Featured" className="px-6 py-4 text-sm text-gray-600">
-                    {item.is_featured ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '\u2014'}
+                  <td data-label="Featured" className="px-4 py-4 text-sm text-gray-600">
+                    {item.can_manage === false && item.managed_by && scope.isProvincial ? (
+                      // Managed by its municipality's own tourism office: Featured stays with the province.
+                      <button
+                        type="button"
+                        onClick={() => toggleFeatured(item)}
+                        aria-pressed={Boolean(item.is_featured)}
+                        aria-label={`${item.is_featured ? 'Unfeature' : 'Feature'} ${item.title}`}
+                        title={item.is_featured ? 'Featured. Click to unfeature.' : 'Not featured. Click to feature.'}
+                        className="-m-1.5 rounded-lg p-1.5 text-gray-400 hover:bg-accent-50 hover:text-yellow-500"
+                      >
+                        <FiStar size={15} className={item.is_featured ? 'text-yellow-500 fill-yellow-500' : ''} />
+                      </button>
+                    ) : item.is_featured ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '\u2014'}
                   </td>
-                  <td data-actions className="px-6 py-4">
+                  <td data-actions className="px-4 py-4">
                     {item.can_manage === false ? (
-                      item.managed_by ? (
-                        // Managed by its municipality's own tourism office: no edit or delete here; a
-                        // provincial admin keeps Featured.
-                        scope.isProvincial && (
-                          <div className="flex justify-end">
-                            <button type="button" onClick={() => toggleFeatured(item)} className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700">
-                              <FiStar size={13} className={item.is_featured ? 'text-yellow-500 fill-yellow-500' : ''} />
-                              {item.is_featured ? 'Unfeature' : 'Feature'}
-                            </button>
-                          </div>
-                        )
-                      ) : (
+                      // Managed by its municipality's own tourism office: no edit or delete here (a
+                      // provincial admin keeps Featured, in its column).
+                      item.managed_by ? null : (
                         // A province-wide event, for a municipal admin.
                         <ManagedBy className="ml-auto" />
                       )
@@ -409,10 +462,12 @@ export default function ManageEvents() {
                 </tr>
               ))}
             </tbody>
-            ))}
           </table>
         </div>
       </div>
+      )}
+      <Pagination currentPage={currentPage} lastPage={lastPage} onPageChange={setPage} />
+      </MunicipalityWorkspace>
     </div>
   )
 }
