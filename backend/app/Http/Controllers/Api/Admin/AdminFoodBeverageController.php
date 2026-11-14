@@ -53,9 +53,10 @@ class AdminFoodBeverageController extends Controller
             $this->perPage($request, 100, 200)
         );
 
-        return response()->json(
-            $query->orderByDesc('created_at')->paginate($perPage)
-        );
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        AdminScope::markManageable($page->getCollection(), $request->user());
+
+        return response()->json($page);
     }
 
     public function store(
@@ -150,7 +151,8 @@ class AdminFoodBeverageController extends Controller
                 ])
                 ->latest('id'),
         ])->findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $item);
+        AdminScope::authorizeRecordView($request->user(), $item);
+        AdminScope::markManageable([$item], $request->user());
 
         return response()->json($item);
     }
@@ -161,7 +163,11 @@ class AdminFoodBeverageController extends Controller
         ImageOptimizationService $images
     ): JsonResponse {
         $item = FoodBeverage::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $item);
+        // A revision review is authorized in reviewRevision(): moving a listing to another
+        // municipality is the provincial administrator's decision (AdminScope::authorizeRevision).
+        if (! $request->filled('revision_action')) {
+            AdminScope::authorizeRecord($request->user(), $item);
+        }
 
         $validated = $request->validate([
             'revision_action' => 'sometimes|required|in:approve,needs_revision',
@@ -291,7 +297,7 @@ class AdminFoodBeverageController extends Controller
         FoodBeverage $item,
         array $validated
     ): JsonResponse {
-        AdminScope::authorizeRecord($request->user(), $item);
+        AdminScope::authorizeRevision($request->user(), $item, $item->revisions()->where('status', 'submitted')->latest('id')->first());
         if ($item->status !== 'approved') {
             throw ValidationException::withMessages([
                 'revision_action' => 'Revision review is only available for published listings.',

@@ -54,9 +54,10 @@ class AdminAccommodationController extends Controller
             $this->perPage($request, 100, 200)
         );
 
-        return response()->json(
-            $query->orderByDesc('created_at')->paginate($perPage)
-        );
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        AdminScope::markManageable($page->getCollection(), $request->user());
+
+        return response()->json($page);
     }
 
     public function store(
@@ -160,7 +161,8 @@ class AdminAccommodationController extends Controller
                 ])
                 ->latest('id'),
         ])->findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $accommodation);
+        AdminScope::authorizeRecordView($request->user(), $accommodation);
+        AdminScope::markManageable([$accommodation], $request->user());
 
         return response()->json($accommodation);
     }
@@ -171,7 +173,11 @@ class AdminAccommodationController extends Controller
         ImageOptimizationService $images
     ): JsonResponse {
         $accommodation = Accommodation::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $accommodation);
+        // A revision review is authorized in reviewRevision(): moving a listing to another
+        // municipality is the provincial administrator's decision (AdminScope::authorizeRevision).
+        if (! $request->filled('revision_action')) {
+            AdminScope::authorizeRecord($request->user(), $accommodation);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -328,7 +334,7 @@ class AdminAccommodationController extends Controller
         array $validated,
         Request $request
     ): JsonResponse {
-        AdminScope::authorizeRecord($request->user(), $accommodation);
+        AdminScope::authorizeRevision($request->user(), $accommodation, $accommodation->revisions()->where('status', 'submitted')->latest('id')->first());
         if ($accommodation->status !== 'approved') {
             throw ValidationException::withMessages([
                 'revision_action' => 'Revision review is only available for published accommodations.',

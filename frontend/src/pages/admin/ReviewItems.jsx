@@ -1,7 +1,7 @@
 // frontend/src/pages/admin/ReviewItems.jsx
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { FiAlertTriangle, FiCheck, FiClock, FiEdit3, FiInbox, FiLayers, FiRefreshCw, FiSearch, FiX, FiXCircle } from 'react-icons/fi'
+import { FiAlertTriangle, FiCheck, FiClock, FiEdit3, FiInbox, FiLayers, FiLock, FiRefreshCw, FiSearch, FiX, FiXCircle } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { bulkReviewItems, getItemReviews, updateAccommodationRoom } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -135,10 +135,12 @@ export default function ReviewItems() {
     return next
   })
 
+  // Items another office decides (e.g. a municipality's own tourism office) can't be selected.
+  const selectable = rows.filter((entry) => entry.can_manage !== false)
   const togglePage = () => setSelected((current) => {
     const next = new Map(current)
-    if (pageSelected === rows.length) rows.forEach((entry) => next.delete(entry.key))
-    else rows.forEach((entry) => next.set(entry.key, entry))
+    if (selectable.length > 0 && selectable.every((entry) => next.has(entry.key))) selectable.forEach((entry) => next.delete(entry.key))
+    else selectable.forEach((entry) => next.set(entry.key, entry))
     return next
   })
 
@@ -323,7 +325,7 @@ export default function ReviewItems() {
           <table className={`w-full ${loading ? 'opacity-70' : ''} transition-opacity`}>
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                {!isRejected && <th scope="col" className="pl-3 sm:pl-4 pr-1 py-2.5 w-8"><SelectAll checked={rows.length > 0 && pageSelected === rows.length} indeterminate={pageSelected > 0 && pageSelected < rows.length} disabled={rows.length === 0} onChange={togglePage} /></th>}
+                {!isRejected && <th scope="col" className="pl-3 sm:pl-4 pr-1 py-2.5 w-8"><SelectAll checked={selectable.length > 0 && pageSelected === selectable.length} indeterminate={pageSelected > 0 && pageSelected < selectable.length} disabled={selectable.length === 0} onChange={togglePage} /></th>}
                 <th scope="col" className={`${TH} ${isRejected ? 'pl-3 sm:pl-4' : ''}`}>Item Name</th>
                 <th scope="col" className={`${TH} hidden md:table-cell`}>Type</th>
                 <th scope="col" className={`${TH} hidden md:table-cell`}>Business</th>
@@ -356,7 +358,11 @@ export default function ReviewItems() {
                   <tr key={entry.key} className={`border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${isSelected ? 'bg-primary-50/60' : 'hover:bg-primary-50/40'}`}>
                     {!isRejected && (
                       <td className="pl-3 sm:pl-4 pr-1 py-2 align-top">
-                        <input type="checkbox" aria-label={`Select ${entry.name}`} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600" checked={isSelected} onChange={() => toggleRow(entry)} />
+                        {entry.can_manage === false ? (
+                          <FiLock size={13} className="mt-1 text-gray-400" role="img" aria-label={`Managed by ${entry.managed_by || 'another office'}`} title={`Managed by ${entry.managed_by || 'another office'} · view only`} />
+                        ) : (
+                          <input type="checkbox" aria-label={`Select ${entry.name}`} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600" checked={isSelected} onChange={() => toggleRow(entry)} />
+                        )}
                       </td>
                     )}
                     <td className={`${TD} ${isRejected ? 'pl-3 sm:pl-4' : ''}`}>

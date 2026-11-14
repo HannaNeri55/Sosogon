@@ -10,6 +10,7 @@ import { confirmDialog } from '../../utils/dialogs'
 import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 import useAdminScope from '../../hooks/useAdminScope'
+import ManagedBy from '../../components/admin/ManagedBy'
 
 // municipality_id: '' is province-wide.
 const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published', municipality_id: '' }
@@ -205,7 +206,7 @@ export default function ManageAnnouncements() {
                   </td>
                   <td data-actions className="px-6 py-4">
                     {item.can_manage === false ? (
-                      <p className="text-right text-xs text-gray-400">Managed by the provincial administrator</p>
+                      <ManagedBy office={item.managed_by} className="ml-auto" />
                     ) : (
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">

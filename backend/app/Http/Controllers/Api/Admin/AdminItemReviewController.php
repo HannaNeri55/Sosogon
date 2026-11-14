@@ -262,6 +262,8 @@ class AdminItemReviewController extends Controller
             $records[$kind] = $models->keyBy('id');
         }
 
+        $admin = request()->user();
+
         return $page->through(fn ($row) => [
             'key' => "{$row->kind}-{$row->item_id}",
             'kind' => $row->kind,
@@ -270,6 +272,8 @@ class AdminItemReviewController extends Controller
             'business_key' => $row->business_id ? "{$row->kind}:{$row->business_id}" : null,
             'business_name' => $row->business_name,
             'submitted_on' => $row->submitted_on,
+            // Whether this admin decides it, or which municipal office does (AdminScope::itemAccess).
+            ...AdminScope::itemAccess($admin, $records[$row->kind][$row->item_id] ?? null),
             'row' => $records[$row->kind][$row->item_id] ?? null,
         ]);
     }

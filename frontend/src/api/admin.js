@@ -30,6 +30,15 @@ export const updateDestination = async (id, formData) => {
   return response.data
 }
 
+/**
+ * Featured and Tourism priority only: the provincial administrator's ranking, for any
+ * municipality's destination (including one its own office manages).
+ */
+export const updateDestinationRanking = async (id, ranking) => {
+  const response = await api.patch(`/admin/destinations/${id}/ranking`, ranking)
+  return response.data
+}
+
 export const deleteDestination = async (id) => {
   const response = await api.delete(`/admin/destinations/${id}`)
   return response.data
@@ -419,6 +428,12 @@ export const reactivateUser = async (id, reason) => {
   return response.data
 }
 
+/** Deactivate or reactivate a municipal administrator's access (provincial admins only); `action` is 'deactivate' or 'reactivate'. */
+export const setAdminAccess = async (id, action, reason) => {
+  const response = await api.post(`/admin/users/${id}/admin-access`, { action, reason })
+  return response.data
+}
+
 export const closeUserAccount = async (id, data) => {
   const response = await api.post(`/admin/users/${id}/close`, data)
   return response.data
@@ -651,6 +666,12 @@ export const updateEvent = async (id, formData) => {
   const response = await api.post(`/admin/events/${id}`, formData, {
     headers: { 'Content-Type': undefined },
   })
+  return response.data
+}
+
+/** Featured only: the provincial administrator's ranking, for any municipality's event. */
+export const updateEventRanking = async (id, isFeatured) => {
+  const response = await api.patch(`/admin/events/${id}/ranking`, { is_featured: isFeatured })
   return response.data
 }
 

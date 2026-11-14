@@ -8,6 +8,7 @@ import Modal from '../../common/Modal'
 import Pagination from '../../common/Pagination'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import ReviewContent, { Badge } from './ReviewContent'
+import ManagedBy from '../ManagedBy'
 import { REPORT_STATUS } from './reviewLabels'
 
 const STATUS_TABS = ['pending', 'reviewed', 'action_taken', 'dismissed', 'all']
@@ -162,7 +163,9 @@ export default function ReviewReportsPanel({ onChange }) {
                       </p>
                     )}
 
-                    {report.rating && (
+                    {/* Another office decides it (e.g. a municipality's own tourism office): view only. */}
+                    {report.rating && report.can_manage === false && <ManagedBy office={report.managed_by} className="mt-4" />}
+                    {report.rating && report.can_manage !== false && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {report.status === 'pending' && (
                           <button type="button" disabled={saving} onClick={() => decide(report, 'reviewed')} className="btn-secondary py-2 text-sm">

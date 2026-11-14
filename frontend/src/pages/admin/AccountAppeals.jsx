@@ -9,6 +9,7 @@ import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
 import StatusPill from '../../components/account/StatusPill'
 import ViolationCard from '../../components/admin/accounts/ViolationCard'
+import ManagedBy from '../../components/admin/ManagedBy'
 import { openPrivateFile } from '../../utils/privateFile'
 import { APPEAL_STATUSES, formatDateTime, roleLabel } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
@@ -26,7 +27,9 @@ function DecisionModal({ appeal, onClose, onDone }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState({})
-  const pending = appeal.status === 'pending'
+  // Another office decides it (e.g. a municipality's own tourism office): view only.
+  const viewOnly = appeal.can_manage === false
+  const pending = appeal.status === 'pending' && !viewOnly
 
   const submit = async () => {
     const found = {
@@ -98,7 +101,9 @@ function DecisionModal({ appeal, onClose, onDone }) {
             </div>
           </div>
 
-          {pending ? (
+          {viewOnly && appeal.status === 'pending' ? (
+            <ManagedBy office={appeal.managed_by} className="self-start" />
+          ) : pending ? (
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Your decision</h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -212,7 +217,7 @@ export default function AccountAppeals() {
                     </div>
                     <span className="flex items-center gap-3 shrink-0">
                       <StatusPill value={appeal.status} map={APPEAL_STATUSES} />
-                      <span className="text-sm font-semibold text-primary-700">{appeal.status === 'pending' ? 'Review' : 'View'}</span>
+                      <span className="text-sm font-semibold text-primary-700">{appeal.status === 'pending' && appeal.can_manage !== false ? 'Review' : 'View'}</span>
                     </span>
                   </button>
                 </li>

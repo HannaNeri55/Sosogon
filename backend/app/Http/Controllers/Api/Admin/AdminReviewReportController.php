@@ -31,12 +31,16 @@ class AdminReviewReportController extends Controller
         // A municipal admin decides reports on reviews of their municipality's listings.
         $reports = AdminScope::applyToRatings(ReviewReport::query(), $request->user(), 'rating')
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->with(['rating.user:id,name', 'rating.reply', 'rating.rateable:id,name', 'reporter:id,name', 'decider:id,name'])
+            ->with(['rating.user:id,name', 'rating.reply', 'rating.rateable:id,name,municipality_id', 'reporter:id,name', 'decider:id,name'])
             ->latest()
             ->orderByDesc('id')
             ->paginate(10);
 
-        $reports->getCollection()->each(fn (ReviewReport $report) => $report->rating?->setAttribute('listing_type', AdminReviewController::typeKey($report->rating->rateable_type)));
+        $reports->getCollection()->each(function (ReviewReport $report) use ($request) {
+            $report->rating?->setAttribute('listing_type', AdminReviewController::typeKey($report->rating->rateable_type));
+            // Whether this admin decides the report, or which municipal office does.
+            $report->forceFill(AdminScope::itemAccess($request->user(), $report->rating?->rateable));
+        });
 
         $counts = AdminScope::applyToRatings(ReviewReport::query(), $request->user(), 'rating')->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
@@ -73,7 +77,7 @@ class AdminReviewReportController extends Controller
     public function evidence(Request $request, int $id): StreamedResponse
     {
         $report = ReviewReport::with('rating.rateable')->findOrFail($id);
-        AdminScope::authorizeRating($request->user(), $report->rating);
+        AdminScope::authorizeRatingView($request->user(), $report->rating);
         abort_unless($report->evidence_path && Storage::disk('local')->exists($report->evidence_path), 404, 'No evidence was attached.');
 
         return Storage::disk('local')->response($report->evidence_path, 'report-'.$report->id.'-evidence.'.pathinfo($report->evidence_path, PATHINFO_EXTENSION),

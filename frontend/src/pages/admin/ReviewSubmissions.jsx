@@ -12,6 +12,7 @@ import {
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import SampleBadge from '../../components/common/SampleBadge'
 import SubmissionReviewModal from '../../components/admin/SubmissionReviewModal'
+import ManagedBy from '../../components/admin/ManagedBy'
 import { STATUS_COLORS } from '../../utils/constants'
 import { daysUntil, formatShortDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -185,6 +186,8 @@ export default function ReviewSubmissions() {
         <div className="space-y-4">
           {filteredItems.map((item) => {
             const isApproved = item.status === 'approved'
+            // Another office decides it (e.g. a municipality's own tourism office): view only.
+            const viewOnly = item.can_manage === false
             const left = daysUntil(item.warning_deadline)
             const panelOpen = panel?.id === item.id
 
@@ -226,9 +229,11 @@ export default function ReviewSubmissions() {
                           Warned on {formatShortDate(item.warned_at)} &middot; deadline {formatShortDate(item.warning_deadline)}{' '}
                           <strong>({left > 0 ? `${left} day${left === 1 ? '' : 's'} left` : 'notice period ended'})</strong>
                         </span>
-                        <button onClick={() => handleClearWarning(item)} className="text-amber-700 hover:text-amber-900 underline font-medium">
-                          Clear warning
-                        </button>
+                        {!viewOnly && (
+                          <button onClick={() => handleClearWarning(item)} className="text-amber-700 hover:text-amber-900 underline font-medium">
+                            Clear warning
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -244,14 +249,15 @@ export default function ReviewSubmissions() {
                     <button
                       onClick={() => setReviewing(item)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        item.status === 'pending'
+                        item.status === 'pending' && !viewOnly
                           ? 'bg-primary-500 text-white hover:bg-primary-600'
                           : 'bg-white border border-gray-200 text-gray-600 hover:border-primary-300'
                       }`}
                     >
-                      <FiEye size={15} /> {item.status === 'pending' ? 'Review' : 'View details'}
+                      <FiEye size={15} /> {item.status === 'pending' && !viewOnly ? 'Review' : 'View details'}
                     </button>
-                    {isApproved && !panelOpen && (
+                    {viewOnly && <ManagedBy office={item.managed_by} className="basis-full" />}
+                    {isApproved && !viewOnly && !panelOpen && (
                       <>
                         <button
                           onClick={() => openPanel(item.id, 'warn')}

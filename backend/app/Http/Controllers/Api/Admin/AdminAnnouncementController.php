@@ -47,7 +47,7 @@ class AdminAnnouncementController extends Controller
         $item = Announcement::with('municipality:id,name')->findOrFail($id);
         // Province-wide announcements can be read by every admin.
         if ($item->municipality_id !== null) {
-            AdminScope::authorizeRecord($request->user(), $item);
+            AdminScope::authorizeRecordView($request->user(), $item);
         }
         AdminScope::markManageable([$item], $request->user());
 

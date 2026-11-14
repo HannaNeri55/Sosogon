@@ -144,7 +144,8 @@ class AdminRetailProductController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $item = RetailProduct::with(['municipality', 'barangay', 'images'])->findOrFail($id);
-        AdminScope::authorizeItem($request->user(), $item);
+        AdminScope::authorizeItemView($request->user(), $item);
+        $item->forceFill(AdminScope::itemAccess($request->user(), $item));
 
         return response()->json($item);
     }

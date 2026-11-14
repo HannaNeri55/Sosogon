@@ -39,7 +39,10 @@ class AdminDestinationController extends Controller
 
         $perPage = $this->perPage($request, 100, 200);
 
-        return response()->json($query->orderByDesc('created_at')->paginate($perPage));
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        AdminScope::markManageable($page->getCollection(), $request->user());
+
+        return response()->json($page);
     }
 
     public function store(Request $request, ImageOptimizationService $images): JsonResponse
@@ -178,7 +181,8 @@ class AdminDestinationController extends Controller
             'amenities',
             'activities',
         ])->findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $destination);
+        AdminScope::authorizeRecordView($request->user(), $destination);
+        AdminScope::markManageable([$destination], $request->user());
 
         return response()->json($destination);
     }
@@ -364,6 +368,22 @@ class AdminDestinationController extends Controller
         ]);
     }
 
+    /**
+     * Featured and Tourism priority only (the admin.provincial route): the provincial
+     * administrator's ranking of places across the province, for any municipality's destination,
+     * including one managed by its own municipal tourism office.
+     */
+    public function updateRanking(Request $request, int $id): JsonResponse
+    {
+        $destination = Destination::findOrFail($id);
+        $validated = $request->validate([
+            'is_featured' => 'sometimes|boolean',
+            'tourism_priority' => 'sometimes|nullable|in:'.implode(',', Destination::PRIORITIES),
+        ]);
+        $destination->update($validated);
+
+        return response()->json(['message' => 'Destination ranking updated.', 'destination' => $destination->fresh('municipality')]);
+    }
 
     public function setCoverImage(Request $request, int $id, int $imageId): JsonResponse
     {

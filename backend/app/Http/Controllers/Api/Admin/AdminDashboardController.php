@@ -10,6 +10,7 @@ use App\Models\BusinessSubmission;
 use App\Models\Destination;
 use App\Models\Event;
 use App\Models\FoodBeverage;
+use App\Models\Municipality;
 use App\Models\PageView;
 use App\Models\RetailProduct;
 use App\Models\User;
@@ -20,7 +21,8 @@ use Illuminate\Http\Request;
 /**
  * The admin dashboard. A municipal admin's figures are their municipality's: its listings, events,
  * submissions, the accounts they work with (AdminScope::applyToUsers), and the page views of its
- * listings' pages; a provincial admin's are the whole province's, as before.
+ * listings' pages; a provincial admin's are the whole province's, except the pending submissions,
+ * which count only those waiting on them (not a municipality's own office's).
  */
 class AdminDashboardController extends Controller
 {
@@ -37,13 +39,14 @@ class AdminDashboardController extends Controller
             'total_retail_products' => AdminScope::applyToProducts(RetailProduct::approved(), $admin)->count(),
             'total_events' => AdminScope::apply(Event::published(), $admin)->count(),
             'total_activities' => AdminScope::applyThrough(Activity::query(), $admin, 'destination')->count(),
-            'pending_submissions' => AdminScope::apply(BusinessSubmission::pending(), $admin)->count(),
+            // Waiting on this admin: a provincial admin's leave out the municipalities with their own office.
+            'pending_submissions' => AdminScope::applyManageable(BusinessSubmission::pending(), $admin)->count(),
             'total_users' => AdminScope::applyToUsers(User::query(), $admin)->count(),
             // Page views of the public site this month (Sorsogon calendar); see PageViewController.
             'monthly_views' => PageView::totalSince(now(config('app.local_timezone'))->startOfMonth()->toDateString(), $paths),
         ];
 
-        $pendingSubmissions = AdminScope::apply(BusinessSubmission::pending(), $admin)
+        $pendingSubmissions = AdminScope::applyManageable(BusinessSubmission::pending(), $admin)
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(5)
@@ -66,6 +69,9 @@ class AdminDashboardController extends Controller
             'pending_submissions' => $pendingSubmissions,
             'recent_activity' => $recentActivity,
             'visitor_trend' => $visitorTrend,
+            // For a provincial admin: the municipalities whose own tourism office manages them.
+            'own_offices' => $municipal ? [] : Municipality::whereIn('id', AdminScope::townsWithOwnOffice())->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Municipality $town) => ['id' => $town->id, 'name' => $town->name, 'office' => AdminScope::officeName($town->id)])->values(),
         ]);
     }
 }

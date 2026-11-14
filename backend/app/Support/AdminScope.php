@@ -9,6 +9,7 @@ use App\Models\Destination;
 use App\Models\Event;
 use App\Models\FoodBeverage;
 use App\Models\MenuItem;
+use App\Models\Municipality;
 use App\Models\Rating;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
@@ -21,11 +22,16 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Which municipalities an admin may manage, in one place for every admin endpoint.
  *
- *  - Provincial admins (users.admin_scope = 'provincial', or not assigned yet) manage every
- *    municipality and the province-wide records (events and announcements without one, hero
- *    slides).
  *  - Municipal admins ('municipal') manage the records of users.municipality_id only. Anything
  *    else answers 403 Forbidden.
+ *  - A municipality with its own tourism office (an active municipal admin) is managed by that
+ *    office alone. Provincial admins (users.admin_scope = 'provincial', or not assigned yet) see
+ *    it but don't change it, except for the province's own decisions: Featured and Tourism
+ *    priority, and moving a listing to another municipality.
+ *  - Provincial admins manage the province-wide records (events and announcements without a
+ *    municipality, hero slides) and every municipality without an office of its own; such a
+ *    municipality passes to its office as soon as it gets an active municipal admin, and back
+ *    when it no longer has one.
  *  - Any other admin_scope value is invalid and grants nothing (fail-closed): such an account is
  *    refused by the admin.scope middleware, and every check here treats it as managing nothing.
  *
@@ -38,8 +44,55 @@ class AdminScope
     public const RATEABLE_TYPES = [Destination::class, Accommodation::class, FoodBeverage::class, RetailShop::class, RetailProduct::class];
 
     /**
-     * The municipality ids an admin manages: null for all of them, an empty list for none
-     * (a municipal admin whose municipality isn't set).
+     * The municipalities with their own tourism office: an active municipal admin is assigned to
+     * them (not suspended, deactivated, closed or pending). Remembered for the rest of an HTTP
+     * request; outside one (commands, tests calling it directly) it is read each time.
+     *
+     * @return array<int, int>
+     */
+    public static function townsWithOwnOffice(): array
+    {
+        $request = request();
+        if ($request->route() !== null && $request->attributes->has('admin_scope.own_offices')) {
+            return $request->attributes->get('admin_scope.own_offices');
+        }
+
+        $towns = self::activeMunicipalAdmins()->distinct()->pluck('municipality_id')
+            ->map(fn ($id) => (int) $id)->values()->all();
+        if ($request->route() !== null) {
+            $request->attributes->set('admin_scope.own_offices', $towns);
+        }
+
+        return $towns;
+    }
+
+    /** Drops the remembered townsWithOwnOffice(), e.g. after an account was saved (see User::booted). */
+    public static function forgetOwnOffices(): void
+    {
+        request()->attributes->remove('admin_scope.own_offices');
+    }
+
+    public static function hasOwnOffice(?int $municipalityId): bool
+    {
+        return $municipalityId !== null && in_array($municipalityId, self::townsWithOwnOffice(), true);
+    }
+
+    /** Municipal admins who can sign in now, with their municipality set. */
+    private static function activeMunicipalAdmins(): Builder
+    {
+        return User::where('role_id', Role::where('name', 'admin')->value('id'))
+            ->where('admin_scope', User::ADMIN_SCOPE_MUNICIPAL)
+            ->whereNotNull('municipality_id')
+            ->whereNull('closed_at')
+            ->where(fn ($q) => $q->where('status', 'active')
+                // A temporary suspension that has ended (not yet written back) no longer restricts.
+                ->orWhere(fn ($s) => $s->where('status', 'suspended')->whereNotNull('suspended_until')->where('suspended_until', '<=', now())));
+    }
+
+    /**
+     * The municipality ids an admin sees: null for all of them, an empty list for none (a
+     * municipal admin whose municipality isn't set). Lists, reports and searches use this; a
+     * change to a record also needs managesMunicipality() (see authorize()).
      *
      * @return array<int, int>|null
      */
@@ -85,13 +138,86 @@ class AdminScope
         return $admin->isMunicipalAdmin() && $admin->municipality_id ? (int) $admin->municipality_id : null;
     }
 
-    /** Marks each record with can_manage, so the admin screens can show province-wide items read-only. */
+    /**
+     * Marks each record with can_manage and managed_by (see mark()), so the admin screens can
+     * show province-wide items, and a provincial admin a municipality's own office's, read-only.
+     */
     public static function markManageable(iterable $records, User $admin, string $column = 'municipality_id'): void
     {
         foreach ($records as $record) {
-            $town = $record->getAttribute($column);
-            $record->setAttribute('can_manage', $admin->managesMunicipality($town === null ? null : (int) $town));
+            $town = $record instanceof Model ? $record->getAttribute($column) : ($record->{$column} ?? null);
+            self::mark($record, $admin, $town === null ? null : (int) $town);
         }
+    }
+
+    /**
+     * Sets can_manage on a record (a model or a query row) of $municipalityId, and managed_by:
+     * the office that manages it instead (e.g. "Bulan Tourism Office") when the admin can't
+     * because the municipality has its own office; null otherwise. $canManage overrides the
+     * municipality check (e.g. a user account, see managesUser()).
+     */
+    public static function mark(object $record, User $admin, ?int $municipalityId, ?bool $canManage = null): void
+    {
+        $canManage ??= $admin->managesMunicipality($municipalityId);
+        $managedBy = ! $canManage && self::hasOwnOffice($municipalityId) ? self::officeName($municipalityId) : null;
+
+        if ($record instanceof Model) {
+            $record->setAttribute('can_manage', $canManage);
+            $record->setAttribute('managed_by', $managedBy);
+        } else {
+            $record->can_manage = $canManage;
+            $record->managed_by = $managedBy;
+        }
+    }
+
+    /**
+     * can_manage and managed_by (see mark()) for a room, menu item, product or listing, by its
+     * municipalities (itemMunicipalities()): the admin must manage each of them.
+     *
+     * @return array{can_manage: bool, managed_by: string|null}
+     */
+    public static function itemAccess(User $admin, ?Model $item): array
+    {
+        $towns = $item ? self::itemMunicipalities($item) : [];
+        $canManage = collect($towns ?: [null])->every(fn ($town) => $admin->managesMunicipality($town));
+        $town = $towns[0] ?? null;
+
+        return ['can_manage' => $canManage, 'managed_by' => ! $canManage && self::hasOwnOffice($town) ? self::officeName($town) : null];
+    }
+
+    /**
+     * can_manage and managed_by (see mark()) for a violation (and its appeal): whether the
+     * admin may act on its user over its review (managesUser()).
+     *
+     * @return array{can_manage: bool, managed_by: string|null}
+     */
+    public static function violationAccess(User $admin, AccountViolation $violation): array
+    {
+        $canManage = $violation->user !== null && self::managesUser($admin, $violation->user, $violation->rating);
+        $town = $canManage ? null : self::violationMunicipality($violation);
+
+        return ['can_manage' => $canManage, 'managed_by' => $admin->isProvincialAdmin() && self::hasOwnOffice($town) ? self::officeName($town) : null];
+    }
+
+    /** @var array<int, string> */
+    private static array $officeNames = [];
+
+    /** How a municipality's own tourism office is named, e.g. "Bulan Tourism Office". */
+    public static function officeName(int $municipalityId): string
+    {
+        return self::$officeNames[$municipalityId] ??= (Municipality::whereKey($municipalityId)->value('name') ?? 'Municipal').' Tourism Office';
+    }
+
+    /**
+     * Limits a query to the records an admin may change: apply(), and for a provincial admin
+     * without the municipalities that have their own office. For counts of work waiting on them.
+     */
+    public static function applyManageable(QueryBuilder $query, User $admin, string $column = 'municipality_id'): QueryBuilder
+    {
+        $query = self::apply($query, $admin, $column);
+        $ownOffices = $admin->isProvincialAdmin() ? self::townsWithOwnOffice() : [];
+
+        return $ownOffices === [] ? $query : $query->where(fn ($q) => $q->whereNull($column)->orWhereNotIn($column, $ownOffices));
     }
 
     /**
@@ -145,6 +271,15 @@ class AdminScope
         }
     }
 
+    /** authorizeView() for a room, menu item, product or listing (see itemMunicipalities()). */
+    public static function authorizeItemView(User $admin, Model $item): void
+    {
+        $towns = self::itemMunicipalities($item);
+        foreach ($towns ?: [null] as $town) {
+            self::authorizeView($admin, $town);
+        }
+    }
+
     /** authorize() for a review: its listing's municipality decides (a deleted listing: provincial). */
     public static function authorizeRating(User $admin, ?Rating $rating): void
     {
@@ -157,16 +292,37 @@ class AdminScope
         self::authorizeItem($admin, $listing);
     }
 
+    /** authorizeRating() for reading a review (e.g. a report's evidence). */
+    public static function authorizeRatingView(User $admin, ?Rating $rating): void
+    {
+        $listing = $rating?->rateable;
+        if (! $listing) {
+            self::authorizeView($admin, null);
+
+            return;
+        }
+        self::authorizeItemView($admin, $listing);
+    }
+
     /**
      * Whether an admin may act on a user account (warn, suspend, deactivate, reactivate, close,
-     * rename): provincial admins on anyone but other admins (as before); a municipal admin on
-     * business owners of their municipality (the business's municipality, see
-     * User::businessMunicipalityId) and on a tourist only over $rating, one of that tourist's
-     * reviews of a listing in their municipality. Other admin accounts: provincial only.
+     * rename). A business owner belongs to their business's municipality (see
+     * User::businessMunicipalityId) and a tourist, over $rating (one of their reviews), to the
+     * reviewed listing's: the admin must manage that municipality (managesMunicipality, so a
+     * municipality with its own office decides alone). A municipal admin acts on a tourist only
+     * over such a review. Provincial admins also handle tourists outside any review, owners
+     * without a municipality, and admin accounts.
      */
     public static function managesUser(User $admin, User $target, ?Rating $rating = null): bool
     {
         if ($admin->isProvincialAdmin()) {
+            if ($target->isBusinessOwner()) {
+                return $admin->managesMunicipality($target->businessMunicipalityId());
+            }
+            if ($target->isTourist() && $rating?->rateable) {
+                return collect(self::itemMunicipalities($rating->rateable))->every(fn ($town) => $admin->managesMunicipality($town));
+            }
+
             return true;
         }
         if (! $admin->isMunicipalAdmin() || $target->isAdmin()) {
@@ -184,10 +340,22 @@ class AdminScope
         return $towns !== [] && collect($towns)->every(fn ($town) => $admin->managesMunicipality($town));
     }
 
-    /** A violation (and its evidence, appeal) is the business of whoever may act on it: its user over its review. */
+    /** Whether an admin may view a user account: provincial admins every account, a municipal admin those they manage. */
+    public static function seesUser(User $admin, User $target, ?Rating $rating = null): bool
+    {
+        return $admin->isProvincialAdmin() || self::managesUser($admin, $target, $rating);
+    }
+
+    /** A violation (and its appeal) is the business of whoever may act on it: its user over its review. */
     public static function authorizeViolation(User $admin, AccountViolation $violation): void
     {
         self::authorizeUser($admin, $violation->user, $violation->rating);
+    }
+
+    /** Reading a violation's evidence or an appeal's attachments: whoever sees its user over its review. */
+    public static function authorizeViolationView(User $admin, AccountViolation $violation): void
+    {
+        abort_unless(self::seesUser($admin, $violation->user, $violation->rating), 403, self::userMessage($violation->user));
     }
 
     public static function authorizeUser(User $admin, User $target, ?Rating $rating = null): void
@@ -196,11 +364,26 @@ class AdminScope
             return;
         }
 
-        abort(403, match (true) {
+        $town = $target->isBusinessOwner() ? $target->businessMunicipalityId() : self::municipalityOf($rating?->rateable);
+        abort(403, $admin->isProvincialAdmin() && self::hasOwnOffice($town) ? self::ownOfficeMessage($town) : self::userMessage($target));
+    }
+
+    private static function userMessage(User $target): string
+    {
+        return match (true) {
             $target->isAdmin() => 'Only the provincial administrator can manage administrator accounts.',
-            $target->isBusinessOwner() => 'This business belongs to another municipality. Only its municipal tourism office or the provincial administrator can act on it.',
+            $target->isBusinessOwner() => 'This business belongs to another municipality. Only its municipal tourism office can act on it.',
             default => 'A municipal tourism office can act on a tourist only over their review of a listing in its municipality. Other cases are handled by the provincial administrator.',
-        });
+        };
+    }
+
+    /** Why a provincial admin can't change a record of a municipality with its own tourism office. */
+    private static function ownOfficeMessage(?int $municipalityId): string
+    {
+        $name = $municipalityId ? Municipality::whereKey($municipalityId)->value('name') : null;
+
+        return ($name ? "{$name} has its own tourism office, which manages its records." : 'This municipality has its own tourism office, which manages its records.')
+            .' The provincial administrator can view them.';
     }
 
     /**
@@ -307,9 +490,19 @@ class AdminScope
             return;
         }
 
-        abort(403, $municipalityId === null
+        abort(403, match (true) {
+            $municipalityId === null => 'Province-wide records are managed by the provincial administrator.',
+            $admin->isProvincialAdmin() => self::ownOfficeMessage($municipalityId),
+            default => 'This record belongs to another municipality. Only its municipal tourism office can manage it.',
+        });
+    }
+
+    /** Stops the request with 403 unless the admin may view records of $municipalityId. */
+    public static function authorizeView(User $admin, ?int $municipalityId): void
+    {
+        abort_unless($admin->seesMunicipality($municipalityId), 403, $municipalityId === null
             ? 'Province-wide records are managed by the provincial administrator.'
-            : 'This record belongs to another municipality. Only its municipal tourism office or the provincial administrator can manage it.');
+            : 'This record belongs to another municipality.');
     }
 
     /** authorize() for a record with a municipality column. */
@@ -319,13 +512,42 @@ class AdminScope
         self::authorize($admin, $id === null ? null : (int) $id);
     }
 
+    /** authorizeView() for a record with a municipality column. */
+    public static function authorizeRecordView(User $admin, Model $record, string $column = 'municipality_id'): void
+    {
+        $id = $record->getAttribute($column);
+        self::authorizeView($admin, $id === null ? null : (int) $id);
+    }
+
+    /**
+     * Reviewing an owner's revision of a listing (approve or request changes). A revision that
+     * moves the listing to another municipality is the provincial administrator's decision, so a
+     * provincial admin may review it even when the listing's municipality has its own office;
+     * any other revision needs authorize() over the listing.
+     */
+    public static function authorizeRevision(User $admin, Model $listing, ?Model $revision): void
+    {
+        $proposed = $revision?->getAttribute('proposed_data')['municipality_id'] ?? null;
+        if ($admin->isProvincialAdmin() && self::isTransfer($listing, $proposed)) {
+            return;
+        }
+        self::authorizeRecord($admin, $listing);
+    }
+
+    /** Whether $newMunicipalityId moves $listing to another municipality. */
+    public static function isTransfer(Model $listing, mixed $newMunicipalityId): bool
+    {
+        return $newMunicipalityId !== null && $newMunicipalityId !== ''
+            && (int) $newMunicipalityId !== (int) $listing->getAttribute('municipality_id');
+    }
+
     /**
      * Moving a listing to another municipality (an owner's revision, or an admin's edit) changes
      * which office manages it, so only a provincial admin may do it. Same or no municipality: no-op.
      */
     public static function authorizeTransfer(User $admin, Model $listing, mixed $newMunicipalityId): void
     {
-        if ($newMunicipalityId === null || $newMunicipalityId === '' || (int) $newMunicipalityId === (int) $listing->getAttribute('municipality_id')) {
+        if (! self::isTransfer($listing, $newMunicipalityId)) {
             return;
         }
 
@@ -363,19 +585,18 @@ class AdminScope
     }
 
     /**
-     * Admins responsible for a record of $municipalityId: its municipal admins and every
-     * provincial admin. A province-wide record (null), or a municipality without a municipal
-     * admin, goes to the provincial admins.
+     * Admins responsible for a record of $municipalityId: a municipality with its own tourism
+     * office, its active municipal admins only; a province-wide record (null) or a municipality
+     * without an office of its own, the provincial admins.
      */
     public static function adminsFor(?int $municipalityId): Builder
     {
+        if (self::hasOwnOffice($municipalityId)) {
+            return self::activeMunicipalAdmins()->where('municipality_id', $municipalityId);
+        }
+
+        // Provincial (or not yet assigned); an invalid scope receives nothing.
         return User::where('role_id', Role::where('name', 'admin')->value('id'))
-            ->where(function ($q) use ($municipalityId) {
-                // Provincial (or not yet assigned); an invalid scope receives nothing.
-                $q->whereNull('admin_scope')->orWhere('admin_scope', User::ADMIN_SCOPE_PROVINCIAL);
-                if ($municipalityId !== null) {
-                    $q->orWhere(fn ($m) => $m->where('admin_scope', User::ADMIN_SCOPE_MUNICIPAL)->where('municipality_id', $municipalityId));
-                }
-            });
+            ->where(fn ($q) => $q->whereNull('admin_scope')->orWhere('admin_scope', User::ADMIN_SCOPE_PROVINCIAL));
     }
 }

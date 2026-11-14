@@ -42,6 +42,7 @@ class AdminSubmissionController extends Controller
 
         $submissions = $query->orderByDesc('created_at')->paginate($perPage);
         $this->attachReviewStats($submissions->getCollection());
+        AdminScope::markManageable($submissions->getCollection(), $request->user());
 
         return response()->json($submissions);
     }
@@ -83,7 +84,7 @@ class AdminSubmissionController extends Controller
     public function downloadPermit(Request $request, int $id): StreamedResponse
     {
         $submission = BusinessSubmission::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $submission);
+        AdminScope::authorizeRecordView($request->user(), $submission);
 
         abort_unless($submission->business_permit_path, 404);
 

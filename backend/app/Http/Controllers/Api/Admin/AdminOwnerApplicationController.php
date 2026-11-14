@@ -29,13 +29,17 @@ class AdminOwnerApplicationController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        return response()->json($query->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END")->latest('updated_at')->get());
+        $applications = $query->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END")->latest('updated_at')->get();
+        AdminScope::markManageable($applications, $request->user());
+
+        return response()->json($applications);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         $application = BusinessOwnerApplication::with(['user:id,name,email,phone,status,created_at', 'municipality:id,name', 'barangay:id,name', 'reviewer:id,name'])->findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $application);
+        AdminScope::authorizeRecordView($request->user(), $application);
+        AdminScope::markManageable([$application], $request->user());
 
         return response()->json($application);
     }
@@ -43,7 +47,7 @@ class AdminOwnerApplicationController extends Controller
     public function permit(Request $request, int $id): StreamedResponse
     {
         $application = BusinessOwnerApplication::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $application);
+        AdminScope::authorizeRecordView($request->user(), $application);
 
         return $this->streamPermit($application->business_permit_path, "business-permit-application-{$application->id}");
     }

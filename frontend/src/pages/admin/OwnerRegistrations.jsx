@@ -12,6 +12,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { formatShortDate } from '../../utils/helpers'
 import { getErrorMessage, showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
+import ManagedBy from '../../components/admin/ManagedBy'
 
 /**
  * Business Owner registration review (account approval). Approving activates
@@ -204,6 +205,8 @@ export default function OwnerRegistrations() {
           {items.map((application) => {
             const busy = actingId === application.id
             const isPending = application.status === 'pending'
+            // Another office decides it (e.g. a municipality's own tourism office): view only.
+            const viewOnly = application.can_manage === false
             const resubmitted = isPending && application.resubmitted_at
             const isRejecting = rejecting?.id === application.id
 
@@ -258,7 +261,8 @@ export default function OwnerRegistrations() {
                     <span className="text-sm text-amber-700">No permit file on record.</span>
                   )}
 
-                  {isPending && !isRejecting && (
+                  {isPending && viewOnly && <ManagedBy office={application.managed_by} className="text-sm" />}
+                  {isPending && !viewOnly && !isRejecting && (
                     <>
                       <button type="button" onClick={() => approve(application)} disabled={Boolean(actingId)}
                         className="inline-flex items-center gap-2 min-h-10 px-4 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50">

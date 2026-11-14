@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Mail\PasswordResetMail;
 use App\Services\AccountEnforcementService;
+use App\Support\AdminScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -156,6 +157,13 @@ class User extends Authenticatable
         return $this->role->name === 'admin';
     }
 
+    protected static function booted(): void
+    {
+        // Which municipalities have their own tourism office depends on the admin accounts.
+        static::saved(fn () => AdminScope::forgetOwnOffices());
+        static::deleted(fn () => AdminScope::forgetOwnOffices());
+    }
+
     // ==================== ADMIN SCOPE (see App\Support\AdminScope) ====================
     // admin_scope and municipality_id are not fillable: only the admin:create / admin:assign
     // commands set them.
@@ -202,7 +210,7 @@ class User extends Authenticatable
      * /user; null for other roles. 'assigned' is false while the scope hasn't been set (the
      * account keeps full access meanwhile). An invalid scope reads 'invalid' (no access).
      *
-     * @return array{scope: string, assigned: bool, municipality: array{id: int, name: string}|null, designation: string}|null
+     * @return array{scope: string, assigned: bool, municipality: array{id: int, name: string}|null, designation: string, own_offices?: array<int, array{id: int, name: string, office: string}>}|null
      */
     public function adminProfile(): ?array
     {
@@ -220,24 +228,40 @@ class User extends Authenticatable
             'municipality' => $municipality ? ['id' => $municipality->id, 'name' => $municipality->name] : null,
             'designation' => $this->admin_title
                 ?? ($municipality ? "{$municipality->name} Tourism Office" : ($this->isMunicipalAdmin() ? 'Municipal Administrator' : 'Provincial Administrator')),
+            // For a provincial admin: the municipalities whose own office manages them (view only).
+            'own_offices' => $this->isProvincialAdmin()
+                ? Municipality::whereIn('id', AdminScope::townsWithOwnOffice())->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (Municipality $town) => ['id' => $town->id, 'name' => $town->name, 'office' => AdminScope::officeName($town->id)])->values()->all()
+                : [],
         ];
     }
 
     /**
-     * Whether this admin may manage a record of $municipalityId. A record without a
-     * municipality (province-wide) belongs to provincial admins only. A municipal admin with no
-     * municipality set, and an admin with an invalid scope, manage nothing.
+     * Whether this admin may change a record of $municipalityId. A municipality with its own
+     * tourism office (an active municipal admin, see AdminScope::townsWithOwnOffice) is managed
+     * by that office alone; a provincial admin manages the province-wide records (no
+     * municipality) and every municipality without an office of its own. A municipal admin with
+     * no municipality set, and an admin with an invalid scope, manage nothing.
      */
     public function managesMunicipality(?int $municipalityId): bool
     {
         if ($this->isProvincialAdmin()) {
-            return true;
+            return $municipalityId === null || ! AdminScope::hasOwnOffice($municipalityId);
         }
         if (! $this->isMunicipalAdmin()) {
             return false;
         }
 
         return $municipalityId !== null && $this->municipality_id !== null && (int) $this->municipality_id === $municipalityId;
+    }
+
+    /**
+     * Whether this admin may view a record of $municipalityId: a provincial admin every
+     * municipality (including those whose own office manages them), a municipal admin their own.
+     */
+    public function seesMunicipality(?int $municipalityId): bool
+    {
+        return $this->isProvincialAdmin() || ($this->isMunicipalAdmin() && $this->managesMunicipality($municipalityId));
     }
 
     /**

@@ -47,9 +47,10 @@ class AdminRetailShopController extends Controller
             $this->perPage($request, 100, 200)
         );
 
-        return response()->json(
-            $query->orderByDesc('created_at')->paginate($perPage)
-        );
+        $page = $query->orderByDesc('created_at')->paginate($perPage);
+        AdminScope::markManageable($page->getCollection(), $request->user());
+
+        return response()->json($page);
     }
 
     public function show(Request $request, int $id): JsonResponse
@@ -68,7 +69,8 @@ class AdminRetailShopController extends Controller
                 ])
                 ->latest('id'),
         ])->findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $shop);
+        AdminScope::authorizeRecordView($request->user(), $shop);
+        AdminScope::markManageable([$shop], $request->user());
 
         return response()->json([
             'data' => $shop,
@@ -165,7 +167,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $shop);
+        AdminScope::authorizeRevision($request->user(), $shop, $shop->revisions()->where('status', 'submitted')->latest('id')->first());
 
         if ($shop->status !== 'approved') {
             throw ValidationException::withMessages([
@@ -326,7 +328,7 @@ class AdminRetailShopController extends Controller
         ]);
 
         $shop = RetailShop::findOrFail($id);
-        AdminScope::authorizeRecord($request->user(), $shop);
+        AdminScope::authorizeRevision($request->user(), $shop, $shop->revisions()->where('status', 'submitted')->latest('id')->first());
 
         if ($shop->status !== 'approved') {
             throw ValidationException::withMessages([

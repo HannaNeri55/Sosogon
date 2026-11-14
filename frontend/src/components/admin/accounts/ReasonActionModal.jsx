@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import Modal from '../../common/Modal'
-import { closeUserAccount, reactivateUser } from '../../../api/admin'
+import { closeUserAccount, reactivateUser, setAdminAccess } from '../../../api/admin'
 import useFormErrors from '../../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
 
@@ -31,10 +31,42 @@ const MODES = {
     minReason: 10,
     button: 'Close account',
     buttonClass: 'bg-red-600 hover:bg-red-700',
+    confirmEmail: true,
+  },
+  admin_deactivate: {
+    title: 'Deactivate admin access',
+    intro: 'Use this when the person no longer works for the tourism office, or their access must stop.',
+    points: [
+      'They are signed out everywhere and can no longer use the admin area.',
+      'Their municipality goes back to the provincial administrator until it has an active municipal administrator.',
+      'This is not a violation: nothing is added to their account health. The change and your reason are logged.',
+      'You can restore their access later.',
+    ],
+    minReason: 10,
+    button: 'Deactivate access',
+    buttonClass: 'bg-red-600 hover:bg-red-700',
+    reasonLabel: 'Reason (recorded in the account activity log)',
+    confirmEmail: true,
+  },
+  admin_reactivate: {
+    title: 'Restore admin access',
+    intro: 'This restores their access to the admin area for their municipality.',
+    points: [
+      'They can sign in to the admin area again.',
+      'Their municipality is managed by its own tourism office again.',
+      'The change and your reason are logged.',
+    ],
+    minReason: 10,
+    button: 'Restore access',
+    buttonClass: 'bg-green-600 hover:bg-green-700',
+    reasonLabel: 'Reason (recorded in the account activity log)',
   },
 }
 
-/** Reactivate, or close (the guarded "delete account" step that keeps all data). */
+/**
+ * Reactivate, close (the guarded "delete account" step that keeps all data), or deactivate or
+ * restore a municipal administrator's access (provincial admins only).
+ */
 export default function ReasonActionModal({ user, mode, onClose, onDone }) {
   const config = MODES[mode]
   const [reason, setReason] = useState('')
@@ -46,7 +78,7 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
   const form = useFormErrors(formRef, {
     validate: () => ({
       reason: reason.trim().length < config.minReason ? `Write at least ${config.minReason} characters.` : null,
-      confirm_email: mode === 'close' && confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()
+      confirm_email: config.confirmEmail && confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()
         ? "Type the account's email address exactly as shown."
         : null,
     }),
@@ -60,7 +92,9 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
     try {
       const data = mode === 'close'
         ? await closeUserAccount(user.id, { reason: reason.trim(), confirm_email: confirmEmail.trim() })
-        : await reactivateUser(user.id, reason.trim())
+        : mode === 'admin_deactivate' || mode === 'admin_reactivate'
+          ? await setAdminAccess(user.id, mode === 'admin_deactivate' ? 'deactivate' : 'reactivate', reason.trim())
+          : await reactivateUser(user.id, reason.trim())
       toast.success(data.message)
       onDone()
     } catch (err) {
@@ -99,12 +133,12 @@ export default function ReasonActionModal({ user, mode, onClose, onDone }) {
           </ul>
         </div>
         <div>
-          <label htmlFor="action-reason" className="block text-sm font-semibold text-gray-800 mb-1.5">Reason (recorded in the activity log and sent to the user)</label>
+          <label htmlFor="action-reason" className="block text-sm font-semibold text-gray-800 mb-1.5">{config.reasonLabel || 'Reason (recorded in the activity log and sent to the user)'}</label>
           <textarea id="action-reason" name="reason" rows={3} className="input-field" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
           <FieldError form={form} name="reason" />
           <p className="mt-1 text-xs text-gray-500">At least {config.minReason} characters.</p>
         </div>
-        {mode === 'close' && (
+        {config.confirmEmail && (
           <div>
             <label htmlFor="confirm-email" className="block text-sm font-semibold text-gray-800 mb-1.5">
               Type <span className="font-mono text-red-700">{user.email}</span> to confirm

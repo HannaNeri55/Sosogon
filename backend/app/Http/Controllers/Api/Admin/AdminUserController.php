@@ -50,7 +50,10 @@ class AdminUserController extends Controller
         $perPage = $this->perPage($request, 100, 200);
         $users = $query->orderByDesc('created_at')->paginate($perPage);
 
-        $users->getCollection()->each(function (User $user) {
+        $admin = $request->user();
+        // A provincial admin's view of business owners in a municipality with its own office is read-only.
+        $ownOffices = $admin->isProvincialAdmin() ? AdminScope::townsWithOwnOffice() : [];
+        $users->getCollection()->each(function (User $user) use ($admin, $ownOffices) {
             $user->liftExpiredSuspension();
             $state = $user->closed_at ? User::STATE_CLOSED : ($user->status === 'pending' ? User::STATE_PENDING : null);
             if (! $state && $user->status === 'suspended') {
@@ -58,6 +61,8 @@ class AdminUserController extends Controller
                 $state = $user->status === 'suspended' ? ($user->suspended_until ? User::STATE_SUSPENDED : User::STATE_DEACTIVATED) : null;
             }
             $user->setAttribute('account_state', $state ?? ($user->current_warnings_count > 0 ? User::STATE_WARNING : User::STATE_ACTIVE));
+            $town = $ownOffices !== [] && $user->isBusinessOwner() ? $user->businessMunicipalityId() : null;
+            AdminScope::mark($user, $admin, $town, $town === null || $admin->managesMunicipality($town));
         });
 
         return response()->json($users);

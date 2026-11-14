@@ -54,6 +54,15 @@ class AdminAccountEnforcementController extends Controller
         $user->refresh();
 
         $lastSeen = $user->tokens()->max('last_used_at');
+        $admin = $request->user();
+        // Tourists are acted on over a review (see 'reviews'); owners and admins as accounts.
+        $access = ['can_manage' => true, 'managed_by' => null];
+        if (! $user->isTourist()) {
+            $canManage = AdminScope::managesUser($admin, $user);
+            $town = $user->isBusinessOwner() ? $user->businessMunicipalityId() : null;
+            $access = ['can_manage' => $canManage,
+                'managed_by' => ! $canManage && $admin->isProvincialAdmin() && AdminScope::hasOwnOffice($town) ? AdminScope::officeName($town) : null];
+        }
 
         return response()->json([
             'user' => [
@@ -76,16 +85,21 @@ class AdminAccountEnforcementController extends Controller
                     'business_submissions' => $user->business_submissions_count,
                 ],
                 'is_protected' => $user->isAdmin(),
+                // An admin's scope (a provincial admin may deactivate or reactivate a municipal one).
+                'admin' => $user->isAdmin() ? array_diff_key($user->adminProfile() ?? [], ['own_offices' => true]) : null,
+                ...$access,
             ],
             'violations' => $user->violations()
                 ->with(['reviewer:id,name', 'resolver:id,name', 'latestAppeal'])
                 ->latest('id')
                 ->get(),
             // A tourist's reviews this admin manages: a municipal admin acts on a tourist over one
-            // of these (rating_id on enforce).
-            'reviews' => AdminScope::applyToRatings(Rating::where('user_id', $user->id), $request->user())
-                ->with('rateable:id,name')->latest('id')->limit(50)
-                ->get(['id', 'rateable_type', 'rateable_id', 'score', 'comment', 'created_at']),
+            // of these (rating_id on enforce); a provincial admin not over a review of a listing in
+            // a municipality with its own office.
+            'reviews' => AdminScope::applyToRatings(Rating::where('user_id', $user->id), $admin)
+                ->with('rateable:id,name,municipality_id')->latest('id')->limit(50)
+                ->get(['id', 'rateable_type', 'rateable_id', 'score', 'comment', 'created_at'])
+                ->filter(fn (Rating $rating) => AdminScope::itemAccess($admin, $rating->rateable)['can_manage'])->values(),
             'account_log' => AccountActionLog::where('user_id', $user->id)->latest('id')->limit(50)->get(),
             'activity' => ActivityLog::where('user_id', $user->id)->latest('created_at')->limit(50)
                 ->get(['id', 'action', 'description', 'model_type', 'model_id', 'created_at']),
@@ -159,6 +173,31 @@ class AdminAccountEnforcementController extends Controller
     }
 
     /**
+     * Deactivate or reactivate a municipal administrator's access (provincial admins only, see
+     * the route). Not a violation: see AccountEnforcementService::setAdminAccess.
+     */
+    public function adminAccess(Request $request, int $id): JsonResponse
+    {
+        $target = User::findOrFail($id);
+        $validated = $request->validate([
+            'action' => 'required|in:deactivate,reactivate',
+            'reason' => 'required|string|min:10|max:1000',
+        ]);
+        $active = $validated['action'] === 'reactivate';
+
+        $this->enforcement->setAdminAccess($target, $request->user(), $active, $validated['reason'], $request->ip());
+
+        $town = $target->municipality?->name ?? 'Their municipality';
+
+        return response()->json([
+            'message' => $active
+                ? "Access restored. {$town} is managed by its own tourism office again."
+                : "Access deactivated. {$town} is managed by the provincial administrator until it has an active municipal administrator.",
+            'account_state' => $target->fresh()->accountState(),
+        ]);
+    }
+
+    /**
      * The separate "delete account" process: closes the account (no sign-in) while keeping all
      * data. The admin must give a reason and type the user's email address to confirm.
      */
@@ -184,7 +223,7 @@ class AdminAccountEnforcementController extends Controller
     public function evidence(Request $request, int $violationId, int $index): StreamedResponse
     {
         $violation = AccountViolation::with(['user', 'rating.rateable'])->findOrFail($violationId);
-        AdminScope::authorizeViolation($request->user(), $violation);
+        AdminScope::authorizeViolationView($request->user(), $violation);
         $file = $violation->evidence_files[$index] ?? abort(404);
 
         return $this->stream($file);
@@ -194,7 +233,7 @@ class AdminAccountEnforcementController extends Controller
     public function appealAttachment(Request $request, int $appealId, int $index): StreamedResponse
     {
         $appeal = AccountAppeal::with(['violation.user', 'violation.rating.rateable'])->findOrFail($appealId);
-        AdminScope::authorizeViolation($request->user(), $appeal->violation);
+        AdminScope::authorizeViolationView($request->user(), $appeal->violation);
         $file = $appeal->attachments[$index] ?? abort(404);
 
         return $this->stream($file);

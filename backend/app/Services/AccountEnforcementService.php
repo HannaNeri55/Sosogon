@@ -310,6 +310,44 @@ class AccountEnforcementService
         }
     }
 
+    /**
+     * Deactivates or reactivates a municipal administrator's access: the provincial
+     * administrator's decision, e.g. when the person leaves the office. It is not a violation, so
+     * nothing is added to their account health; the change is logged with its reason. While the
+     * account is deactivated its municipality goes back to the provincial administrators
+     * (AdminScope::townsWithOwnOffice). Provincial administrator accounts are never changed here.
+     */
+    public function setAdminAccess(User $target, User $admin, bool $active, string $reason, ?string $ip = null): void
+    {
+        if (! $admin->isProvincialAdmin()) {
+            throw new HttpException(403, "Only the provincial administrator can change an administrator's access.");
+        }
+        if (! $target->isMunicipalAdmin()) {
+            throw new HttpException(403, 'Only municipal administrator accounts can be deactivated here. Provincial administrator accounts are protected.');
+        }
+        if ($target->closed_at) {
+            throw new HttpException(409, 'This account is closed.');
+        }
+
+        DB::transaction(function () use ($target, $admin, $active, $reason, $ip) {
+            $target = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $previous = $target->accountState();
+
+            if ($active) {
+                abort_unless($previous === User::STATE_DEACTIVATED, 409, 'This administrator account is not deactivated.');
+                $target->forceFill(['status' => 'active', 'suspended_until' => null])->save();
+            } else {
+                abort_if($previous === User::STATE_DEACTIVATED, 409, 'This administrator account is already deactivated.');
+                $target->forceFill(['status' => 'suspended', 'suspended_until' => null])->save();
+                // Signed-in sessions end now.
+                $target->tokens()->delete();
+            }
+
+            $this->log($admin, $target, $active ? 'admin_reactivated' : 'admin_deactivated', $previous, $target->accountState(), $reason,
+                ['municipality_id' => $target->municipality_id], $ip);
+        });
+    }
+
     /** Admins can't be actioned here, nor can an admin action their own account. */
     private function guardTarget(User $target, User $admin): void
     {

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { FiCheck, FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 import Modal from '../common/Modal'
+import ManagedBy from './ManagedBy'
 import { formatShortDate, getImageUrl } from '../../utils/helpers'
 import { ITEM_KINDS, changedFields, displayValue, photosAfterChange, photosChanged } from '../../utils/itemReview'
 
@@ -100,7 +101,9 @@ export default function ItemReviewModal({ entry, tab, busy, onClose, onDecide, o
   const config = ITEM_KINDS[kind]
   const parent = config.parent(row)
   const isChange = tab === 'changes'
-  const decidable = tab !== 'rejected'
+  // Another office decides it (e.g. a municipality's own tourism office): view only.
+  const viewOnly = entry.can_manage === false
+  const decidable = tab !== 'rejected' && !viewOnly
   const [rejecting, setRejecting] = useState(false)
   const [notes, setNotes] = useState('')
   const [notesError, setNotesError] = useState('')
@@ -120,6 +123,7 @@ export default function ItemReviewModal({ entry, tab, busy, onClose, onDecide, o
         <button type="button" onClick={onPrevious} disabled={!onPrevious || busy} aria-label="Previous item" className="inline-flex items-center justify-center min-h-10 min-w-10 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"><FiChevronLeft aria-hidden="true" /></button>
         <button type="button" onClick={onNext} disabled={!onNext || busy} aria-label="Next item" className="inline-flex items-center justify-center min-h-10 min-w-10 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"><FiChevronRight aria-hidden="true" /></button>
       </div>
+      {viewOnly && <ManagedBy office={entry.managed_by} />}
       {decidable && !rejecting && (
         <>
           {kind === 'rooms' && (

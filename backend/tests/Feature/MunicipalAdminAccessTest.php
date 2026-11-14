@@ -721,10 +721,16 @@ class MunicipalAdminAccessTest extends TestCase
         $this->putJson("/api/v1/admin/destinations/{$beach->id}", ['name' => 'Bulan Beach Park', 'is_featured' => false, 'tourism_priority' => null])->assertOk();
         $this->putJson("/api/v1/admin/events/{$fiesta->id}", ['title' => 'Bulan Town Fiesta', 'is_featured' => false])->assertOk();
 
-        // The provincial admin sets them, and the municipal admin can still edit the record after.
+        // Nor through the provincial ranking routes.
+        $this->patchJson("/api/v1/admin/destinations/{$beach->id}/ranking", ['is_featured' => true])->assertForbidden();
+        $this->patchJson("/api/v1/admin/events/{$fiesta->id}/ranking", ['is_featured' => true])->assertForbidden();
+
+        // The provincial admin sets them through the ranking routes (the rest of a Bulan record is
+        // Bulan's office's), and the municipal admin can still edit the record after.
         $this->actingAs($this->provincial);
-        $this->putJson("/api/v1/admin/destinations/{$beach->id}", ['is_featured' => true, 'tourism_priority' => 'iconic'])->assertOk();
-        $this->putJson("/api/v1/admin/events/{$fiesta->id}", ['is_featured' => true])->assertOk();
+        $this->putJson("/api/v1/admin/destinations/{$beach->id}", ['is_featured' => true, 'tourism_priority' => 'iconic'])->assertForbidden();
+        $this->patchJson("/api/v1/admin/destinations/{$beach->id}/ranking", ['is_featured' => true, 'tourism_priority' => 'iconic'])->assertOk();
+        $this->patchJson("/api/v1/admin/events/{$fiesta->id}/ranking", ['is_featured' => true])->assertOk();
         $this->actingAs($this->bulanAdmin);
         $this->putJson("/api/v1/admin/destinations/{$beach->id}", ['name' => 'Bulan Beach', 'is_featured' => true, 'tourism_priority' => 'iconic'])->assertOk();
         $this->putJson("/api/v1/admin/destinations/{$beach->id}", ['is_featured' => false])->assertForbidden();
