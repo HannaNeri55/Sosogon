@@ -75,7 +75,8 @@ export default function ManageDestinations() {
   // priority rank places across the province, so only provincial admins set them.
   const scope = useAdminScope();
   const ownTown = scope.municipality ? String(scope.municipality.id) : null;
-  // The selected municipality's workspace (?municipality=<id>, so it survives a reload).
+  // The selected municipality's workspace (?municipality=<id>, so it survives a reload and the
+  // browser's Back returns to the overview); none selected: the municipality overview.
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   // A new destination starts in the municipality being viewed, when this admin manages it.
@@ -121,10 +122,15 @@ export default function ManageDestinations() {
       .map((town) => ({ key: String(town.id), name: town.name, count: counts[town.id] || 0 }));
   }, [items, municipalities, scope.isMunicipal, scope.municipality]);
   const requested = searchParams.get("municipality");
-  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas[0]?.key ?? null;
+  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas.length === 1 ? areas[0].key : null;
   const selectedArea = areas.find((area) => area.key === selectedKey);
   const selectArea = (key) => {
-    setSearchParams((params) => { params.set("municipality", key); return params; }, { replace: true });
+    setSearchParams((params) => { params.set("municipality", key); return params; });
+    setSearch("");
+    setPage(1);
+  };
+  const showOverview = () => {
+    setSearchParams((params) => { params.delete("municipality"); return params; });
     setSearch("");
     setPage(1);
   };
@@ -903,7 +909,7 @@ export default function ManageDestinations() {
         </form>
       )}
 
-      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} noun="destination">
+      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} onBack={showOverview} noun="destination">
       {selectedArea && (
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
