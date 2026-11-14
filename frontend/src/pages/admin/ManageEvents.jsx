@@ -99,7 +99,8 @@ export default function ManageEvents() {
   }, [items, search])
 
   // One workspace per municipality plus the province-wide events, each with its event count. A
-  // provincial admin starts at the province-wide events; a municipal admin at their municipality.
+  // municipal admin sees their municipality's events only (the province-wide ones are the
+  // provincial admin's), so they go straight to its workspace.
   const keyOf = (item) => (item.municipality_id == null ? PROVINCE : String(item.municipality_id))
   const areas = useMemo(() => {
     const counts = {}
@@ -108,7 +109,7 @@ export default function ManageEvents() {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((town) => ({ key: String(town.id), name: town.name, count: counts[town.id] || 0 }))
     const province = { key: PROVINCE, name: 'Province-wide', count: counts[PROVINCE] || 0, provinceWide: true }
-    return scope.isMunicipal ? [...towns, province] : [province, ...towns]
+    return scope.isMunicipal ? towns : [province, ...towns]
   }, [items, municipalities, scope.isMunicipal, scope.municipality])
   const requested = searchParams.get('municipality')
   const selectedKey = areas.some((area) => area.key === requested) ? requested : areas.length === 1 ? areas[0].key : null

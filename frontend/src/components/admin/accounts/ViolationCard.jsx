@@ -3,7 +3,7 @@ import { FiPaperclip } from 'react-icons/fi'
 import StatusPill from '../../account/StatusPill'
 import { downloadViolationEvidence } from '../../../api/admin'
 import { openPrivateFile } from '../../../utils/privateFile'
-import { APPEAL_STATUSES, ENFORCEMENT_ACTIONS, VIOLATION_STATUSES, formatDateTime, formatDay } from '../../../utils/accountStates'
+import { APPEAL_STATUSES, displayName, ENFORCEMENT_ACTIONS, formatDateTime, formatDay, VIOLATION_STATUSES } from '../../../utils/accountStates'
 
 /** One enforcement record as admins see it: case details, evidence, reviewer, outcome and appeal. */
 export default function ViolationCard({ violation, showUser = false }) {
@@ -20,7 +20,7 @@ export default function ViolationCard({ violation, showUser = false }) {
 
       {showUser && violation.user && (
         <p className="mt-3 text-sm text-gray-700">
-          <span className="font-semibold text-gray-900">{violation.user.name}</span> · {violation.user.email}
+          <span className="font-semibold text-gray-900">{displayName(violation.user.name)}</span> · {violation.user.email}
           {violation.user.role?.name && <span className="text-gray-500"> · {violation.user.role.name.replace('_', ' ')}</span>}
         </p>
       )}

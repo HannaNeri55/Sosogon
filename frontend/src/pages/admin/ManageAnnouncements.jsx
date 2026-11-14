@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FiSearch, FiEdit2, FiTrash2, FiStar } from 'react-icons/fi'
+import { FiSearch, FiEdit2, FiTrash2, FiStar, FiMapPin, FiCalendar, FiBell } from 'react-icons/fi'
 import { getAdminAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, getMunicipalities } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { truncate } from '../../utils/helpers'
+import { formatShortDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 import useScrollToForm from '../../hooks/useScrollToForm'
 import { showApiError } from '../../utils/apiErrors'
@@ -11,13 +11,14 @@ import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 import useAdminScope from '../../hooks/useAdminScope'
 import ManagedBy from '../../components/admin/ManagedBy'
+import EmptyState from '../../components/common/EmptyState'
 
 // municipality_id: '' is province-wide.
 const EMPTY_FORM = { title: '', content: '', is_pinned: false, status: 'published', municipality_id: '' }
 
 export default function ManageAnnouncements() {
-  // An announcement is for one municipality or the whole province. A municipal admin writes for
-  // their municipality and sees the province-wide ones read-only.
+  // An announcement is for one municipality or the whole province. A municipal admin sees and
+  // writes their municipality's only (the server lists nothing else for them).
   const scope = useAdminScope()
   const blankForm = () => ({ ...EMPTY_FORM, municipality_id: scope.municipality ? String(scope.municipality.id) : '' })
   const [municipalities, setMunicipalities] = useState([])
@@ -27,12 +28,21 @@ export default function ManageAnnouncements() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(EMPTY_FORM)
   const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
 
+  // Pinned first, then newest; narrowed by the search and the status filter.
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter((item) => item.title?.toLowerCase().includes(q))
-  }, [items, search])
+    return items
+      .filter((item) => status === 'all' || item.status === status)
+      .filter((item) => !q || item.title?.toLowerCase().includes(q) || item.content?.toLowerCase().includes(q))
+      .sort((a, b) => Number(!!b.is_pinned) - Number(!!a.is_pinned) || new Date(b.created_at) - new Date(a.created_at))
+  }, [items, search, status])
+  const statusCounts = {
+    all: items.length,
+    published: items.filter((item) => item.status === 'published').length,
+    draft: items.filter((item) => item.status === 'draft').length,
+  }
 
   const formRef = useScrollToForm(showForm ? editingId ?? 'new' : null)
   const form = useFormErrors(formRef)
@@ -166,64 +176,86 @@ export default function ManageAnnouncements() {
         </form>
       )}
 
-      <div className="relative mb-5 max-w-sm">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-        <input
-          className="input-field pl-9"
-          placeholder="Search announcements..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
-        <div className="overflow-x-auto">
-          {/* Phones: keep columns readable and let the table scroll sideways. */}
-          <table className="table-cards w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
-            <thead className="bg-gray-50/80 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Announcement</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Pinned</th>
-                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
-                  <td className="px-6 py-3">
-                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{item.municipality?.name || 'Province-wide'}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{truncate(item.content, 80)}</p>
-                  </td>
-                  <td data-label="Status" className="px-6 py-4">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td data-label="Pinned" className="px-6 py-4 text-sm text-gray-600">
-                    {item.is_pinned ? <FiStar className="text-yellow-500 fill-yellow-500" size={15} /> : '—'}
-                  </td>
-                  <td data-actions className="px-6 py-4">
-                    {item.can_manage === false ? (
-                      <ManagedBy office={item.managed_by} className="ml-auto" />
-                    ) : (
-                    <div className="flex gap-3 justify-end">
-                      <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
-                        <FiEdit2 size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(item.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                        <FiTrash2 size={15} />
-                      </button>
-                    </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
+          {[['all', 'All'], ['published', 'Published'], ['draft', 'Drafts']].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatus(value)}
+              aria-pressed={status === value}
+              className={`min-h-9 rounded-full border px-3.5 text-sm font-medium transition-colors ${status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              {label} <span className="tabular-nums opacity-80">({statusCounts[value]})</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full sm:max-w-xs">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} aria-hidden="true" />
+          <input
+            type="search"
+            className="input-field pl-9"
+            placeholder="Search announcements"
+            aria-label="Search announcements"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
+
+      {filteredItems.length === 0 ? (
+        <EmptyState
+          icon={FiBell}
+          title={items.length === 0 ? 'No announcements yet' : 'No announcements match'}
+        >
+          {items.length === 0 ? 'Use Add Announcement to post the first one.' : 'Try another search or status.'}
+        </EmptyState>
+      ) : (
+        <ul className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {filteredItems.map((item) => (
+            <li key={item.id}>
+              <article className="flex h-full flex-col rounded-2xl border border-gray-200/70 bg-white p-5 shadow-(--shadow-card)">
+                <div className="flex flex-wrap items-center gap-2">
+                  {item.is_pinned && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700">
+                      <FiStar size={12} className="fill-current" aria-hidden="true" /> Pinned
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {item.status}
+                  </span>
+                  {scope.isProvincial && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <FiMapPin size={12} aria-hidden="true" /> {item.municipality?.name || 'Province-wide'}
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-3 font-heading text-lg font-semibold leading-snug text-gray-900 wrap-anywhere">{item.title}</h3>
+                <p className="mb-4 mt-1.5 line-clamp-3 text-sm text-gray-600 wrap-anywhere">{item.content?.replace(/\s+/g, ' ')}</p>
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                  <p className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    <FiCalendar size={12} aria-hidden="true" />
+                    Posted {formatShortDate(item.created_at)}
+                    {item.updated_at && item.updated_at !== item.created_at && <> · Updated {formatShortDate(item.updated_at)}</>}
+                  </p>
+                  {item.can_manage === false ? (
+                    <ManagedBy office={item.managed_by} />
+                  ) : (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => startEdit(item)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-primary-50 hover:text-primary-700">
+                        <FiEdit2 size={14} aria-hidden="true" /> Edit
+                      </button>
+                      <button type="button" onClick={() => handleDelete(item.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-700">
+                        <FiTrash2 size={14} aria-hidden="true" /> Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

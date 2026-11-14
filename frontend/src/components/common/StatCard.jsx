@@ -8,8 +8,11 @@ const ACCENTS = {
   red: 'bg-red-50 text-red-600',
 }
 
-/** Number tile for dashboards; pass `to` to make it a link to the related admin page. */
-export default function StatCard({ icon: Icon, label, value, accent = 'primary', to }) {
+/**
+ * Number tile for dashboards; pass `to` to make it a link to the related admin page, or
+ * `onClick` to make it a button (`active` marks the one whose records are shown).
+ */
+export default function StatCard({ icon: Icon, label, value, accent = 'primary', to, onClick, active = false }) {
   const className =
     'bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4'
   const content = (
@@ -25,6 +28,19 @@ export default function StatCard({ icon: Icon, label, value, accent = 'primary',
   )
 
   // Phones (two tiles per row): icon above the number and the label may wrap, so it isn't cut off.
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={`${className} w-full text-left cursor-pointer hover:shadow-(--shadow-card-hover) hover:border-primary-200 transition-[box-shadow,border-color] ${active ? 'border-primary-500 ring-2 ring-primary-500/30' : ''}`}
+      >
+        {content}
+      </button>
+    )
+  }
+
   return to ? (
     <Link to={to} className={`${className} hover:shadow-(--shadow-card-hover) hover:border-primary-200 transition-[box-shadow,border-color]`}>
       {content}

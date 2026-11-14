@@ -12,7 +12,7 @@ import ActionMenu from '../../components/admin/accounts/ActionMenu'
 import EnforcementModal from '../../components/admin/accounts/EnforcementModal'
 import ReasonActionModal from '../../components/admin/accounts/ReasonActionModal'
 import UserAccountPanel from '../../components/admin/accounts/UserAccountPanel'
-import { formatDateTime } from '../../utils/accountStates'
+import { displayName, formatDateTime } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
 import useAdminScope from '../../hooks/useAdminScope'
@@ -96,7 +96,7 @@ export default function ManageUsers() {
   }
 
   const activateLegacyOwner = async (user) => {
-    if (!(await confirmDialog({ title: `Activate ${user.name}'s account?`, message: 'This business owner registered before registration review existed.', confirmLabel: 'Activate' }))) return
+    if (!(await confirmDialog({ title: `Activate ${displayName(user.name)}'s account?`, message: 'This business owner registered before registration review existed.', confirmLabel: 'Activate' }))) return
     try {
       await updateAdminUser(user.id, { status: 'active' })
       toast.success('Owner account activated.')
@@ -204,10 +204,10 @@ export default function ManageUsers() {
                     <td className="px-6 py-3">
                       <button type="button" onClick={() => setDialog({ type: 'panel', user, tab: 'details' })} className="flex items-center gap-3 text-left">
                         <div className="w-9 h-9 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-heading font-semibold text-sm shrink-0">
-                          {user.name.charAt(0).toUpperCase()}
+                          {displayName(user.name).charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900 hover:text-primary-700">{user.name}</p>
+                          <p className="text-sm font-medium text-gray-900 hover:text-primary-700">{displayName(user.name)}</p>
                           <p className="text-xs text-gray-500">{user.email}</p>
                         </div>
                       </button>

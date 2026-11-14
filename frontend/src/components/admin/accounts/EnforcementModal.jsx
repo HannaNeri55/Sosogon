@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { FiAlertTriangle, FiArrowLeft, FiPaperclip, FiX } from 'react-icons/fi'
 import Modal from '../../common/Modal'
 import { enforceUser, getUserAccount } from '../../../api/admin'
-import { ACTION_CONSEQUENCES, ENFORCEMENT_ACTIONS, formatDay, roleLabel } from '../../../utils/accountStates'
+import { ACTION_CONSEQUENCES, ENFORCEMENT_ACTIONS, displayName, formatDay, roleLabel } from '../../../utils/accountStates'
 import { showApiError } from '../../../utils/apiErrors'
 import useAdminScope from '../../../hooks/useAdminScope'
 import { parseReview } from '../../../utils/helpers'
@@ -141,7 +141,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
       busy={busy}
       onClose={onClose}
       title={step === 'form' ? 'Account enforcement' : `Confirm: ${action.verb.toLowerCase()}`}
-      subtitle={`${user.name} · ${user.email} · ${roleLabel(user.role?.name || user.role)}`}
+      subtitle={`${displayName(user.name)} · ${user.email} · ${roleLabel(user.role?.name || user.role)}`}
       footer={
         step === 'form' ? (
           <>
@@ -306,7 +306,7 @@ export default function EnforcementModal({ user, initialAction = 'warning', cate
             <FiAlertTriangle size={20} className={`mt-0.5 shrink-0 ${form.action === 'warning' ? 'text-amber-600' : 'text-red-600'}`} aria-hidden="true" />
             <div className="text-sm text-gray-800">
               <p className="font-semibold">
-                {action.verb} for {user.name}
+                {action.verb} for {displayName(user.name)}
                 {form.action === 'suspension' && ` — ${form.suspension_days} day${Number(form.suspension_days) === 1 ? '' : 's'}`}
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-4">

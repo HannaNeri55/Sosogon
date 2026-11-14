@@ -36,6 +36,14 @@ const STATUS = {
   new: ['Pending', 'bg-yellow-100 text-yellow-800'],
   changes: ['Change proposed', 'bg-blue-100 text-blue-700'],
   rejected: ['Rejected', 'bg-red-100 text-red-700'],
+  approved: ['Approved', 'bg-green-100 text-green-700'],
+}
+
+/** A row's status in the "All items" tab, where statuses are mixed. */
+const rowStatus = (row) => {
+  if (row.status === 'rejected') return STATUS.rejected
+  if (row.status === 'approved') return row.pending_changes?.status === 'pending' ? STATUS.changes : STATUS.approved
+  return STATUS.new
 }
 
 const plural = (count, word = 'item') => `${count} ${word}${count === 1 ? '' : 's'}`
@@ -62,6 +70,9 @@ export default function ReviewItems() {
   const tab = REVIEW_TABS.some((option) => option.value === filter('tab')) ? filter('tab') : 'new'
   const isChange = tab === 'changes'
   const isRejected = tab === 'rejected'
+  // The "All items" tab only lists (mixed statuses); decisions happen in the other tabs.
+  const isAll = tab === 'all'
+  const canSelect = !isRejected && !isAll
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -88,6 +99,13 @@ export default function ReviewItems() {
     }, { replace: true })
     if (!keepSelection) setSelected(new Map())
   }, [setParams])
+
+  // A summary card shows the records behind its number: its tab, from the top of the list.
+  const listRef = useRef(null)
+  const showTab = (value) => {
+    update({ tab: value, business: '' })
+    requestAnimationFrame(() => listRef.current?.scrollIntoView({ block: 'start' }))
+  }
 
   const load = useCallback(async () => {
     const request = ++latestRequest.current
@@ -126,7 +144,7 @@ export default function ReviewItems() {
     return parent && parent.status !== 'approved'
   }).length
   const hasFilters = ['kind', 'business', 'q', 'from', 'to'].some((name) => filter(name))
-  const columns = isRejected ? 6 : 8
+  const columns = isRejected ? 6 : isAll ? 7 : 8
 
   const toggleRow = (entry) => setSelected((current) => {
     const next = new Map(current)
@@ -241,11 +259,12 @@ export default function ReviewItems() {
         </p>
       </div>
 
+      {/* Each card shows the records behind its number (the matching tab below). */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <StatCard icon={FiInbox} label="Pending New Items" value={counts.new ?? '—'} accent="yellow" />
-        <StatCard icon={FiEdit3} label="Pending Changes" value={counts.changes ?? '—'} />
-        <StatCard icon={FiXCircle} label="Rejected Items" value={counts.rejected ?? '—'} accent="red" />
-        <StatCard icon={FiLayers} label="Total Submissions" value={counts.total ?? '—'} accent="green" />
+        <StatCard icon={FiInbox} label="Pending New Items" value={counts.new ?? '—'} accent="yellow" onClick={() => showTab('new')} active={tab === 'new'} />
+        <StatCard icon={FiEdit3} label="Pending Changes" value={counts.changes ?? '—'} onClick={() => showTab('changes')} active={tab === 'changes'} />
+        <StatCard icon={FiXCircle} label="Rejected Items" value={counts.rejected ?? '—'} accent="red" onClick={() => showTab('rejected')} active={tab === 'rejected'} />
+        <StatCard icon={FiLayers} label="Total Submissions" value={counts.total ?? '—'} accent="green" onClick={() => showTab('all')} active={tab === 'all'} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4" role="tablist" aria-label="Review type">
@@ -253,7 +272,7 @@ export default function ReviewItems() {
           <button key={option.value} type="button" role="tab" aria-selected={tab === option.value}
             onClick={() => update({ tab: option.value, business: '' })}
             className={`min-h-9 px-3.5 rounded-full text-sm font-medium border transition-colors ${tab === option.value ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>
-            {option.label} <span className="tabular-nums opacity-80">({counts[option.value] ?? 0})</span>
+            {option.label} <span className="tabular-nums opacity-80">({counts[option.count ?? option.value] ?? 0})</span>
           </button>
         ))}
         <button type="button" onClick={load} disabled={loading} className="ml-auto inline-flex items-center gap-1.5 min-h-9 px-3 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50">
@@ -294,9 +313,10 @@ export default function ReviewItems() {
         </label>
       </div>
 
-      <section className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card)" aria-label="Submissions">
+      <section ref={listRef} className="scroll-mt-20 bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card)" aria-label="Submissions">
         <div className="sticky top-16 z-10 bg-white rounded-t-2xl border-b border-gray-200 px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
-          {!isRejected && (
+          {isAll && <p className="text-sm text-gray-600">Every room, dish and product, whatever its status. Open the other tabs to approve or reject.</p>}
+          {canSelect && (
             <>
               <p className="text-sm font-semibold text-gray-900 tabular-nums" aria-live="polite">{count} selected</p>
               {count > 0 && <button type="button" onClick={() => setSelected(new Map())} className="text-sm text-gray-500 underline hover:text-gray-800">Clear</button>}
@@ -325,8 +345,8 @@ export default function ReviewItems() {
           <table className={`w-full ${loading ? 'opacity-70' : ''} transition-opacity`}>
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                {!isRejected && <th scope="col" className="pl-3 sm:pl-4 pr-1 py-2.5 w-8"><SelectAll checked={selectable.length > 0 && pageSelected === selectable.length} indeterminate={pageSelected > 0 && pageSelected < selectable.length} disabled={selectable.length === 0} onChange={togglePage} /></th>}
-                <th scope="col" className={`${TH} ${isRejected ? 'pl-3 sm:pl-4' : ''}`}>Item Name</th>
+                {canSelect && <th scope="col" className="pl-3 sm:pl-4 pr-1 py-2.5 w-8"><SelectAll checked={selectable.length > 0 && pageSelected === selectable.length} indeterminate={pageSelected > 0 && pageSelected < selectable.length} disabled={selectable.length === 0} onChange={togglePage} /></th>}
+                <th scope="col" className={`${TH} ${canSelect ? '' : 'pl-3 sm:pl-4'}`}>Item Name</th>
                 <th scope="col" className={`${TH} hidden md:table-cell`}>Type</th>
                 <th scope="col" className={`${TH} hidden md:table-cell`}>Business</th>
                 {isRejected ? (
@@ -352,11 +372,11 @@ export default function ReviewItems() {
                 const { kind, row } = entry
                 const config = ITEM_KINDS[kind]
                 const parent = config.parent(row)
-                const [statusLabel, statusClass] = STATUS[tab]
+                const [statusLabel, statusClass] = isAll ? rowStatus(row) : STATUS[tab]
                 const isSelected = selected.has(entry.key)
                 return (
                   <tr key={entry.key} className={`border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${isSelected ? 'bg-primary-50/60' : 'hover:bg-primary-50/40'}`}>
-                    {!isRejected && (
+                    {canSelect && (
                       <td className="pl-3 sm:pl-4 pr-1 py-2 align-top">
                         {entry.can_manage === false ? (
                           <FiLock size={13} className="mt-1 text-gray-400" role="img" aria-label={`Managed by ${entry.managed_by || 'another office'}`} title={`Managed by ${entry.managed_by || 'another office'} · view only`} />
@@ -365,7 +385,7 @@ export default function ReviewItems() {
                         )}
                       </td>
                     )}
-                    <td className={`${TD} ${isRejected ? 'pl-3 sm:pl-4' : ''}`}>
+                    <td className={`${TD} ${canSelect ? '' : 'pl-3 sm:pl-4'}`}>
                       <p className="font-semibold text-gray-900 wrap-anywhere">{entry.name}</p>
                       <p className="md:hidden text-xs text-gray-500 wrap-anywhere">{config.type} · {entry.business_name || 'Unknown listing'}</p>
                       {!isRejected && <p className="lg:hidden text-xs text-gray-500">{priceLabel(kind, row, isChange)}</p>}

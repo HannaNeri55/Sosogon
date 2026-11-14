@@ -11,7 +11,7 @@ import StatusPill from '../../components/account/StatusPill'
 import ViolationCard from '../../components/admin/accounts/ViolationCard'
 import ManagedBy from '../../components/admin/ManagedBy'
 import { openPrivateFile } from '../../utils/privateFile'
-import { APPEAL_STATUSES, formatDateTime, roleLabel } from '../../utils/accountStates'
+import { APPEAL_STATUSES, displayName, formatDateTime, roleLabel } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
 
 const STATUS_TABS = [
@@ -58,7 +58,7 @@ function DecisionModal({ appeal, onClose, onDone }) {
       busy={busy}
       onClose={onClose}
       title={pending ? 'Review appeal' : 'Appeal decision'}
-      subtitle={`${appeal.user?.name} · ${appeal.user?.email} · ${roleLabel(appeal.user?.role?.name)}`}
+      subtitle={`${displayName(appeal.user?.name)} · ${appeal.user?.email} · ${roleLabel(appeal.user?.role?.name)}`}
       footer={pending && (
         <>
           <button type="button" onClick={onClose} disabled={busy} className="btn-secondary">Cancel</button>
@@ -210,7 +210,7 @@ export default function AccountAppeals() {
                 <li key={appeal.id}>
                   <button type="button" onClick={() => setOpen(appeal)} className="flex w-full flex-col gap-2 px-5 py-4 text-left hover:bg-primary-50/40 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900">{appeal.user?.name} <span className="font-normal text-gray-500">· {appeal.user?.email}</span></p>
+                      <p className="font-semibold text-gray-900">{displayName(appeal.user?.name)} <span className="font-normal text-gray-500">· {appeal.user?.email}</span></p>
                       <p className="text-sm text-gray-600 truncate">
                         {appeal.violation?.category_label} — {appeal.violation?.action} · submitted {formatDateTime(appeal.created_at)}
                       </p>

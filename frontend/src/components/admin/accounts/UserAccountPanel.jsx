@@ -5,7 +5,7 @@ import LoadingSpinner from '../../common/LoadingSpinner'
 import StatusPill from '../../account/StatusPill'
 import ViolationCard from './ViolationCard'
 import { getUserAccount } from '../../../api/admin'
-import { formatDateTime, roleLabel } from '../../../utils/accountStates'
+import { displayName, formatDateTime, roleLabel } from '../../../utils/accountStates'
 
 const TABS = [
   { key: 'details', label: 'Details' },
@@ -58,7 +58,7 @@ export default function UserAccountPanel({ userId, initialTab = 'details', refre
         <header className="border-b border-gray-200 bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="font-heading text-lg font-bold text-gray-900 truncate">{user?.name || 'Loading…'}</h2>
+              <h2 className="font-heading text-lg font-bold text-gray-900 truncate">{user ? displayName(user.name) : 'Loading…'}</h2>
               {user && <p className="text-sm text-gray-500 truncate">{user.email} · {roleLabel(user.role)}</p>}
             </div>
             <button type="button" onClick={onClose} className="-mr-2 p-2 rounded-full text-gray-500 hover:bg-gray-100" aria-label="Close panel">
@@ -102,7 +102,7 @@ export default function UserAccountPanel({ userId, initialTab = 'details', refre
           ) : tab === 'details' ? (
             <dl className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-white p-5 text-sm sm:grid-cols-2">
               {[
-                ['Name', user.name],
+                ['Name', displayName(user.name)],
                 ['Email', user.email],
                 ['Phone', user.phone || '—'],
                 ['Role', roleLabel(user.role)],

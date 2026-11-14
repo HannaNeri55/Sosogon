@@ -67,3 +67,13 @@ export function formatDay(value) {
 }
 
 export const roleLabel = (role) => (role === 'business_owner' ? 'Business owner' : role ? role.charAt(0).toUpperCase() + role.slice(1) : '')
+
+/**
+ * A user's name as the admin area shows it. Sample accounts are named "Demo Owner – <business>";
+ * the "Demo Owner(s)" wording is left out of the display. The stored name is unchanged (searches
+ * still match it), and nothing else is invented in its place.
+ */
+export function displayName(name) {
+  const shown = (name || '').replace(/^\s*demo\s+owners?\s*[-\u2013\u2014:]\s*/i, '').trim()
+  return shown || name || ''
+}
