@@ -37,8 +37,6 @@ export const REVIEW_TABS = [
   { value: 'new', label: 'New items' },
   { value: 'changes', label: 'Proposed changes' },
   { value: 'rejected', label: 'Rejected new items' },
-  // Every item of any status (the Total card); read-only, decisions happen in the other tabs.
-  { value: 'all', label: 'All items', count: 'total' },
 ]
 
 export function displayValue(value) {

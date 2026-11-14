@@ -68,8 +68,7 @@ class AdminItemReviewController extends Controller
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            // "all": every item of any status (the Total card), read-only on the screen.
-            'tab' => 'nullable|in:new,changes,rejected,all',
+            'tab' => 'nullable|in:new,changes,rejected',
             'kind' => 'nullable|in:rooms,menu,products',
             'business' => ['nullable', 'regex:/^(rooms|menu|products):\d+$/'],
             'q' => 'nullable|string|max:255',
@@ -246,12 +245,9 @@ class AdminItemReviewController extends Controller
                 },
             ]);
 
-        return match ($tab) {
-            'changes' => $query->where('item.pending_changes->status', 'pending'),
-            'rejected' => $query->where('item.status', 'rejected'),
-            'all' => $query,
-            default => $query->where('item.status', 'pending'),
-        };
+        return $tab === 'changes'
+            ? $query->where('item.pending_changes->status', 'pending')
+            : $query->where('item.status', $tab === 'rejected' ? 'rejected' : 'pending');
     }
 
     /** Swaps each page row for the full record the review panel needs. */
