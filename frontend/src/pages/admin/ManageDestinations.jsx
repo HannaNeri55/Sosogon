@@ -12,6 +12,7 @@ import {
   getAdminDestinations,
   createDestination,
   updateDestination,
+  updateDestinationRanking,
   deleteDestination,
   getMunicipalities,
   getCategories,
@@ -31,6 +32,7 @@ import { confirmDialog } from "../../utils/dialogs";
 import useFormErrors from "../../hooks/useFormErrors";
 import FieldError, { FormErrorSummary } from "../../components/common/FieldError";
 import useAdminScope from "../../hooks/useAdminScope";
+import ManagedBy from "../../components/admin/ManagedBy";
 
 const PRIORITY_LABELS = {
   iconic: "Must-Visit / Iconic",
@@ -105,6 +107,18 @@ export default function ManageDestinations() {
       setItems(data.data || []);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // A provincial admin sets Featured and Tourism priority on any municipality's destination,
+  // including one its own tourism office manages (the rest of that record is the office's).
+  const updateRanking = async (item, ranking) => {
+    try {
+      await updateDestinationRanking(item.id, ranking);
+      toast.success("Destination ranking updated");
+      loadData();
+    } catch (err) {
+      showApiError(err, "Could not update the destination's ranking.");
     }
   };
 
@@ -941,6 +955,34 @@ export default function ManageDestinations() {
                     </span>
                   </td>
                   <td data-actions className="px-6 py-4">
+                    {item.can_manage === false ? (
+                      <div className="flex flex-col items-end gap-2">
+                        <ManagedBy office={item.managed_by} className="ml-auto" />
+                        {scope.isProvincial && (
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => updateRanking(item, { is_featured: !item.is_featured })}
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700"
+                            >
+                              <FiStar size={13} className={item.is_featured ? "text-yellow-500 fill-yellow-500" : ""} />
+                              {item.is_featured ? "Unfeature" : "Feature"}
+                            </button>
+                            <select
+                              aria-label={`Tourism priority of ${item.name}`}
+                              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                              value={item.tourism_priority || ""}
+                              onChange={(e) => updateRanking(item, { tourism_priority: e.target.value || null })}
+                            >
+                              <option value="">Not classified</option>
+                              {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                     <div className="flex gap-3 justify-end">
                       <button
                         onClick={() => startEdit(item)}
@@ -957,6 +999,7 @@ export default function ManageDestinations() {
                         <FiTrash2 size={15} />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}

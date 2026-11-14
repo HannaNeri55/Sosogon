@@ -26,6 +26,8 @@ const LOG_LABELS = {
   activated_legacy_owner: 'Owner account activated',
   admin_created: 'Admin account created',
   admin_scope_changed: 'Admin scope changed',
+  admin_deactivated: 'Admin access deactivated',
+  admin_reactivated: 'Admin access restored',
 }
 
 /** Side panel: profile and state, account activity, and full violation history of one user. */
@@ -67,7 +69,13 @@ export default function UserAccountPanel({ userId, initialTab = 'details', refre
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusPill value={user.account_state} withDot />
               {user.account_state === 'suspended' && <span className="text-xs text-gray-600">until {formatDateTime(user.suspended_until)}</span>}
-              {user.is_protected && <span className="text-xs font-medium text-gray-500">Administrator accounts are protected</span>}
+              {user.is_protected && (
+                <span className="text-xs font-medium text-gray-500">
+                  {user.admin?.scope === 'municipal'
+                    ? `Municipal administrator · ${user.admin.designation}`
+                    : 'Administrator accounts are protected'}
+                </span>
+              )}
             </div>
           )}
           {user && actions && <div className="mt-3">{actions(user)}</div>}

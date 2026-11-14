@@ -16,6 +16,9 @@ import { formatDateTime } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
 import { confirmDialog } from '../../utils/dialogs'
 import useAdminScope from '../../hooks/useAdminScope'
+import { useAuth } from '../../contexts/AuthContext'
+import { getUser } from '../../api/auth'
+import ManagedBy from '../../components/admin/ManagedBy'
 
 const ROLE_STYLES = {
   admin: 'bg-primary-50 text-primary-700',
@@ -40,6 +43,7 @@ const ROLE_FILTERS = [
 export default function ManageUsers() {
   // A municipal admin sees their municipality's owners and the tourists who reviewed its listings.
   const scope = useAdminScope()
+  const { updateUser } = useAuth()
   const [items, setItems] = useState([])
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 })
   const [page, setPage] = useState(1)
@@ -84,6 +88,8 @@ export default function ManageUsers() {
 
   // After an action: refresh the list and, if the panel was open, reopen it with fresh data.
   const afterAction = (user) => {
+    // A municipal admin's access changed: which municipalities have their own office may have too.
+    if (dialog?.type?.startsWith('admin_')) getUser().then((fresh) => updateUser({ admin: fresh.admin })).catch(() => {})
     loadData()
     setPanelKey((key) => key + 1)
     setDialog(dialog?.from === 'panel' ? { type: 'panel', user, tab: 'violations' } : null)
@@ -109,7 +115,16 @@ export default function ManageUsers() {
       { label: 'View account activity', icon: FiActivity, onClick: () => setDialog({ type: 'panel', user, tab: 'activity' }) },
       { label: 'View violation history', icon: FiFileText, onClick: () => setDialog({ type: 'panel', user, tab: 'violations' }) },
     ]
-    if (protectedAccount || state === 'closed') return items
+    // A municipal administrator's access: the provincial administrator may deactivate or restore it.
+    if (protectedAccount && scope.isProvincial && (user.admin?.scope ?? user.admin_scope) === 'municipal' && state !== 'closed') {
+      items.push({ divider: true })
+      items.push(state === 'deactivated'
+        ? { label: 'Restore admin access…', icon: FiRotateCcw, tone: 'good', onClick: () => setDialog({ type: 'admin_reactivate', user, from }) }
+        : { label: 'Deactivate admin access…', icon: FiSlash, tone: 'danger', onClick: () => setDialog({ type: 'admin_deactivate', user, from }) })
+      return items
+    }
+    // An owner whose business is in a municipality with its own tourism office: that office acts.
+    if (protectedAccount || state === 'closed' || user.can_manage === false) return items
 
     items.push({ divider: true })
     if (state === 'pending' && !user.owner_application) {
@@ -207,6 +222,7 @@ export default function ManageUsers() {
                       {user.account_state === 'suspended' && user.suspended_until && (
                         <p className="mt-1 text-xs text-gray-500">until {formatDateTime(user.suspended_until)}</p>
                       )}
+                      {user.can_manage === false && <ManagedBy office={user.managed_by} className="mt-1" />}
                     </td>
                     <td data-label="Violations" className="px-6 py-4 text-sm text-gray-600">
                       {user.violations_count > 0 ? (
@@ -235,15 +251,17 @@ export default function ManageUsers() {
           initialTab={dialog.tab}
           refreshKey={panelKey}
           onClose={closeDialog}
-          actions={(fresh) => (
+          actions={(fresh) => (fresh.can_manage === false ? (
+            <ManagedBy office={fresh.managed_by} />
+          ) : (
             <ActionMenu label="Account actions" items={menuItems({ ...dialog.user, ...fresh, role: { name: fresh.role } }, 'panel').filter((item) => item.divider || !item.label.startsWith('View'))} />
-          )}
+          ))}
         />
       )}
       {dialog?.type === 'enforce' && (
         <EnforcementModal user={dialog.user} initialAction={dialog.action} categories={categories} onClose={closeDialog} onDone={() => afterAction(dialog.user)} />
       )}
-      {(dialog?.type === 'reactivate' || dialog?.type === 'close') && (
+      {['reactivate', 'close', 'admin_deactivate', 'admin_reactivate'].includes(dialog?.type) && (
         <ReasonActionModal user={dialog.user} mode={dialog.type} onClose={closeDialog} onDone={() => afterAction(dialog.user)} />
       )}
     </div>

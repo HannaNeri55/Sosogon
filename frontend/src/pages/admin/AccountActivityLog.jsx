@@ -20,6 +20,8 @@ const ACTIONS = {
   activated_legacy_owner: 'Owner account activated',
   admin_created: 'Admin account created',
   admin_scope_changed: 'Admin scope changed',
+  admin_deactivated: 'Admin access deactivated',
+  admin_reactivated: 'Admin access restored',
 }
 
 /** Read-only audit trail of account management actions. Entries cannot be edited or deleted. */

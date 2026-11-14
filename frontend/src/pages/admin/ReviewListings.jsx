@@ -43,6 +43,7 @@ import {
 } from '../../utils/helpers'
 import { showApiError } from '../../utils/apiErrors'
 import useAdminScope from '../../hooks/useAdminScope'
+import ManagedBy from '../../components/admin/ManagedBy'
 
 const BUSINESS_TYPES = [
   { key: 'accommodation', label: 'Accommodations' },
@@ -435,6 +436,9 @@ function ReviewModal({
     isRevision &&
     Boolean(revision?.proposed_data?.municipality_id) &&
     Number(revision.proposed_data.municipality_id) !== Number(listing.municipality_id)
+  // Another office decides it (e.g. a municipality's own tourism office): view only. A move to
+  // another municipality is still the provincial administrator's decision.
+  const viewOnly = listing.can_manage === false && !(movesMunicipality && scope.isProvincial)
 
   const images = useMemo(
     () => getProposedImages(listing, type),
@@ -559,7 +563,7 @@ function ReviewModal({
           </section>
 
           {type === 'accommodation' && (
-            <CategoryEditor listing={listing} locked={isRevision} onSaved={onCategoriesSaved} />
+            <CategoryEditor listing={listing} locked={isRevision || listing.can_manage === false} onSaved={onCategoriesSaved} />
           )}
 
           <section className="space-y-4">
@@ -775,8 +779,9 @@ function ReviewModal({
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap justify-end gap-2">
-              {isSubmitted && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {viewOnly && <ManagedBy office={listing.managed_by} className="mr-auto" />}
+              {isSubmitted && !viewOnly && (
                 <>
                   <button
                     type="button"

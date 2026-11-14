@@ -22,6 +22,7 @@ import {
 } from '../../utils/helpers'
 import { STATUS_COLORS } from '../../utils/constants'
 import { showApiError } from '../../utils/apiErrors'
+import ManagedBy from './ManagedBy'
 
 function Detail({ icon: Icon, label, children }) {
   return (
@@ -49,7 +50,9 @@ export default function SubmissionReviewModal({
   const [notesError, setNotesError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const isPending = submission.status === 'pending'
+  // Another office decides it (e.g. a municipality's own tourism office): shown read-only.
+  const viewOnly = submission.can_manage === false
+  const isPending = submission.status === 'pending' && !viewOnly
 
   const location = [
     submission.address,
@@ -409,7 +412,8 @@ export default function SubmissionReviewModal({
               </button>
             </div>
           ) : (
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {viewOnly && <ManagedBy office={submission.managed_by} className="mr-auto" />}
               <button
                 type="button"
                 onClick={onClose}

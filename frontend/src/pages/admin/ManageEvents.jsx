@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FiSearch, FiEdit2, FiTrash2, FiStar, FiImage, FiUpload, FiX } from 'react-icons/fi'
-import { getAdminEvents, createEvent, updateEvent, deleteEvent, getMunicipalities } from '../../api/admin'
+import { getAdminEvents, createEvent, updateEvent, updateEventRanking, deleteEvent, getMunicipalities } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getImageUrl } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -10,6 +10,7 @@ import { confirmDialog } from '../../utils/dialogs'
 import useFormErrors from '../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../components/common/FieldError'
 import useAdminScope from '../../hooks/useAdminScope'
+import ManagedBy from '../../components/admin/ManagedBy'
 
 const EMPTY_FORM = {
   title: '', description: '', location: '', municipality_id: '',
@@ -148,6 +149,17 @@ export default function ManageEvents() {
       loadData()
     } catch (err) {
       if (!form.fromResponse(err)) showApiError(err, editingId ? 'Failed to update event' : 'Failed to create event')
+    }
+  }
+
+  // A provincial admin features any municipality's event, including one its own office manages.
+  const toggleFeatured = async (item) => {
+    try {
+      await updateEventRanking(item.id, !item.is_featured)
+      toast.success(item.is_featured ? 'Event is no longer featured' : 'Event featured')
+      loadData()
+    } catch (err) {
+      showApiError(err, 'Could not update the event.')
     }
   }
 
@@ -346,7 +358,15 @@ export default function ManageEvents() {
                   </td>
                   <td data-actions className="px-6 py-4">
                     {item.can_manage === false ? (
-                      <p className="text-right text-xs text-gray-400">Managed by the provincial administrator</p>
+                      <div className="flex flex-col items-end gap-2">
+                        <ManagedBy office={item.managed_by} className="ml-auto" />
+                        {scope.isProvincial && (
+                          <button type="button" onClick={() => toggleFeatured(item)} className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700">
+                            <FiStar size={13} className={item.is_featured ? 'text-yellow-500 fill-yellow-500' : ''} />
+                            {item.is_featured ? 'Unfeature' : 'Feature'}
+                          </button>
+                        )}
+                      </div>
                     ) : (
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
