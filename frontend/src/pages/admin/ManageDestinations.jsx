@@ -1,5 +1,6 @@
 // frontend/src/pages/admin/ManageDestinations.jsx — full file
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   FiSearch,
   FiEdit2,
@@ -32,6 +33,12 @@ import { confirmDialog } from "../../utils/dialogs";
 import useFormErrors from "../../hooks/useFormErrors";
 import FieldError, { FormErrorSummary } from "../../components/common/FieldError";
 import useAdminScope from "../../hooks/useAdminScope";
+import MunicipalityWorkspace from "../../components/admin/MunicipalityWorkspace";
+import Pagination from "../../components/common/Pagination";
+import EmptyState from "../../components/common/EmptyState";
+
+/** Destinations per page inside a municipality's workspace. */
+const PAGE_SIZE = 10;
 
 const PRIORITY_LABELS = {
   iconic: "Must-Visit / Iconic",
@@ -68,7 +75,14 @@ export default function ManageDestinations() {
   // priority rank places across the province, so only provincial admins set them.
   const scope = useAdminScope();
   const ownTown = scope.municipality ? String(scope.municipality.id) : null;
-  const blankForm = () => ({ ...EMPTY_FORM, municipality_id: ownTown ?? EMPTY_FORM.municipality_id });
+  // The selected municipality's workspace (?municipality=<id>, so it survives a reload).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [page, setPage] = useState(1);
+  // A new destination starts in the municipality being viewed, when this admin manages it.
+  const blankForm = () => ({
+    ...EMPTY_FORM,
+    municipality_id: ownTown ?? (selectedKey && scope.canManage(selectedKey) ? selectedKey : EMPTY_FORM.municipality_id),
+  });
   const [items, setItems] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -97,16 +111,29 @@ export default function ManageDestinations() {
     );
   }, [items, search]);
 
-  // The list grouped by each destination's municipality, municipalities in name order.
-  const groups = useMemo(() => {
-    const byTown = new Map();
-    for (const item of filteredItems) {
-      const key = item.municipality_id ?? "none";
-      if (!byTown.has(key)) byTown.set(key, { key, name: item.municipality?.name || "No municipality", items: [] });
-      byTown.get(key).items.push(item);
-    }
-    return [...byTown.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [filteredItems]);
+  // One workspace per municipality (a municipal admin: their own), each with its destination count.
+  const areas = useMemo(() => {
+    const towns = scope.isMunicipal ? (scope.municipality ? [scope.municipality] : []) : municipalities;
+    const counts = {};
+    items.forEach((item) => { counts[item.municipality_id] = (counts[item.municipality_id] || 0) + 1; });
+    return [...towns]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((town) => ({ key: String(town.id), name: town.name, count: counts[town.id] || 0 }));
+  }, [items, municipalities, scope.isMunicipal, scope.municipality]);
+  const requested = searchParams.get("municipality");
+  const selectedKey = areas.some((area) => area.key === requested) ? requested : areas[0]?.key ?? null;
+  const selectedArea = areas.find((area) => area.key === selectedKey);
+  const selectArea = (key) => {
+    setSearchParams((params) => { params.set("municipality", key); return params; }, { replace: true });
+    setSearch("");
+    setPage(1);
+  };
+
+  // The selected municipality's destinations matching the search, a page at a time.
+  const townItems = filteredItems.filter((item) => String(item.municipality_id) === selectedKey);
+  const lastPage = Math.max(1, Math.ceil(townItems.length / PAGE_SIZE));
+  const currentPage = Math.min(page, lastPage);
+  const pageItems = townItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const formRef = useScrollToForm(showForm ? editingId ?? "new" : null);
   const form = useFormErrors(formRef);
@@ -368,6 +395,8 @@ export default function ManageDestinations() {
       } else {
         await createDestination(payload);
         toast.success("Destination created");
+        // Open the municipality it was added to.
+        if (formData.municipality_id && String(formData.municipality_id) !== selectedKey) selectArea(String(formData.municipality_id));
       }
       closeForm();
       loadData();
@@ -874,95 +903,115 @@ export default function ManageDestinations() {
         </form>
       )}
 
-      <div className="relative mb-5 max-w-sm">
-        <FiSearch
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          size={16}
-        />
-        <input
-          className="input-field pl-9"
-          placeholder="Search destinations..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <MunicipalityWorkspace areas={areas} selectedKey={selectedKey} onSelect={selectArea} noun="destination">
+      {selectedArea && (
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-xl font-heading font-bold text-gray-900">
+              <FiMapPin size={18} className="text-primary-600" aria-hidden="true" />
+              {selectedArea.name}
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500">
+              {selectedArea.count} destination{selectedArea.count === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <FiSearch
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={16}
+            />
+            <input
+              type="search"
+              className="input-field pl-9"
+              placeholder={`Search ${selectedArea.name} destinations`}
+              aria-label={`Search ${selectedArea.name} destinations`}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
+        </div>
+      )}
 
+      {pageItems.length === 0 ? (
+        <EmptyState
+          icon={FiMapPin}
+          title={search.trim()
+            ? `No destinations in ${selectedArea?.name} match “${search.trim()}”`
+            : `No destinations in ${selectedArea?.name ?? "this municipality"} yet`}
+        >
+          {!search.trim() && selectedKey && scope.canManage(selectedKey) && "Use Add Destination to add the first one."}
+        </EmptyState>
+      ) : (
       <div className="bg-white rounded-2xl border border-gray-200/70 shadow-(--shadow-card) overflow-hidden">
         <div className="overflow-x-auto">
           {/* Phones: keep columns readable and let the table scroll sideways. */}
           <table className="table-cards w-full min-w-[40rem] [&_.rounded-full]:whitespace-nowrap">
             <thead className="bg-gray-50/80 border-b border-gray-200">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Destination
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Category
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Status
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Featured
                 </th>
-                <th className="text-left px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Views
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Actions
                 </th>
               </tr>
             </thead>
-            {groups.map((group) => (
-            <tbody key={group.key} className="border-b border-gray-200 last:border-b-0">
-              <tr className="bg-gray-50/70">
-                <th scope="colgroup" colSpan={6} className="px-6 py-2.5 text-left">
-                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <FiMapPin size={14} className="text-primary-600" aria-hidden="true" />
-                    {group.name}
-                    <span className="text-xs font-medium text-gray-500">
-                      {group.items.length} destination{group.items.length === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                </th>
-              </tr>
-              {group.items.map((item) => (
+            <tbody>
+              {pageItems.map((item) => (
                 <tr
                   key={item.id}
                   className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150"
                 >
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <img
                         src={getImageUrl(item.images?.find((img) => img.is_primary) || item.images?.[0])}
                         alt=""
                         className="w-10 h-10 rounded-lg object-cover shrink-0 bg-gray-100"
                       />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                          <FiMapPin size={10} />
-                          {item.municipality?.name}
-                        </p>
-                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {item.name}
+                      </p>
                     </div>
                   </td>
-                  <td data-label="Category" className="px-6 py-4">
+                  <td data-label="Category" className="px-4 py-4">
                     <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary-50 text-secondary-700">
                       {item.category?.name}
                     </span>
                   </td>
-                  <td data-label="Status" className="px-6 py-4">
+                  <td data-label="Status" className="px-4 py-4">
                     <span
                       className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${item.status === "published" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
                     >
                       {item.status}
                     </span>
                   </td>
-                  <td data-label="Featured" className="px-6 py-4 text-sm text-gray-600">
-                    {item.is_featured ? (
+                  <td data-label="Featured" className="px-4 py-4 text-sm text-gray-600">
+                    {item.can_manage === false && scope.isProvincial ? (
+                      // Managed by its municipality's own tourism office: Featured stays with the province.
+                      <button
+                        type="button"
+                        onClick={() => updateRanking(item, { is_featured: !item.is_featured })}
+                        aria-pressed={Boolean(item.is_featured)}
+                        aria-label={`${item.is_featured ? "Unfeature" : "Feature"} ${item.name}`}
+                        title={item.is_featured ? "Featured. Click to unfeature." : "Not featured. Click to feature."}
+                        className="-m-1.5 rounded-lg p-1.5 text-gray-400 hover:bg-accent-50 hover:text-yellow-500"
+                      >
+                        <FiStar size={15} className={item.is_featured ? "text-yellow-500 fill-yellow-500" : ""} />
+                      </button>
+                    ) : item.is_featured ? (
                       <FiStar
                         className="text-yellow-500 fill-yellow-500"
                         size={15}
@@ -971,29 +1020,22 @@ export default function ManageDestinations() {
                       "—"
                     )}
                   </td>
-                  <td data-label="Views" className="px-6 py-4 text-sm text-gray-600">
+                  <td data-label="Views" className="px-4 py-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1.5">
                       <FiEye size={13} className="text-gray-400" />
                       {item.view_count}
                     </span>
                   </td>
-                  <td data-actions className="px-6 py-4">
+                  <td data-actions className="px-4 py-4">
                     {item.can_manage === false ? (
                       // Managed by its municipality's own tourism office: no edit or delete here; a
-                      // provincial admin keeps Featured and Tourism priority.
+                      // provincial admin keeps Tourism priority (and Featured, in its column).
                       scope.isProvincial && (
-                          <div className="flex flex-wrap items-center justify-end gap-3">
-                            <button
-                              type="button"
-                              onClick={() => updateRanking(item, { is_featured: !item.is_featured })}
-                              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700"
-                            >
-                              <FiStar size={13} className={item.is_featured ? "text-yellow-500 fill-yellow-500" : ""} />
-                              {item.is_featured ? "Unfeature" : "Feature"}
-                            </button>
+                          <div className="flex justify-end">
                             <select
                               aria-label={`Tourism priority of ${item.name}`}
-                              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                              title="Tourism priority"
+                              className="w-36 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
                               value={item.tourism_priority || ""}
                               onChange={(e) => updateRanking(item, { tourism_priority: e.target.value || null })}
                             >
@@ -1026,10 +1068,12 @@ export default function ManageDestinations() {
                 </tr>
               ))}
             </tbody>
-            ))}
           </table>
         </div>
       </div>
+      )}
+      <Pagination currentPage={currentPage} lastPage={lastPage} onPageChange={setPage} />
+      </MunicipalityWorkspace>
     </div>
   );
 }
