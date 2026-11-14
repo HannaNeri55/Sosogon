@@ -15,13 +15,13 @@ class AdminEventController extends Controller
     private const IMAGE_RULE = 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120';
 
     /**
-     * A municipal admin sees their municipality's events and, read-only, the province-wide ones
-     * (no municipality); each row says whether this admin can change it (can_manage).
+     * A municipal admin sees their municipality's events only (not the province-wide ones, which
+     * are the provincial admin's); each row says whether this admin can change it (can_manage).
      */
     public function index(Request $request): JsonResponse
     {
         $query = Event::with('municipality');
-        AdminScope::applyWithProvinceWide($query, $request->user());
+        AdminScope::apply($query, $request->user());
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -66,10 +66,7 @@ class AdminEventController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $event = Event::with('municipality')->findOrFail($id);
-        // Province-wide events can be read by every admin.
-        if ($event->municipality_id !== null) {
-            AdminScope::authorizeRecordView($request->user(), $event);
-        }
+        AdminScope::authorizeRecordView($request->user(), $event);
         AdminScope::markManageable([$event], $request->user());
 
         return response()->json($event);
