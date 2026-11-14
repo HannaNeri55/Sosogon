@@ -15,7 +15,6 @@ import {
   FiBarChart2,
   FiArrowRight,
   FiCheckCircle,
-  FiLock,
 } from 'react-icons/fi'
 import { getAdminDashboard } from '../../api/admin'
 import { useAuth } from '../../contexts/AuthContext'
@@ -96,8 +95,6 @@ export default function AdminDashboard() {
 
   const stats = data?.stats || {}
   const pending = stats.pending_submissions || 0
-  // For a provincial admin: the municipalities whose own tourism office manages them.
-  const ownOffices = data?.own_offices || []
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
@@ -129,7 +126,8 @@ export default function AdminDashboard() {
       {/* ==================== NUMBERS ==================== */}
       <section aria-label="Listings">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Listings</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Three per row on wide screens too: six in a row cut off the labels below ~1900px. */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={FiMapPin} label="Destinations" value={stats.total_destinations || 0} accent="primary" to="/admin/destinations" />
           <StatCard icon={FiHome} label="Accommodations" value={stats.total_accommodations || 0} accent="secondary" />
           <StatCard icon={FiCoffee} label="Food & Beverage" value={stats.total_food_beverages || 0} accent="green" />
@@ -146,18 +144,6 @@ export default function AdminDashboard() {
           <StatCard icon={FiUsers} label="Total Users" value={stats.total_users || 0} accent="secondary" to="/admin/users" />
           <StatCard icon={FiEye} label="Monthly Views" value={stats.monthly_views || 0} accent="green" to="/admin/reports" />
         </div>
-        {ownOffices.length > 0 && (
-          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-            <p className="flex items-center gap-2 font-semibold text-gray-900">
-              <FiLock size={14} aria-hidden="true" /> Managed by their own tourism office
-            </p>
-            <p className="mt-1">
-              {ownOffices.map((town) => town.office).join(', ')}{' '}
-              {ownOffices.length === 1 ? 'handles its' : 'handle their'} listings, registrations and reviews. You can view them;
-              Featured and Tourism priority stay with you. Pending submissions above count only the municipalities you manage.
-            </p>
-          </div>
-        )}
       </section>
 
       {/* ==================== TREND + QUICK ACTIONS ==================== */}

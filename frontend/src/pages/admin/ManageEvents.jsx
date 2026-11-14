@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FiSearch, FiEdit2, FiTrash2, FiStar, FiImage, FiUpload, FiX } from 'react-icons/fi'
+import { FiSearch, FiEdit2, FiTrash2, FiStar, FiImage, FiUpload, FiX, FiMapPin } from 'react-icons/fi'
 import { getAdminEvents, createEvent, updateEvent, updateEventRanking, deleteEvent, getMunicipalities } from '../../api/admin'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getImageUrl } from '../../utils/helpers'
@@ -78,10 +78,22 @@ export default function ManageEvents() {
     return items.filter((item) => item.title?.toLowerCase().includes(q))
   }, [items, search])
 
+  // The list grouped by each event's municipality: province-wide events first, then municipalities in name order.
+  const groups = useMemo(() => {
+    const byTown = new Map()
+    for (const item of filteredItems) {
+      const key = item.municipality_id ?? 'province'
+      if (!byTown.has(key)) byTown.set(key, { key, name: item.municipality?.name || 'Province-wide', provinceWide: item.municipality_id == null, items: [] })
+      byTown.get(key).items.push(item)
+    }
+    return [...byTown.values()].sort((a, b) => Number(b.provinceWide) - Number(a.provinceWide) || a.name.localeCompare(b.name))
+  }, [filteredItems])
+
 
   const loadData = async () => {
     try {
-      const data = await getAdminEvents({ per_page: 100 })
+      // Every event at once (the server allows up to 200), so each municipality's group is complete.
+      const data = await getAdminEvents({ per_page: 200 })
       setItems(data.data || [])
     } finally {
       setLoading(false)
@@ -323,8 +335,18 @@ export default function ManageEvents() {
                 <th className="text-right px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {filteredItems.map((item) => (
+            {groups.map((group) => (
+            <tbody key={group.key} className="border-b border-gray-200 last:border-b-0">
+              <tr className="bg-gray-50/70">
+                <th scope="colgroup" colSpan={5} className="px-6 py-2.5 text-left">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <FiMapPin size={14} className="text-primary-600" aria-hidden="true" />
+                    {group.name}
+                    <span className="text-xs font-medium text-gray-500">{group.items.length} event{group.items.length === 1 ? '' : 's'}</span>
+                  </span>
+                </th>
+              </tr>
+              {group.items.map((item) => (
                 <tr key={item.id} className="border-b border-gray-100 last:border-b-0 hover:bg-primary-50/40 transition-colors duration-150">
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
@@ -358,15 +380,21 @@ export default function ManageEvents() {
                   </td>
                   <td data-actions className="px-6 py-4">
                     {item.can_manage === false ? (
-                      <div className="flex flex-col items-end gap-2">
-                        <ManagedBy office={item.managed_by} className="ml-auto" />
-                        {scope.isProvincial && (
-                          <button type="button" onClick={() => toggleFeatured(item)} className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700">
-                            <FiStar size={13} className={item.is_featured ? 'text-yellow-500 fill-yellow-500' : ''} />
-                            {item.is_featured ? 'Unfeature' : 'Feature'}
-                          </button>
-                        )}
-                      </div>
+                      item.managed_by ? (
+                        // Managed by its municipality's own tourism office: no edit or delete here; a
+                        // provincial admin keeps Featured.
+                        scope.isProvincial && (
+                          <div className="flex justify-end">
+                            <button type="button" onClick={() => toggleFeatured(item)} className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-primary-700">
+                              <FiStar size={13} className={item.is_featured ? 'text-yellow-500 fill-yellow-500' : ''} />
+                              {item.is_featured ? 'Unfeature' : 'Feature'}
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        // A province-wide event, for a municipal admin.
+                        <ManagedBy className="ml-auto" />
+                      )
                     ) : (
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => startEdit(item)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
@@ -381,6 +409,7 @@ export default function ManageEvents() {
                 </tr>
               ))}
             </tbody>
+            ))}
           </table>
         </div>
       </div>
