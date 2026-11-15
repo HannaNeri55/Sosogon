@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Tourist;
 use App\Http\Controllers\Controller;
 use App\Models\Itinerary;
 use App\Services\ItineraryDocumentService;
+use App\Services\ItineraryPdfDownloads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ItineraryDocumentController extends Controller
 {
-    public function __construct(private ItineraryDocumentService $documents) {}
+    public function __construct(private ItineraryDocumentService $documents, private ItineraryPdfDownloads $downloads) {}
 
     private function owned(Request $request, int $id): Itinerary
     {
@@ -54,6 +55,24 @@ class ItineraryDocumentController extends Controller
         $itinerary = $this->ownedWithDetails($request, $id);
 
         return $this->documents->pdf($itinerary)->download($this->documents->filename($itinerary));
+    }
+
+    /**
+     * Download PDF: makes the PDF and returns its ticket. The browser then opens
+     * /itinerary-files/{ticket}/download itself to save the file, or /view to show it (Open PDF).
+     */
+    public function preparePdf(Request $request, int $id): JsonResponse
+    {
+        return response()->json($this->downloads->prepare($this->ownedWithDetails($request, $id)));
+    }
+
+    /** Whether the browser has fetched the prepared file yet: the only sign a page gets that a download began. */
+    public function pdfDownloadStatus(Request $request, int $id, string $ticket): JsonResponse
+    {
+        $download = $this->downloads->find($ticket);
+        abort_unless($download && $download['user_id'] === $request->user()->id && $download['itinerary_id'] === $id, 404);
+
+        return response()->json(['started' => $download['started']]);
     }
 
     public function shareStatus(Request $request, int $id): JsonResponse

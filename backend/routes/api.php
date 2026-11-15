@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\Public\DestinationController;
 use App\Http\Controllers\Api\Public\EventController;
 use App\Http\Controllers\Api\Public\FoodBeverageController;
 use App\Http\Controllers\Api\Public\HeroSlideController;
+use App\Http\Controllers\Api\Public\ItineraryFileController;
 use App\Http\Controllers\Api\Public\LocationController;
 use App\Http\Controllers\Api\Public\PageViewController;
 use App\Http\Controllers\Api\Public\PhotoCreditController;
@@ -110,6 +111,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/shared-itineraries/{token}/pdf', [SharedItineraryController::class, 'pdf'])->middleware('throttle:20,1');
     });
 
+    // A prepared itinerary PDF, opened by the browser itself so it saves to the device's Downloads.
+    // The random ticket is the key and expires after a few minutes (ItineraryPdfDownloads).
+    Route::get('/itinerary-files/{ticket}/{mode}', [ItineraryFileController::class, 'show'])
+        ->where(['ticket' => '[A-Za-z0-9]{40}', 'mode' => 'download|view'])
+        ->middleware('throttle:30,1')
+        ->name('itinerary-files.show');
+
     // Guest itinerary planner: returns a preview only; the full itinerary is claimed after login.
     Route::middleware('throttle:5,1')->group(function () {
         Route::post('/itineraries/guest-generate', [ItineraryController::class, 'guestGenerate']);
@@ -152,6 +160,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::post('/itineraries/{id}/save', [ItineraryDocumentController::class, 'save']);
         Route::get('/itineraries/{id}/document', [ItineraryDocumentController::class, 'document'])->middleware('throttle:30,1');
         Route::get('/itineraries/{id}/pdf', [ItineraryDocumentController::class, 'pdf'])->middleware('throttle:20,1');
+        Route::post('/itineraries/{id}/pdf-download', [ItineraryDocumentController::class, 'preparePdf'])->middleware('throttle:20,1');
+        Route::get('/itineraries/{id}/pdf-download/{ticket}', [ItineraryDocumentController::class, 'pdfDownloadStatus'])->where('ticket', '[A-Za-z0-9]{40}');
         Route::get('/itineraries/{id}/share', [ItineraryDocumentController::class, 'shareStatus']);
         Route::post('/itineraries/{id}/share', [ItineraryDocumentController::class, 'share']);
         Route::delete('/itineraries/{id}/share', [ItineraryDocumentController::class, 'unshare']);
