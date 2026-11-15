@@ -67,9 +67,19 @@ class ItineraryDocumentService
         return $pdf;
     }
 
+    /**
+     * "SOSOGON-Itinerary-Prieto-Diaz-2026-12-05.pdf": the towns visited (the province when there are
+     * more than two) and the first day of the trip, or the day it was planned when it has no dates.
+     */
     public function filename(Itinerary $itinerary): string
     {
-        return (Str::slug($itinerary->title) ?: 'itinerary').'-sosogon.pdf';
+        $towns = $itinerary->municipalities->pluck('name')->whenEmpty(
+            fn ($names) => $names->push($itinerary->municipality?->name)->filter()
+        );
+        $place = $towns->count() > 2 || $towns->isEmpty() ? 'Sorsogon' : $towns->implode(' ');
+        $date = ($itinerary->start_date ?? $itinerary->created_at ?? now())->format('Y-m-d');
+
+        return 'SOSOGON-Itinerary-'.trim(preg_replace('/[^A-Za-z0-9]+/', '-', Str::ascii($place)), '-').'-'.$date.'.pdf';
     }
 
     public function datesLabel(Itinerary $itinerary): ?string

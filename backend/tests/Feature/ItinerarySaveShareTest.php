@@ -9,6 +9,7 @@ use App\Models\ItineraryItem;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ItineraryDocumentService;
+use App\Services\ItineraryPdfDownloads;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -169,7 +170,7 @@ class ItinerarySaveShareTest extends TestCase
         $response = $this->actingAs($this->tourist)->get($this->url('/pdf'))->assertOk();
 
         $this->assertSame('application/pdf', $response->headers->get('content-type'));
-        $this->assertStringContainsString('beach-weekend-sosogon.pdf', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('SOSOGON-Itinerary-Bulan-2026-12-05.pdf', (string) $response->headers->get('content-disposition'));
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
@@ -225,5 +226,84 @@ class ItinerarySaveShareTest extends TestCase
         $this->deleteJson("/api/v1/shared-itineraries/{$token}")->assertStatus(405);
 
         $this->assertSame('Beach weekend', $this->itinerary->fresh()->title);
+    }
+
+    /** Download PDF: the prepared file, with the two links the page opens for it. */
+    private function preparedPdf(): array
+    {
+        $prepared = $this->actingAs($this->tourist)->postJson($this->url('/pdf-download'))->assertOk()->json();
+
+        return $prepared + [
+            'download_url' => "/api/v1/itinerary-files/{$prepared['ticket']}/download",
+            'view_url' => "/api/v1/itinerary-files/{$prepared['ticket']}/view",
+        ];
+    }
+
+    public function test_download_pdf_prepares_a_file_the_browser_saves_as_an_attachment(): void
+    {
+        $prepared = $this->preparedPdf();
+
+        $this->assertSame('SOSOGON-Itinerary-Bulan-2026-12-05.pdf', $prepared['filename']);
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{40}$/', $prepared['ticket']);
+
+        // Requested the way a browser opens a link: no sign-in, the ticket is the key.
+        $this->app['auth']->forgetGuards();
+        $response = $this->get($prepared['download_url'])->assertOk();
+
+        $this->assertSame('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringStartsWith('attachment;', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('SOSOGON-Itinerary-Bulan-2026-12-05.pdf', (string) $response->headers->get('content-disposition'));
+        $this->assertStringStartsWith('%PDF-', file_get_contents($response->getFile()->getPathname()));
+    }
+
+    public function test_open_pdf_shows_the_same_file_instead_of_saving_it(): void
+    {
+        $prepared = $this->preparedPdf();
+
+        $response = $this->get($prepared['view_url'])->assertOk();
+
+        $this->assertSame('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringStartsWith('inline;', (string) $response->headers->get('content-disposition'));
+    }
+
+    public function test_the_page_learns_the_download_started_only_from_the_browsers_own_request(): void
+    {
+        $prepared = $this->preparedPdf();
+        $status = $this->url('/pdf-download/'.$prepared['ticket']);
+
+        $this->actingAs($this->tourist)->getJson($status)->assertOk()->assertJsonPath('started', false);
+
+        // The page reading its offline copy, and Open PDF, are not the download.
+        $this->get($prepared['download_url'], ['X-Sosogon-Copy' => '1'])->assertOk();
+        $this->get($prepared['view_url'])->assertOk();
+        $this->actingAs($this->tourist)->getJson($status)->assertOk()->assertJsonPath('started', false);
+
+        $this->get($prepared['download_url'])->assertOk();
+        $this->actingAs($this->tourist)->getJson($status)->assertOk()->assertJsonPath('started', true);
+    }
+
+    public function test_only_the_owner_can_prepare_a_download_or_follow_it(): void
+    {
+        $this->actingAs($this->stranger)->postJson($this->url('/pdf-download'))->assertNotFound();
+
+        $prepared = $this->preparedPdf();
+        $this->actingAs($this->stranger)->getJson($this->url('/pdf-download/'.$prepared['ticket']))->assertNotFound();
+    }
+
+    public function test_preparing_a_download_needs_a_signed_in_tourist(): void
+    {
+        $this->postJson($this->url('/pdf-download'))->assertUnauthorized();
+    }
+
+    public function test_an_unknown_or_expired_link_explains_itself_instead_of_downloading(): void
+    {
+        $this->get('/api/v1/itinerary-files/'.str_repeat('a', 40).'/download')
+            ->assertStatus(410)
+            ->assertSee('This download link has expired');
+
+        $prepared = $this->preparedPdf();
+        $this->travel(ItineraryPdfDownloads::MINUTES + 1)->minutes();
+
+        $this->get($prepared['download_url'])->assertStatus(410);
     }
 }
