@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FiBookmark, FiCheck, FiDownload, FiLoader, FiPrinter, FiShare2 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { downloadItineraryPdf, getItineraryDocument, saveItinerary } from '../../api/itineraries'
 import { hasOfflineCopy, keepOfflineCopy } from '../../utils/offlineItineraries'
+import { isPdfBlob, openPdfCopy, savePdfCopy } from '../../utils/downloadedItineraries'
 import { openPrintWindow, pdfFilename, printDocument, saveBlobAs } from '../../utils/itineraryExport'
 import ShareItineraryModal from './ShareItineraryModal'
 import { showApiError } from '../../utils/apiErrors'
+import { useAuth } from '../../contexts/AuthContext'
 
 const BUTTON =
   'inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 min-h-11 text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
@@ -18,6 +21,8 @@ export default function ItineraryActions({ itinerary, onSaved }) {
   const running = useRef(false)
   const [offlineReady, setOfflineReady] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
     let current = true
@@ -58,14 +63,68 @@ export default function ItineraryActions({ itinerary, onSaved }) {
       }
     })
 
+  // Gets the PDF, keeps it in this browser (My Downloads, which opens without internet) and hands
+  // a copy to the device's Downloads. Success is shown only once the kept file has been read back.
   const handleDownload = () =>
     once('pdf', async () => {
+      let blob
       try {
-        saveBlobAs(await downloadItineraryPdf(itinerary.id), pdfFilename(itinerary.title))
-        toast.success('PDF downloaded. It opens without internet.')
+        blob = await downloadItineraryPdf(itinerary.id)
       } catch (error) {
-        showApiError(error, 'Could not create the PDF.')
+        showApiError(error, 'Could not create the PDF. Please try again.')
+        return
       }
+      if (!(await isPdfBlob(blob))) {
+        toast.error('The PDF could not be created. Please try again.')
+        return
+      }
+
+      const filename = pdfFilename(itinerary.title)
+      let record = null
+      try {
+        record = await savePdfCopy(user.id, itinerary, blob, filename)
+      } catch {
+        // Private browsing, full storage or a browser without IndexedDB: the device copy is all there is.
+      }
+      saveBlobAs(blob, filename)
+
+      if (!record) {
+        toast(
+          `The PDF was sent to your device as ${filename}. Find it in your phone's Files app or your browser's Downloads. This browser couldn't keep a copy in SOSOGON (private browsing or no free space), so it won't appear in My Downloads.`,
+          { icon: '⚠️', duration: 10000 }
+        )
+        return
+      }
+      toast.success(
+        (t) => (
+          <span className="block">
+            PDF saved. It opens without internet from My Downloads.
+            <span className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white"
+                onClick={() => {
+                  if (!openPdfCopy(record)) saveBlobAs(blob, filename)
+                  toast.dismiss(t.id)
+                }}
+              >
+                Open PDF
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-primary-200 px-2.5 py-1 text-xs font-semibold text-primary-700"
+                onClick={() => {
+                  toast.dismiss(t.id)
+                  navigate('/my-downloads')
+                }}
+              >
+                View My Downloads
+              </button>
+            </span>
+          </span>
+        ),
+        { duration: 10000 }
+      )
     })
 
   const handlePrint = () => {
@@ -113,7 +172,7 @@ export default function ItineraryActions({ itinerary, onSaved }) {
         </button>
       </div>
       <p className="mt-2.5 text-xs text-gray-500">
-        Going somewhere with weak signal? Download the PDF or save it for offline. A share link needs internet to open.
+        Going somewhere with weak signal? Download the PDF: it stays in My Downloads and opens without internet. A share link needs internet to open.
       </p>
 
       {shareOpen && <ShareItineraryModal itinerary={itinerary} onClose={() => setShareOpen(false)} />}

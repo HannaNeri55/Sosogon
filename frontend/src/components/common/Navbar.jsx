@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import NotificationBell from '../notifications/NotificationBell'
-import { FiChevronDown, FiGrid, FiLogOut, FiMenu, FiSearch, FiShield, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiDownload, FiGrid, FiLogOut, FiMenu, FiSearch, FiShield, FiX } from 'react-icons/fi'
 
 const publicLinks = [
   { to: '/', label: 'Home' },
@@ -75,6 +75,8 @@ export default function Navbar() {
   // Account Health is for tourists and business owners; admins have no account standing.
   const accountLinks = [
     { to: getDashboardLink(), label: 'Dashboard', icon: FiGrid },
+    // Tourists' downloaded itinerary PDFs, which open without internet.
+    ...(isAdmin || isBusinessOwner ? [] : [{ to: '/my-downloads', label: 'My Downloads', icon: FiDownload }]),
     ...(isAdmin ? [] : [{ to: '/account/status', label: 'Account Health', icon: FiShield, warning: hasWarning }]),
   ]
 

@@ -18,6 +18,7 @@
   .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
   .card h2 { font-size: 16px; margin: 0 0 4px; }
   .meta { font-size: 13px; color: #6b7280; margin: 0 0 12px; }
+  h2.section { font-size: 18px; margin: 24px 0 4px; color: #0c3946; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
   button, a.btn { min-height: 44px; padding: 10px 16px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid #abdce6; background: #fff; color: #0b6680; text-decoration: none; display: inline-flex; align-items: center; }
   button.primary { background: #0b6680; color: #fff; border-color: #0b6680; }
@@ -34,8 +35,16 @@
 <main>
   <section id="list-view">
     <h1>Your offline itineraries</h1>
-    <p class="lead">Copies you saved on this device. They open without internet.</p>
-    <p class="banner" id="no-connection" hidden>You're offline. Saved copies still open, but Google Maps directions and share links need a connection.</p>
+    <p class="lead">Itineraries kept on this device. They open without internet.</p>
+    <p class="banner" id="no-connection" hidden>You're offline. Your downloads and saved copies still open, but Google Maps directions and share links need a connection.</p>
+
+    <h2 class="section">Downloaded PDFs</h2>
+    <p class="meta">From Download PDF on an itinerary.</p>
+    <div id="pdf-list"></div>
+    <p id="pdf-empty" class="lead" hidden>No PDFs are downloaded on this device yet. When you have signal, open an itinerary and press Download PDF.</p>
+
+    <h2 class="section">Saved copies</h2>
+    <p class="meta">From Save Itinerary.</p>
     <div id="list"></div>
     <p id="empty" class="lead" hidden>No itineraries are saved on this device. When you have signal, open an itinerary and press Save Itinerary.</p>
     <a class="btn" href="/">Go to SOSOGON</a>
@@ -49,26 +58,77 @@
   </section>
 </main>
 <script>
-  // Reads the copies kept by src/utils/offlineItineraries.js (keep the names in step).
+  // Reads what src/utils/offlineItineraries.js and downloadedItineraries.js keep (keep the names
+  // and the version in step).
   const DB_NAME = 'sosogon-offline'
+  const DB_VERSION = 2
   const STORE = 'itineraries'
+  const PDF_STORE = 'pdfs'
 
   function openDb() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1)
-      request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'id' })
+      const request = indexedDB.open(DB_NAME, DB_VERSION)
+      request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' })
+        if (!db.objectStoreNames.contains(PDF_STORE)) db.createObjectStore(PDF_STORE, { keyPath: 'key' }).createIndex('userId', 'userId')
+      }
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
   }
 
-  function run(mode, action) {
+  function runOn(storeName, mode, action) {
     return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, mode)
-      const request = action(tx.objectStore(STORE))
+      const tx = db.transaction(storeName, mode)
+      const request = action(tx.objectStore(storeName))
       tx.oncomplete = () => { db.close(); resolve(request.result) }
       tx.onerror = () => { db.close(); reject(tx.error) }
     }))
+  }
+  const run = (mode, action) => runOn(STORE, mode, action)
+
+  // The PDFs belong to the account signed in on this browser (logging out removes them all).
+  function signedInUserId() {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null')?.id ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const pdfBlob = (record) => new Blob([record.data], { type: 'application/pdf' })
+
+  // Opens the PDF in the browser's or phone's viewer; when a new tab is refused, it is saved instead.
+  function openPdf(record) {
+    const url = URL.createObjectURL(pdfBlob(record))
+    if (!window.open(url, '_blank')) savePdf(record, url)
+    setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000)
+  }
+
+  function savePdf(record, existingUrl) {
+    const url = existingUrl || URL.createObjectURL(pdfBlob(record))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = record.filename || 'itinerary-sosogon.pdf'
+    document.body.append(link)
+    link.click()
+    link.remove()
+    if (!existingUrl) setTimeout(() => URL.revokeObjectURL(url), 60000)
+  }
+
+  function size(bytes) {
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB'
+  }
+
+  function tripDates(record) {
+    const days = record.numDays ? record.numDays + (record.numDays > 1 ? ' days' : ' day') : ''
+    const start = record.startDate ? new Date(record.startDate) : null
+    if (!start || isNaN(start)) return days
+    const end = new Date(start)
+    end.setDate(end.getDate() + Math.max(0, (record.numDays || 1) - 1))
+    const format = (date) => date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    return [record.numDays > 1 ? format(start) + ' – ' + format(end) : format(start), days].filter(Boolean).join(' · ')
   }
 
   const listView = document.getElementById('list-view')
@@ -77,6 +137,8 @@
   const list = document.getElementById('list')
   const empty = document.getElementById('empty')
   const noConnection = document.getElementById('no-connection')
+  const pdfList = document.getElementById('pdf-list')
+  const pdfEmpty = document.getElementById('pdf-empty')
 
   function button(label, className, onClick) {
     const element = document.createElement('button')
@@ -94,7 +156,41 @@
     window.scrollTo(0, 0)
   }
 
+  function renderPdfs() {
+    const userId = signedInUserId()
+    if (userId === null) {
+      pdfList.replaceChildren()
+      pdfEmpty.hidden = false
+      return
+    }
+    runOn(PDF_STORE, 'readonly', (store) => store.index('userId').getAll(Number(userId))).then((records) => {
+      pdfList.replaceChildren()
+      pdfEmpty.hidden = records.length > 0
+      records.sort((a, b) => b.savedAt.localeCompare(a.savedAt)).forEach((record) => {
+        const card = document.createElement('article')
+        card.className = 'card'
+        const title = document.createElement('h2')
+        title.textContent = record.title
+        const meta = document.createElement('p')
+        meta.className = 'meta'
+        meta.textContent = [tripDates(record), (record.towns || []).join(', '), 'Downloaded ' + new Date(record.savedAt).toLocaleDateString(), size(record.size)].filter(Boolean).join(' · ')
+        const row = document.createElement('div')
+        row.className = 'row'
+        row.append(
+          button('Open PDF', 'primary', () => openPdf(record)),
+          button('Save to device', '', () => savePdf(record))
+        )
+        card.append(title, meta, row)
+        pdfList.append(card)
+      })
+    }).catch(() => {
+      pdfEmpty.hidden = false
+      pdfEmpty.textContent = 'Downloaded PDFs could not be read in this browser.'
+    })
+  }
+
   function render() {
+    renderPdfs()
     noConnection.hidden = navigator.onLine
     run('readonly', (store) => store.getAll()).then((copies) => {
       list.replaceChildren()
