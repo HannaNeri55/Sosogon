@@ -67,6 +67,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const ManageDestinations = lazy(() => import('./pages/admin/ManageDestinations'))
 const ManageEvents = lazy(() => import('./pages/admin/ManageEvents'))
 const ManageHeroSlides = lazy(() => import('./pages/admin/ManageHeroSlides'))
+const ManageMunicipalityProfiles = lazy(() => import('./pages/admin/ManageMunicipalityProfiles'))
 const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'))
 const ReviewSubmissions = lazy(() => import('./pages/admin/ReviewSubmissions'))
 const ReviewListings = lazy(() => import('./pages/admin/ReviewListings'))
@@ -170,6 +171,7 @@ export default function App() {
           <Route path="destinations" element={<ManageDestinations />} />
           <Route path="events" element={<ManageEvents />} />
           <Route path="hero-slides" element={<ManageHeroSlides />} />
+          <Route path="municipality-profiles" element={<ManageMunicipalityProfiles />} />
           <Route path="announcements" element={<ManageAnnouncements />} />
           {/* Registration & Approvals: three independent stages, same URLs as before, shared tabs */}
           <Route element={<ApprovalsLayout />}>

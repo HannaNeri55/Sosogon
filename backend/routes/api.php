@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\AdminFoodBeverageController;
 use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
 use App\Http\Controllers\Api\Admin\AdminItemReviewController;
 use App\Http\Controllers\Api\Admin\AdminMenuItemController;
+use App\Http\Controllers\Api\Admin\AdminMunicipalityProfileController;
 use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
 use App\Http\Controllers\Api\Admin\AdminRetailProductController;
 use App\Http\Controllers\Api\Admin\AdminRetailShopController;
@@ -95,6 +96,9 @@ Route::prefix('v1')->group(function () {
     // Locations
     Route::get('/municipalities', [LocationController::class, 'municipalities']);
     Route::get('/municipalities/{id}/barangays', [LocationController::class, 'barangays']);
+    // About page: each town's profile (contact details, geography, history) and photo
+    Route::get('/municipality-profiles', [LocationController::class, 'profiles']);
+    Route::get('/municipality-profiles/{id}', [LocationController::class, 'profile'])->whereNumber('id');
     Route::get('/categories', [LocationController::class, 'categories']);
 
     // Search
@@ -270,6 +274,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         // Hero slides are the whole site's: every admin may view them, only provincial admins change them.
         Route::apiResource('/hero-slides', AdminHeroSlideController::class)->only(['index', 'show'])->names('admin.hero-slides');
         Route::apiResource('/hero-slides', AdminHeroSlideController::class)->except(['index', 'show'])->names('admin.hero-slides')->middleware('admin.provincial');
+        // The About page's municipality profiles describe the whole province: provincial admins only.
+        Route::middleware('admin.provincial')->group(function () {
+            Route::get('/municipality-profiles', [AdminMunicipalityProfileController::class, 'index']);
+            Route::get('/municipality-profiles/{id}', [AdminMunicipalityProfileController::class, 'show'])->whereNumber('id');
+            Route::put('/municipality-profiles/{id}', [AdminMunicipalityProfileController::class, 'update'])->whereNumber('id');
+        });
 
         // Submissions
         Route::get('/submissions', [AdminSubmissionController::class, 'index']);

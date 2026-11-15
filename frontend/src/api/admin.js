@@ -680,6 +680,26 @@ export const deleteEvent = async (id) => {
   return response.data
 }
 
+// ==================== MUNICIPALITY PROFILES (About page, provincial admins) ====================
+
+export const getAdminMunicipalityProfiles = async () => {
+  const response = await api.get('/admin/municipality-profiles')
+  return response.data
+}
+
+export const getAdminMunicipalityProfile = async (id) => {
+  const response = await api.get(`/admin/municipality-profiles/${id}`)
+  return response.data
+}
+
+export const updateMunicipalityProfile = async (id, formData) => {
+  formData.append('_method', 'PUT')
+  const response = await api.post(`/admin/municipality-profiles/${id}`, formData, {
+    headers: { 'Content-Type': undefined },
+  })
+  return response.data
+}
+
 // ==================== HERO SLIDES ====================
 
 export const getAdminHeroSlides = async (params = {}) => {
