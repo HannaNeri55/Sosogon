@@ -8,6 +8,7 @@ import { getAccommodations } from '../../api/accommodations'
 import { getFoodBeverages } from '../../api/foodBeverages'
 import Reveal from '../../components/common/Reveal'
 import SectionHeader from '../../components/common/SectionHeader'
+import MunicipalitiesSection from '../../components/about/MunicipalitiesSection'
 
 const CATEGORIES = [
   { to: '/destinations', label: 'Destinations', text: 'Beaches, springs and heritage sites', icon: FiMapPin },
@@ -138,6 +139,9 @@ export default function About() {
           </Reveal>
         </div>
       </section>
+
+      {/* ==================== MUNICIPALITIES ==================== */}
+      <MunicipalitiesSection />
     </div>
   )
 }

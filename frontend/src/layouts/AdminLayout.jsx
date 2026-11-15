@@ -22,6 +22,7 @@ import {
   FiInbox,
   FiClipboard,
   FiAlertTriangle,
+  FiMap,
 } from 'react-icons/fi'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
 import NotificationBell from '../components/notifications/NotificationBell'
@@ -58,6 +59,13 @@ const sidebarLinks = [
     to: '/admin/hero-slides',
     icon: FiImage,
     label: 'Hero Slides',
+    provincialOnly: true,
+  },
+  {
+    // The About page's municipality profiles are the whole province's: provincial admins only.
+    to: '/admin/municipality-profiles',
+    icon: FiMap,
+    label: 'Municipality Profiles',
     provincialOnly: true,
   },
   {
