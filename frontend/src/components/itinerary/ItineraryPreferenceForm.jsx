@@ -233,7 +233,8 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
     arrival_time: '',
     // "HH:mm" when the tourist leaves on the last day; empty keeps the last day running through dinner.
     departure_time: '',
-    interests: ['nature'],
+    // None picked until the tourist chooses; Continue asks for at least one.
+    interests: [],
     travel_pace: 'moderate',
     budget: 'moderate',
     travelers: 1,
@@ -714,7 +715,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
-              {(attempted[2] || noInterests) && problems[2] && <FieldError>{problems[2]}</FieldError>}
+              {attempted[2] && problems[2] && <FieldError>{problems[2]}</FieldError>}
             </div>
 
             <div>
