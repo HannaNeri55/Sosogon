@@ -149,6 +149,9 @@ class ItineraryService
     /** How much each tourism-office classification counts when ranking destinations. */
     private const PRIORITY_POINTS = ['iconic' => 100, 'popular' => 60, 'recommended' => 30, 'hidden_gem' => 20];
 
+    /** Fewest genuine visitor ratings before a destination's average counts in ranking or is told to the AI. */
+    private const MIN_GENUINE_RATINGS = 5;
+
     private const PRIORITY_LABELS = [
         'iconic' => 'Must-visit',
         'popular' => 'Popular attraction',
@@ -633,7 +636,8 @@ class ItineraryService
             ->whereIn('category_id', $categoryIds)
             ->with(['category:id,name', 'municipality:id,name', 'activities:id,destination_id,name,description,type,best_time_to_visit,duration_minutes,what_to_wear', 'estimates', 'fees', 'amenities:id,destination_id,name'])
             ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
-                'is_featured', 'tourism_priority', 'setting', 'average_rating', 'total_reviews', 'view_count')
+                'is_featured', 'tourism_priority', 'setting', 'view_count')
+            ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get()
             ->each(fn ($d) => $this->applyEstimates($d))
             ->each(fn ($d) => $this->planningTown($d));
@@ -838,7 +842,7 @@ class ItineraryService
 
             $standing = array_filter([
                 $this->priorityLabel($d),
-                (int) $d->total_reviews >= 5 ? "rated {$d->average_rating}/5 by {$d->total_reviews} visitors" : null,
+                ($rated = $this->genuineRating($d)) ? 'rated '.round($rated['average'], 1)."/5 by {$rated['count']} visitors" : null,
             ]);
             $setting = ['indoor' => 'indoors', 'outdoor' => 'open-air', 'mixed' => 'partly covered'][$d->setting] ?? null;
 
@@ -3509,7 +3513,9 @@ class ItineraryService
         }
 
         $places = Destination::published()->whereIn('category_id', $categoryIds)->whereNotNull('latitude')->whereNotNull('longitude')
-            ->get(['id', 'name', 'municipality_id', 'latitude', 'longitude', 'is_featured', 'tourism_priority', 'average_rating', 'total_reviews', 'view_count']);
+            ->select(['id', 'name', 'municipality_id', 'latitude', 'longitude', 'is_featured', 'tourism_priority', 'view_count'])
+            ->tap(fn ($query) => $this->withGenuineRatings($query))
+            ->get();
         if ($places->isEmpty()) {
             throw new ItineraryNotPossibleException('No published destinations in Sorsogon match those interests yet. Please pick other interests.');
         }
@@ -3632,11 +3638,45 @@ class ItineraryService
     {
         $score = self::PRIORITY_POINTS[$destination->tourism_priority] ?? 0;
         $score += $destination->is_featured ? 40 : 0;
-        if ((int) $destination->total_reviews >= 5) {
-            $score += (int) round(max(0, (float) $destination->average_rating - 3.5) * 20);
+        // Only genuine visitor ratings count; a place without enough of them gets no rating points.
+        if ($rated = $this->genuineRating($destination)) {
+            $score += (int) round(max(0, $rated['average'] - 3.5) * 20);
         }
 
         return $score + min(15, intdiv((int) $destination->view_count, 10));
+    }
+
+    /**
+     * Adds each destination's genuine rating count and average (Rating::genuine(): no demo
+     * reviews, none hidden after a report) to a destination query. The listing's stored
+     * average_rating isn't used for planning: where sample reviews are shown, it includes them.
+     */
+    private function withGenuineRatings(Builder $query): Builder
+    {
+        $genuine = fn ($ratings) => $ratings->genuine();
+
+        return $query->withCount(['ratings as genuine_rating_count' => $genuine])
+            ->withAvg(['ratings as genuine_rating_average' => $genuine], 'score');
+    }
+
+    /**
+     * A destination's genuine visitor rating, ['average' => 4.3, 'count' => 12], or null with
+     * fewer than MIN_GENUINE_RATINGS. Loaded once for a destination that came from another query.
+     *
+     * @return array{average: float, count: int}|null
+     */
+    private function genuineRating(Destination $destination): ?array
+    {
+        if (! array_key_exists('genuine_rating_count', $destination->getAttributes())) {
+            $genuine = fn ($ratings) => $ratings->genuine();
+            $destination->loadCount(['ratings as genuine_rating_count' => $genuine])
+                ->loadAvg(['ratings as genuine_rating_average' => $genuine], 'score');
+        }
+        $count = (int) $destination->getAttribute('genuine_rating_count');
+
+        return $count >= self::MIN_GENUINE_RATINGS
+            ? ['average' => round((float) $destination->getAttribute('genuine_rating_average'), 2), 'count' => $count]
+            : null;
     }
 
     /** What the tourism office says about a destination ("Must-visit", "Featured"), for the AI and the stop's reason. */
