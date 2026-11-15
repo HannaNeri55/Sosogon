@@ -235,16 +235,17 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
     departure_time: '',
     // None picked until the tourist chooses; Continue asks for at least one.
     interests: [],
-    travel_pace: 'moderate',
-    budget: 'moderate',
+    // Pace, budget, food and transport start unanswered too: the tourist picks each one.
+    travel_pace: '',
+    budget: '',
     travelers: 1,
-    food_preference: 'no_preference',
+    food_preference: '',
     accommodation_type: 'no_preference',
     // Whether the planner suggests a stay (null until the tourist answers), and the stay and room
     // they picked themselves (optional; the planner picks when left empty).
     accommodation_needed: null,
     // How the tourist plans to get around; sent with the request for later transportation guidance.
-    transport_preference: 'no_preference',
+    transport_preference: '',
     accommodation_id: null,
     room_id: null,
     additional_preferences: '',
@@ -264,6 +265,15 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const tooManyTowns = numDays !== null && townCount > numDays * 2
   const sharedDays = numDays !== null && !tooManyTowns && townCount > numDays
   const noInterests = formData.interests.length === 0
+  // What the Preferences step still needs, each shown under its own section after Continue.
+  const preferenceProblems = {
+    interests: noInterests ? 'Pick at least one interest to continue.' : null,
+    pace: formData.travel_pace ? null : 'Choose a travel pace.',
+    budget: formData.budget ? null : 'Choose a budget.',
+    food: formData.food_preference ? null : 'Choose a food preference, or No Preference.',
+    stay: formData.accommodation_needed === null ? 'Tell us whether you need accommodation for this trip.' : null,
+    transport: formData.transport_preference ? null : "Choose how you'll get around, or No Preference.",
+  }
   const travelerTotal = Math.min(Math.max(Number(formData.travelers) || 1, 1), MAX_TRAVELERS)
   const stayLists = formData.municipality_ids.map((id) => staysByTown[id])
   const townStays = stayLists.filter(Array.isArray).flat()
@@ -292,11 +302,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
             : departureBeforeArrival
               ? 'For a one-day trip, your departure time must be after your arrival time.'
               : null,
-    noInterests
-      ? 'Pick at least one interest to continue.'
-      : formData.accommodation_needed === null
-        ? 'Tell us whether you need accommodation for this trip.'
-        : roomProblem,
+    Object.values(preferenceProblems).find(Boolean) || roomProblem || null,
   ]
   const firstProblemStep = problems.findIndex(Boolean)
   const ready = firstProblemStep === -1
@@ -372,7 +378,14 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   }
   const goNext = () => {
     setAttempted((prev) => ({ ...prev, [step]: true }))
-    if (!problems[step]) setStep((s) => Math.min(s + 1, REVIEW_STEP))
+    if (!problems[step]) {
+      setStep((s) => Math.min(s + 1, REVIEW_STEP))
+      return
+    }
+    // Long steps: bring the first unanswered question into view once its message shows.
+    requestAnimationFrame(() => {
+      document.querySelector('form [role="alert"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
   }
 
   const handleSubmit = (e) => {
@@ -715,7 +728,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
-              {attempted[2] && problems[2] && <FieldError>{problems[2]}</FieldError>}
+              {attempted[2] && preferenceProblems.interests && <FieldError>{preferenceProblems.interests}</FieldError>}
             </div>
 
             <div>
@@ -741,6 +754,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
+              {attempted[2] && preferenceProblems.pace && <FieldError>{preferenceProblems.pace}</FieldError>}
             </div>
 
             <div>
@@ -766,6 +780,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
+              {attempted[2] && preferenceProblems.budget && <FieldError>{preferenceProblems.budget}</FieldError>}
             </div>
 
             <div>
@@ -790,6 +805,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
+              {attempted[2] && preferenceProblems.food && <FieldError>{preferenceProblems.food}</FieldError>}
             </div>
 
             <div>
@@ -804,7 +820,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 townCount={townCount}
                 roomProblem={roomProblem}
               />
-              {attempted[2] && !noInterests && formData.accommodation_needed === null && <FieldError>Tell us whether you need accommodation for this trip.</FieldError>}
+              {attempted[2] && preferenceProblems.stay && <FieldError>{preferenceProblems.stay}</FieldError>}
             </div>
 
             <div>
@@ -838,6 +854,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
+              {attempted[2] && preferenceProblems.transport && <FieldError>{preferenceProblems.transport}</FieldError>}
               <p className="text-xs text-gray-500 mt-2">We'll use this for travel tips between stops. SOSOGON doesn't book transport or list fares and schedules.</p>
             </div>
 
