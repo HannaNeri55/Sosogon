@@ -54,6 +54,7 @@ function Field({ form, name, label, hint, children }) {
 export default function ManageMunicipalityProfiles() {
   const { isProvincial } = useAdminScope()
   const [towns, setTowns] = useState(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [search, setSearch] = useState('')
   const [profile, setProfile] = useState(null)
   const [formData, setFormData] = useState(null)
@@ -70,11 +71,19 @@ export default function ManageMunicipalityProfiles() {
 
   const loadTowns = () =>
     getAdminMunicipalityProfiles()
-      .then(setTowns)
-      .catch((error) => {
-        setTowns([])
-        showApiError(error, 'Could not load the municipalities.')
+      .then((data) => {
+        setTowns(data)
+        setLoadFailed(false)
       })
+      .catch(() => {
+        setTowns([])
+        setLoadFailed(true)
+      })
+
+  const retry = () => {
+    setTowns(null)
+    loadTowns()
+  }
 
   useEffect(() => {
     if (isProvincial) loadTowns()
@@ -141,13 +150,15 @@ export default function ManageMunicipalityProfiles() {
 
     setSaving(true)
     try {
-      const { message, profile: saved } = await updateMunicipalityProfile(profile.id, payload)
+      const { message } = await updateMunicipalityProfile(profile.id, payload)
       toast.success(`${message} The About page now shows it.`)
+      // Back to the list of municipalities, with the saved profile's status.
       setPreviewing(false)
-      setProfile(saved)
-      setFormData(formFrom(saved))
+      setProfile(null)
+      setFormData(null)
       setDirty(false)
       loadTowns()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
       setPreviewing(false)
       if (!form.fromResponse(error)) showApiError(error, 'Could not save the changes.')
@@ -307,8 +318,16 @@ export default function ManageMunicipalityProfiles() {
         <input className="input-field pl-9" placeholder="Search municipalities..." aria-label="Search municipalities" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {shown.length === 0 ? (
-        <p className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">No municipality matches "{search}".</p>
+      {loadFailed ? (
+        // e.g. the server is still starting up or being updated: say so, never "no matches".
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
+          <p>The municipalities couldn't be loaded. The server may still be starting up or being updated; please wait a minute and try again.</p>
+          <button type="button" onClick={retry} className="btn-primary mt-4">Try again</button>
+        </div>
+      ) : shown.length === 0 ? (
+        <p className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+          {search.trim() ? `No municipality matches "${search.trim()}".` : 'No municipalities to show.'}
+        </p>
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((town) => (
