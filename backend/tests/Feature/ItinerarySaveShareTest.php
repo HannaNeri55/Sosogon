@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\Tourist\ItineraryController;
 use App\Models\Destination;
+use App\Models\FoodBeverage;
 use App\Models\Itinerary;
 use App\Models\ItineraryItem;
 use App\Models\Role;
@@ -154,6 +155,32 @@ class ItinerarySaveShareTest extends TestCase
         $this->assertStringNotContainsString('<nav', $html);
         $this->assertStringNotContainsString('<button', $html);
         $this->assertStringNotContainsString('<script', $html);
+    }
+
+    public function test_a_lunch_break_during_a_visit_appears_in_that_visits_schedule_at_its_time(): void
+    {
+        $lagoon = ItineraryItem::where('itinerary_id', $this->itinerary->id)->where('sequence', 1)->firstOrFail();
+        $lagoon->update(['time_slot' => '8:00 AM – 1:00 PM', 'activities' => [
+            ['time' => '8:00 AM – 11:00 AM', 'name' => 'Morning swim', 'description' => ''],
+            ['time' => '12:30 PM – 1:00 PM', 'name' => 'Sunset photos', 'description' => ''],
+        ]]);
+        $grill = FoodBeverage::create([
+            'user_id' => $this->tourist->id, 'name' => 'Sea Grill', 'description' => 'A grill.', 'municipality_id' => $lagoon->destination->municipality_id,
+            'address' => 'Bulan', 'latitude' => 12.71, 'longitude' => 123.91, 'price_range' => 'moderate', 'status' => 'approved',
+        ]);
+        ItineraryItem::create([
+            'itinerary_id' => $this->itinerary->id, 'item_type' => 'food_beverage', 'food_beverage_id' => $grill->id,
+            'day_number' => 1, 'sequence' => 1, 'time_slot' => '11:30 AM – 12:30 PM',
+            'notes' => 'Lunch break during your visit to Paguriran Lagoon.',
+        ]);
+
+        $html = $this->actingAs($this->tourist)->getJson($this->url('/document'))->assertOk()->json('html');
+        $schedule = substr($html, strpos($html, 'Your schedule here'));
+
+        $swim = strpos($schedule, 'Morning swim');
+        $lunch = strpos($schedule, 'Lunch break · 11:30 AM – 12:30 PM');
+        $photos = strpos($schedule, 'Sunset photos');
+        $this->assertTrue($swim !== false && $lunch !== false && $photos !== false && $swim < $lunch && $lunch < $photos);
     }
 
     public function test_the_document_escapes_what_a_tourist_typed(): void

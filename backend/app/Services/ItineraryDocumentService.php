@@ -182,17 +182,69 @@ class ItineraryDocumentService
                 'date' => $itinerary->start_date?->copy()->addDays((int) $dayNumber - 1)->format('l, F j, Y'),
                 'town' => $overnight?->municipality?->name,
                 'overnight' => $overnight?->accommodation?->name,
+                'summary' => $this->daySummary($stops),
                 'rows' => collect($rows)->values()->map(function ($row, $index) use ($rows, $guide) {
                     $next = $rows[$index + 1]['stop'] ?? null;
+                    $stop = $this->stop($row['stop']);
+                    $lunch = $row['lunch'] ? $this->stop($row['lunch']) : null;
 
                     return [
-                        'stop' => $this->stop($row['stop']),
-                        'lunch' => $row['lunch'] ? $this->stop($row['lunch']) : null,
+                        'stop' => $stop,
+                        'lunch' => $lunch,
+                        'agenda' => $this->agenda($stop['activities'], $lunch),
                         'leg' => $next ? $this->leg($row['stop'], $next, $guide) : null,
                     ];
                 })->all(),
             ];
         })->values()->all();
+    }
+
+    /** "5 stops · 7:45 AM to 7:30 PM · 54.8 km": the day's outline under its heading. */
+    private function daySummary($stops): string
+    {
+        $times = $stops->map(fn (ItineraryItem $stop) => $this->slotTimes($stop->time_slot));
+        $starts = $times->pluck(0)->filter(fn ($minutes) => $minutes !== null);
+        $ends = $times->pluck(1)->filter(fn ($minutes) => $minutes !== null);
+        $km = round((float) $stops->sum(fn (ItineraryItem $stop) => (float) $stop->distance_from_prev_km), 1);
+        $clock = fn (float $minutes) => Carbon::today()->addMinutes((int) $minutes)->format('g:i A');
+
+        return collect([
+            $stops->count().' '.Str::plural('stop', $stops->count()),
+            $starts->isNotEmpty() && $ends->isNotEmpty() ? $clock($starts->min()).' to '.$clock($ends->max()) : null,
+            $km > 0 ? "{$km} km of travel" : null,
+        ])->filter()->implode(' · ');
+    }
+
+    /**
+     * A visit's planned activities with its lunch or dinner break put in at the right time, so the
+     * schedule reads in order. Null when the visit has no activities (the break is shown on its own).
+     */
+    private function agenda(array $activities, ?array $meal): ?array
+    {
+        if ($activities === []) {
+            return null;
+        }
+        $entries = array_map(fn ($activity) => [
+            'type' => 'activity',
+            'time' => $activity['time'] ?? '',
+            'name' => $activity['name'] ?? '',
+            'description' => $activity['description'] ?? '',
+            'start' => $this->slotTimes($activity['time'] ?? null)[0],
+        ], $activities);
+
+        if ($meal) {
+            $mealStart = $this->slotTimes($meal['slot'])[0];
+            $at = count($entries);
+            foreach ($entries as $index => $entry) {
+                if ($mealStart !== null && $entry['start'] !== null && $entry['start'] > $mealStart) {
+                    $at = $index;
+                    break;
+                }
+            }
+            array_splice($entries, $at, 0, [['type' => 'meal', 'meal' => $meal]]);
+        }
+
+        return $entries;
     }
 
     /** A lunch break that falls inside the visit listed before it is shown under that visit. */
@@ -276,6 +328,30 @@ class ItineraryDocumentService
         return collect([$part, $stop->destination?->category?->name ?? 'Destination'])->filter()->implode(' · ');
     }
 
+    /** The colour family a stop is printed in: visit, meal, stay or shop. */
+    private function kind(ItineraryItem $stop, string $badge): string
+    {
+        return match (true) {
+            $stop->item_type === ItineraryItem::TYPE_DESTINATION => 'visit',
+            $stop->item_type === ItineraryItem::TYPE_FOOD_BEVERAGE,
+            (bool) preg_match('/^(Breakfast|Lunch|Dinner)/', $badge) => 'meal',
+            $stop->item_type === ItineraryItem::TYPE_RETAIL_SHOP => 'shop',
+            default => 'stay',
+        };
+    }
+
+    /** "4 h 35 min", "45 min" */
+    private function duration(int $minutes): ?string
+    {
+        if ($minutes <= 0) {
+            return null;
+        }
+        $hours = intdiv($minutes, 60);
+        $rest = $minutes % 60;
+
+        return trim(($hours ? "{$hours} h " : '').($rest || ! $hours ? "{$rest} min" : ''));
+    }
+
     private function stop(ItineraryItem $stop): array
     {
         $place = $this->place($stop);
@@ -283,12 +359,19 @@ class ItineraryDocumentService
         $description = $isVisit ? trim((string) $place?->description) : '';
         $picks = $stop->item_type === ItineraryItem::TYPE_FOOD_BEVERAGE ? $stop->dishes : ($stop->item_type === ItineraryItem::TYPE_RETAIL_SHOP ? $stop->souvenirs : collect());
 
+        $badge = $this->badge($stop);
+        $times = array_map('trim', explode('–', (string) $stop->time_slot));
+
         return [
             'name' => $place?->name ?? 'Listing no longer available',
             'town' => $place?->municipality?->name,
-            'badge' => $this->badge($stop),
+            'badge' => $badge,
+            'kind' => $this->kind($stop, $badge),
             'slot' => $stop->time_slot,
+            'start' => $times[0] ?? '',
+            'end' => $times[1] ?? '',
             'minutes' => (int) $stop->duration_minutes,
+            'duration' => $this->duration((int) $stop->duration_minutes),
             'description' => $description,
             'notes' => $this->notesWithoutDescription((string) $stop->notes, $description),
             'reason' => $stop->reason,
@@ -376,7 +459,7 @@ class ItineraryDocumentService
         return is_file($path) ? 'data:image/png;base64,'.base64_encode(file_get_contents($path)) : null;
     }
 
-    /** The place's first photo as a small embedded JPEG, or null when it can't be read. */
+    /** The place's first photo as a small 4:3 embedded JPEG (so photos line up), or null when it can't be read. */
     private function embedImage(?Model $place): ?string
     {
         $image = $place?->images?->first();
@@ -396,7 +479,7 @@ class ItineraryDocumentService
                 return null;
             }
 
-            return 'data:image/jpeg;base64,'.base64_encode((string) Image::read($bytes)->scaleDown(width: self::IMAGE_WIDTH)->toJpeg(70));
+            return 'data:image/jpeg;base64,'.base64_encode((string) Image::read($bytes)->cover(self::IMAGE_WIDTH, self::IMAGE_WIDTH * 3 / 4)->toJpeg(70));
         } catch (Throwable) {
             return null;
         }
