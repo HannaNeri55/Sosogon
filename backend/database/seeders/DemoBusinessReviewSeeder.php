@@ -479,7 +479,7 @@ class DemoBusinessReviewSeeder extends Seeder
     ];
 
     /** Comments already in the database or used in this run, so none repeat. */
-    private array $used = [];
+    protected array $used = [];
 
     private array $counts = ['checked' => 0, 'skipped_not_public' => 0, 'already_full' => 0, 'populated' => 0, 'created' => 0, 'scores' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0]];
 
@@ -638,7 +638,7 @@ class DemoBusinessReviewSeeder extends Seeder
     }
 
     /** Builds a comment not used before: an opener, one or two details and sometimes a closer. */
-    private function comment(string $kind, int $score, Randomizer $random): string
+    protected function comment(string $kind, int $score, Randomizer $random): string
     {
         [$openers, $details, $closers] = self::PARTS[$kind][$score];
 
