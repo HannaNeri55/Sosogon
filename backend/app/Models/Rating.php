@@ -30,6 +30,15 @@ class Rating extends Model
         return config('reviews.show_demo') ? $query : $query->where('is_demo', false);
     }
 
+    /**
+     * Genuine visitor feedback only: never seeded demo reviews (whatever SHOW_DEMO_REVIEWS says)
+     * and none the Tourism Office hid after a report. What the itinerary planner ranks with.
+     */
+    public function scopeGenuine(Builder $query): Builder
+    {
+        return $query->whereNull($query->qualifyColumn('hidden_at'))->where($query->qualifyColumn('is_demo'), false);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
