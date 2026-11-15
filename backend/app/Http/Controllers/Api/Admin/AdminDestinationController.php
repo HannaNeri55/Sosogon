@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Destination;
 use App\Models\DestinationImage;
+use App\Models\ExperienceTag;
 use App\Services\ImageOptimizationService;
 use App\Support\AdminScope;
+use Database\Seeders\ExperienceTagSeeder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminDestinationController extends Controller
 {
@@ -27,6 +30,8 @@ class AdminDestinationController extends Controller
             'rates',
             'amenities',
             'activities',
+            'experienceTags',
+            'experiencesReviewer:id,name',
         ]);
 
         if ($request->filled('status')) {
@@ -41,6 +46,7 @@ class AdminDestinationController extends Controller
 
         $page = $query->orderByDesc('created_at')->paginate($perPage);
         AdminScope::markManageable($page->getCollection(), $request->user());
+        $page->getCollection()->each(fn (Destination $destination) => $this->withReviewFields($destination));
 
         return response()->json($page);
     }
@@ -76,6 +82,7 @@ class AdminDestinationController extends Controller
             'amenities' => 'sometimes|array',
             'amenities.*.name' => 'required|string|max:255',
             ...$this->activityRules(null),
+            ...$this->experienceRules(),
 
             'contact_number' => 'nullable|string|max:50',
             'website' => 'nullable|string|max:500',
@@ -91,6 +98,7 @@ class AdminDestinationController extends Controller
         // A municipal admin adds destinations to their own municipality only.
         AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
         AdminScope::guardProvincialFields($request->user(), $validated, null);
+        $experiences = $this->experienceInput($request, $validated, null);
 
         $coverNewIndex = (int) ($validated['cover_new_index'] ?? 0);
         unset($validated['cover_new_index']);
@@ -106,15 +114,19 @@ class AdminDestinationController extends Controller
             $validated['rates'],
             $validated['amenities'],
             $validated['activities'],
-            $validated['activities_present']
+            $validated['activities_present'],
+            $validated['experiences_present'],
+            $validated['experience_tags'],
+            $validated['experiences_reviewed']
         );
 
 
-        $destination = DB::transaction(function () use ($validated, $details, $request) {
+        $destination = DB::transaction(function () use ($validated, $details, $request, $experiences) {
             $destination = Destination::create([
                 ...$validated,
                 'created_by' => $request->user()->id,
             ]);
+            $this->saveExperiences($destination, $experiences, $request);
             foreach ($details['fees'] as $index => $fee) {
                 $destination->fees()->create([
                     ...$fee,
@@ -165,7 +177,7 @@ class AdminDestinationController extends Controller
 
         return response()->json([
             'message' => 'Destination created.',
-            'destination' => $destination->load(['images', 'fees', 'rates', 'amenities', 'activities']),
+            'destination' => $this->withReviewFields($destination->load(['images', 'fees', 'rates', 'amenities', 'activities', 'experienceTags', 'experiencesReviewer:id,name'])),
         ], 201);
     }
 
@@ -180,11 +192,13 @@ class AdminDestinationController extends Controller
             'rates',
             'amenities',
             'activities',
+            'experienceTags',
+            'experiencesReviewer:id,name',
         ])->findOrFail($id);
         AdminScope::authorizeRecordView($request->user(), $destination);
         AdminScope::markManageable([$destination], $request->user());
 
-        return response()->json($destination);
+        return response()->json($this->withReviewFields($destination));
     }
 
     public function update(Request $request, int $id, ImageOptimizationService $images): JsonResponse
@@ -243,6 +257,7 @@ class AdminDestinationController extends Controller
             'amenities' => 'sometimes|array',
             'amenities.*.name' => 'required|string|max:255',
             ...$this->activityRules($id),
+            ...$this->experienceRules(),
 
             'contact_number' => 'nullable|string|max:50',
             'website' => 'nullable|string|max:500',
@@ -261,6 +276,7 @@ class AdminDestinationController extends Controller
         // Moving a destination to another municipality is a provincial decision.
         AdminScope::authorizeTransfer($request->user(), $destination, $validated['municipality_id'] ?? null);
         AdminScope::guardProvincialFields($request->user(), $validated, $destination);
+        $experiences = $this->experienceInput($request, $validated, $destination);
 
         $coverImageId = isset($validated['cover_image_id']) ? (int) $validated['cover_image_id'] : null;
         $coverNewIndex = isset($validated['cover_new_index']) ? (int) $validated['cover_new_index'] : null;
@@ -277,12 +293,13 @@ class AdminDestinationController extends Controller
 
             unset($validated[$key]);
         }
-        unset($validated['activities'], $validated['activities_present']);
+        unset($validated['activities'], $validated['activities_present'], $validated['experiences_present'], $validated['experience_tags'], $validated['experiences_reviewed']);
 
 
         // Save destination details together in one transaction
-        DB::transaction(function () use ($destination, $validated, $details) {
+        DB::transaction(function () use ($destination, $validated, $details, $experiences, $request) {
             $destination->update($validated);
+            $this->saveExperiences($destination, $experiences, $request);
 
             if (array_key_exists('fees', $details)) {
                 $destination->fees()->delete();
@@ -364,7 +381,7 @@ class AdminDestinationController extends Controller
 
         return response()->json([
             'message' => 'Destination updated.',
-            'destination' => $destination->fresh(['images', 'fees', 'rates', 'amenities', 'activities']),
+            'destination' => $this->withReviewFields($destination->fresh(['images', 'fees', 'rates', 'amenities', 'activities', 'experienceTags', 'experiencesReviewer:id,name'])),
         ]);
     }
 
@@ -439,6 +456,108 @@ class AdminDestinationController extends Controller
         $destination->delete();
 
         return response()->json(['message' => 'Destination deleted.']);
+    }
+
+    /** The experience vocabulary for the destination form: every tag with its definition, in order. */
+    public function experienceTags(): JsonResponse
+    {
+        return response()->json(ExperienceTag::ordered()->get(['slug', 'name', 'group', 'description']));
+    }
+
+    /**
+     * Validation for the destination's experience tags and review mark. Tags are slugs from the
+     * vocabulary; experiences_present=1 (sent by the form) means the list is complete, so an
+     * empty list clears them.
+     */
+    private function experienceRules(): array
+    {
+        return [
+            'experiences_present' => 'sometimes|in:0,1',
+            'experience_tags' => 'sometimes|array|max:'.count(ExperienceTagSeeder::TAGS),
+            'experience_tags.*' => 'string|distinct|exists:experience_tags,slug',
+            'experiences_reviewed' => 'sometimes|boolean',
+        ];
+    }
+
+    /**
+     * What this save does to the experience tags, checked before anything is written: null when
+     * the request doesn't touch them; otherwise the tag slugs the destination will have and
+     * whether it will be reviewed. A destination can only be reviewed with at least one tag, and
+     * adding tags never marks it reviewed by itself.
+     *
+     * @return array{tags: array<int, string>, reviewed: bool}|null
+     */
+    private function experienceInput(Request $request, array $validated, ?Destination $destination): ?array
+    {
+        $listed = $request->input('experiences_present') === '1' || array_key_exists('experience_tags', $validated);
+        if (! $listed && ! array_key_exists('experiences_reviewed', $validated)) {
+            return null;
+        }
+
+        $current = $destination?->experienceTags()->pluck('slug')->all() ?? [];
+        $tags = $listed ? array_values(array_unique($validated['experience_tags'] ?? [])) : $current;
+        $reviewed = array_key_exists('experiences_reviewed', $validated)
+            ? (bool) $validated['experiences_reviewed']
+            : (bool) $destination?->experiencesReviewed();
+
+        if ($reviewed && $tags === []) {
+            throw ValidationException::withMessages([
+                'experiences_reviewed' => $destination?->experiencesReviewed()
+                    ? 'A reviewed destination needs at least one experience. Choose one, or mark it Not reviewed first.'
+                    : 'Choose at least one experience before marking this destination reviewed.',
+            ]);
+        }
+
+        return ['tags' => $tags, 'reviewed' => $reviewed];
+    }
+
+    /**
+     * Applies experienceInput(): the destination's tags become exactly the chosen ones, and the
+     * review mark records who confirmed them and when: on becoming reviewed, or when a reviewed
+     * destination's tags change. Not reviewed clears the mark and keeps the tags. Status is never touched.
+     */
+    private function saveExperiences(Destination $destination, ?array $input, Request $request): void
+    {
+        if ($input === null) {
+            return;
+        }
+
+        $before = $destination->experienceTags()->pluck('slug')->sort()->values()->all();
+        $after = collect($input['tags'])->sort()->values()->all();
+        $destination->experienceTags()->sync(ExperienceTag::whereIn('slug', $input['tags'])->pluck('id')->all());
+
+        $wasReviewed = $destination->experiencesReviewed();
+        if (! $input['reviewed']) {
+            if ($wasReviewed) {
+                $destination->forceFill(['experiences_reviewed_at' => null, 'experiences_reviewed_by' => null])->save();
+                $this->logReview($destination, $request, 'unreviewed_destination_experiences', 'Marked experiences not reviewed');
+            }
+
+            return;
+        }
+        if (! $wasReviewed || $before !== $after) {
+            $destination->forceFill(['experiences_reviewed_at' => now(), 'experiences_reviewed_by' => $request->user()->id])->save();
+            $this->logReview($destination, $request, 'reviewed_destination_experiences', 'Reviewed experiences ('.implode(', ', $after).')');
+        }
+    }
+
+    private function logReview(Destination $destination, Request $request, string $action, string $what): void
+    {
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'action' => $action,
+            'description' => "{$what}: {$destination->name}",
+            'model_type' => Destination::class,
+            'model_id' => $destination->id,
+            'ip_address' => $request->ip(),
+            'created_at' => now(),
+        ]);
+    }
+
+    /** Admin responses include the review fields the public API leaves out. */
+    private function withReviewFields(Destination $destination): Destination
+    {
+        return $destination->makeVisible(['experiences_reviewed_at', 'experiences_reviewed_by']);
     }
 
     /**

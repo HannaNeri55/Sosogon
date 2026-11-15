@@ -272,6 +272,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::apiResource('/destinations', AdminDestinationController::class)->names('admin.destinations');
         Route::delete('/destinations/{id}/images/{imageId}', [AdminDestinationController::class, 'destroyImage']);
         Route::patch('/destinations/{id}/images/{imageId}/cover', [AdminDestinationController::class, 'setCoverImage']);
+        // The experience vocabulary for the destination form (any admin; tags are saved with the destination).
+        Route::get('/experience-tags', [AdminDestinationController::class, 'experienceTags']);
         // Featured and Tourism priority rank places across the province: provincial admins set them
         // on any municipality's destinations and events, including those managed by a municipal office.
         Route::patch('/destinations/{id}/ranking', [AdminDestinationController::class, 'updateRanking'])->middleware('admin.provincial');

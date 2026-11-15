@@ -71,11 +71,11 @@ Unreviewed destinations keep today's behaviour everywhere: category badge, categ
 | **Unpublished** (`draft`, `archived`) | Never eligible (the existing `published()` scope), whatever its tags | Hidden as now | Tags kept; can be reviewed. Phase 1B publish decisions come before tagging. |
 | **Published, not reviewed** | Category rule (today's behaviour) | Category badge only; no experience chips | Shows "Experiences: not reviewed"; included in the review sheet |
 | **Published, reviewed** | Tag rule | Category badge + experience chips | Shows "Reviewed by … on …"; editing tags keeps it reviewed and records the editor |
-| **"Untagged"** | Cannot happen while reviewed: marking reviewed **requires at least one tag** (validation). To keep a place out of itineraries, unpublish it; tags are never used for that. | — | Removing the last tag clears the reviewed status (back to the category rule) |
+| **"Untagged"** | Cannot happen while reviewed: marking reviewed **requires at least one tag** (validation). To keep a place out of itineraries, unpublish it; tags are never used for that. | — | A reviewed destination can't be saved with no tags (refused). In the form, clearing the last tag also unticks Reviewed, so saving makes it Not reviewed explicitly (back to the category rule). *(Phase 2C)* |
 
 ### 2.4 Admin permissions (unchanged)
 - Tags and the review mark are edited through the existing destination edit (`AdminDestinationController::update`). The same scope rules apply: provincial admins for any town, municipal admins for their own town.
-- **Open decision:** should *marking reviewed* be provincial-only? If so, use `AdminScope::guardProvincialFields` exactly as for the other provincial-only fields.
+- **Decided in Phase 2C:** marking reviewed follows the same rule as editing the destination (no separate permission). It can be made provincial-only later with `AdminScope::guardProvincialFields`, as for the other provincial-only fields.
 
 ---
 
