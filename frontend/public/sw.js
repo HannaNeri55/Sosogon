@@ -3,7 +3,7 @@
 // or the API is cached, and no stale page can be served.
 // It also shows push notifications (new registrations, submissions, decisions, reviews) on the
 // user's computer or phone, even with the site closed.
-const CACHE = 'sosogon-offline-v1'
+const CACHE = 'sosogon-offline-v2'
 const OFFLINE_PAGE = '/offline.html'
 const LOGO = '/images/Logo.png'
 

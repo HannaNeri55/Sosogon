@@ -45,6 +45,7 @@ const TouristDashboard = lazy(() => import('./pages/tourist/TouristDashboard'))
 const ItineraryPlanner = lazy(() => import('./pages/tourist/ItineraryPlanner'))
 const ItineraryView = lazy(() => import('./pages/tourist/ItineraryView'))
 const SavedItineraries = lazy(() => import('./pages/tourist/SavedItineraries'))
+const DownloadedItineraries = lazy(() => import('./pages/tourist/DownloadedItineraries'))
 const SharedItinerary = lazy(() => import('./pages/public/SharedItinerary'))
 const MyReviews = lazy(() => import('./pages/tourist/MyReviews'))
 
@@ -127,6 +128,7 @@ export default function App() {
           <Route path="/dashboard" element={<TouristDashboard />} />
           <Route path="/itineraries/:id" element={<ItineraryView />} />
           <Route path="/my-itineraries" element={<SavedItineraries />} />
+          <Route path="/my-downloads" element={<DownloadedItineraries />} />
           <Route path="/my-reviews" element={<MyReviews />} />
         </Route>
 

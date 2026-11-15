@@ -6,6 +6,7 @@ import { getStoredUser } from '../../utils/authStorage'
 
 const ICONS = {
   connection: FiWifiOff,
+  unreachable: FiServer,
   server: FiServer,
   unavailable: FiServer,
   'rate-limit': FiClock,
@@ -40,8 +41,8 @@ function ErrorDialog({ dialog }) {
       <p className="whitespace-pre-line">{dialog.message}</p>
       {dialog.kind === 'connection' && isTourist() && (
         <p className="mt-3">
-          Itineraries you saved for offline use can still be opened from{' '}
-          <a href="/offline.html" className="font-medium text-primary-700 hover:underline">Offline Copies</a>.
+          Itineraries you downloaded or saved can still be opened from{' '}
+          <a href="/offline.html" className="font-medium text-primary-700 hover:underline">your offline itineraries</a>.
         </p>
       )}
     </Modal>

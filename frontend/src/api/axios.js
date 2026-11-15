@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { loginPathFor, expiredLoginPathFor } from '../utils/session'
-import { CONNECTION_MESSAGE, isConnectionError } from '../utils/apiErrors'
+import { CONNECTION_MESSAGE, SERVER_UNREACHABLE_MESSAGE, isConnectionError, isDeviceOffline } from '../utils/apiErrors'
 import { showErrorDialog } from '../utils/dialogs'
 import { clearSession, getStoredUser, getToken, saveStoredUser } from '../utils/authStorage'
 
@@ -45,8 +45,12 @@ function dialogFor(error, isAuthAttempt) {
   const status = error.response?.status
   const retryable = (error.config?.method ?? 'get').toLowerCase() === 'get'
 
+  // No answer: "offline" only when the device really has no network; otherwise the server is
+  // asleep, busy or too slow, which a retry usually fixes.
   if (isConnectionError(error)) {
-    return { kind: 'connection', title: 'No connection', message: CONNECTION_MESSAGE, retryable }
+    return isDeviceOffline()
+      ? { kind: 'connection', title: "You're offline", message: CONNECTION_MESSAGE, retryable }
+      : { kind: 'unreachable', title: 'Server not responding', message: SERVER_UNREACHABLE_MESSAGE, retryable }
   }
   if (status === 429) {
     return {

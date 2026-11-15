@@ -4,7 +4,7 @@ import { getItineraries } from '../../api/itineraries'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { formatShortDate, formatTripCost } from '../../utils/helpers'
 import { INTERESTS, TRAVEL_PACES, BUDGETS } from '../../utils/constants'
-import { FiPlus, FiCalendar, FiActivity, FiChevronRight, FiCompass, FiWifiOff, FiBookmark } from 'react-icons/fi'
+import { FiPlus, FiCalendar, FiActivity, FiChevronRight, FiCompass, FiWifiOff, FiBookmark, FiDownload } from 'react-icons/fi'
 
 function labelFor(list, value) {
   const match = list.find((item) => item.value === value)
@@ -42,6 +42,9 @@ export default function SavedItineraries() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link to="/my-downloads" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors">
+              <FiDownload size={15} aria-hidden="true" /> My Downloads
+            </Link>
             <a href="/offline.html" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors">
               <FiWifiOff size={15} aria-hidden="true" /> Offline Copies
             </a>
