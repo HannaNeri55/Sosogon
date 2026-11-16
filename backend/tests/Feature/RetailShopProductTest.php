@@ -252,4 +252,21 @@ class RetailShopProductTest extends TestCase
         Storage::disk('public')->assertExists([$second->image_path, $second->thumbnail_path]);
         $this->assertCount(2, Storage::disk('public')->allFiles("retail-products/{$product->id}"));
     }
+
+    public function test_approved_products_of_a_shop_still_in_drafts_stay_hidden_with_their_shop(): void
+    {
+        $this->shop->forceFill(['status' => 'pending'])->save();
+        $product = $this->makeProduct('Abaca Keychain');
+        $product->forceFill(['status' => 'approved'])->save();
+
+        $this->getJson('/api/v1/retail-products')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("/api/v1/retail-products/{$product->id}")->assertNotFound();
+        $this->getJson('/api/v1/search?q=Abaca&type=retail_product')->assertOk()->assertJsonCount(0, 'results.retail_products');
+
+        // Once the shop is approved, its approved products are listed again.
+        $this->shop->forceFill(['status' => 'approved'])->save();
+        $this->getJson('/api/v1/retail-products')->assertOk()->assertJsonPath('data.0.id', $product->id);
+        $this->getJson("/api/v1/retail-products/{$product->id}")->assertOk();
+        $this->getJson('/api/v1/search?q=Abaca&type=retail_product')->assertOk()->assertJsonPath('results.retail_products.0.id', $product->id);
+    }
 }
