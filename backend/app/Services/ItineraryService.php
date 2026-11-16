@@ -1052,7 +1052,9 @@ class ItineraryService
 
         $prompt .= "TOURIST PREFERENCES:\n";
         $prompt .= "- Duration: {$numDays} day(s)\n";
-        $prompt .= "- Interests: {$interestsFormatted}\n";
+        $prompt .= ! empty($preferences['interests_balanced'])
+            ? "- Interests: none chosen. The tourist left it to you, so plan a balanced trip that mixes the kinds of places below ({$interestsFormatted}).\n"
+            : "- Interests: {$interestsFormatted}\n";
         $prompt .= "- Travel Pace: {$travelPace}\n";
         $prompt .= "- Budget: {$budget}\n";
         $prompt .= '- Getting around: '.(self::TRANSPORT_LABELS[$this->transport] ?? 'no preference')."\n";
@@ -1123,7 +1125,10 @@ class ItineraryService
         }
         $prompt .= "5. Respect operating hours and keep entrance fees in line with the tourist's budget.\n";
         if (count($sightseeing) > 1) {
-            $prompt .= '5a. Represent every selected interest ('.implode(', ', $sightseeing).") at least once in the trip where a suitable destination exists; they don't need equal numbers.\n";
+            $prompt .= '5a. Represent every selected interest ('.implode(', ', $sightseeing).") at least once in the trip where a suitable destination exists; they don't need equal numbers. "
+                ."Mix them within days where the places are close (a heritage stop and a beach on the same day) rather than giving each interest a day of its own.\n";
+        } elseif (count($sightseeing) === 1) {
+            $prompt .= '5a. '.reset($sightseeing)." is the tourist's one interest: every destination serves it, so make each stop a different experience of it rather than adding unrelated places.\n";
         }
         if ($preferred !== []) {
             $prompt .= "5c. Include every destination marked \"The tourist asked for this place\" where it fits these rules (town, day capacity, opening hours, travel time); never break a rule to fit one in.\n";

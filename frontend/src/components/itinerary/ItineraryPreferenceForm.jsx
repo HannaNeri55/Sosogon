@@ -244,7 +244,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
     arrival_time: '',
     // "HH:mm" when the tourist leaves on the last day; empty keeps the last day running through dinner.
     departure_time: '',
-    // None picked until the tourist chooses; Continue asks for at least one.
+    // None picked until the tourist chooses; none at all plans a balanced trip.
     interests: [],
     // Pace, budget, food and transport start unanswered too: the tourist picks each one.
     travel_pace: '',
@@ -275,10 +275,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   // Two nearby municipalities can share a day, so up to two per day (the planner checks they're close).
   const tooManyTowns = numDays !== null && townCount > numDays * 2
   const sharedDays = numDays !== null && !tooManyTowns && townCount > numDays
-  const noInterests = formData.interests.length === 0
   // What the Preferences step still needs, each shown under its own section after Continue.
+  // Interests are optional: with none, SOSOGON plans a balanced trip.
   const preferenceProblems = {
-    interests: noInterests ? 'Pick at least one interest to continue.' : null,
     pace: formData.travel_pace ? null : 'Choose a travel pace.',
     budget: formData.budget ? null : 'Choose a budget.',
     food: formData.food_preference ? null : 'Choose a food preference, or No Preference.',
@@ -336,13 +335,15 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const townKey = [...formData.municipality_ids].map(Number).sort((a, b) => a - b).join(',')
   const interestKey = [...formData.interests].sort().join(',')
   const placesKey = `${townKey}|${interestKey}`
-  const placesWanted = townKey !== '' && interestKey !== ''
+  const placesWanted = townKey !== ''
+  // No interests: the backend lists the places a balanced trip draws from.
+  const interestList = (key) => (key ? key.split(',') : [])
   useEffect(() => {
     if (!placesWanted) return undefined
     const controller = new AbortController()
     const timer = setTimeout(() => {
       setPlaces((prev) => ({ ...prev, key: placesKey, status: 'loading' }))
-      getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestKey.split(','), perPage: PLACES_PER_PAGE }, { signal: controller.signal })
+      getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestList(interestKey), perPage: PLACES_PER_PAGE }, { signal: controller.signal })
         .then((data) => {
           const list = data.data || []
           setSeenPlaces((prev) => ({ ...prev, ...placesById(list) }))
@@ -362,7 +363,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const loadMorePlaces = () => {
     const { key, page } = places
     setPlaces((prev) => ({ ...prev, loadingMore: true, moreFailed: false }))
-    getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestKey.split(','), page: page + 1, perPage: PLACES_PER_PAGE })
+    getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestList(interestKey), page: page + 1, perPage: PLACES_PER_PAGE })
       .then((data) => {
         const list = data.data || []
         setSeenPlaces((prev) => ({ ...prev, ...placesById(list) }))
@@ -786,7 +787,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   )
                 })}
               </div>
-              {attempted[2] && preferenceProblems.interests && <FieldError>{preferenceProblems.interests}</FieldError>}
+              <p className="text-xs text-gray-500 mt-2">
+                Select the experiences you'd enjoy most. You can pick several, or none and SOSOGON will plan a balanced trip.
+              </p>
             </div>
 
             <div>
@@ -1088,7 +1091,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   {formData.interests.length ? (
                     <span className="flex flex-wrap gap-1.5">{formData.interests.map((i) => <Chip key={i}>{labelOf(INTERESTS, i)}</Chip>)}</span>
                   ) : (
-                    <span className="text-red-600">None selected</span>
+                    <span className="text-gray-500">None picked — SOSOGON plans a balanced trip</span>
                   )}
                 </ReviewRow>
                 <ReviewRow label="Must-see places">
