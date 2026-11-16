@@ -17,11 +17,13 @@ import {
   deleteDestination,
   getMunicipalities,
   getCategories,
+  getExperienceTags,
 } from "../../api/admin";
 import { getImageUrl, oneTimeToken } from "../../utils/helpers";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import DestinationPhotoManager from "../../components/admin/DestinationPhotoManager";
 import DestinationActivitiesEditor from "../../components/admin/DestinationActivitiesEditor";
+import DestinationExperiencesEditor from "../../components/admin/DestinationExperiencesEditor";
 import { activityDraft, draftDurationMinutes, releaseActivityPreviews } from "../../utils/activityDrafts";
 
 const MAX_NEW_PHOTOS_PER_SAVE = 10;
@@ -68,7 +70,34 @@ const EMPTY_FORM = {
   rates: [],
   amenities: [],
   activities: [],
+  // Experience tags (slugs) and whether an admin confirmed them; never set automatically.
+  experience_tags: [],
+  experiences_reviewed: false,
 };
+
+/** The list's Experiences cell: reviewed or not, and the tags (or that there are none). */
+function ExperienceStatus({ item }) {
+  const tags = item.experience_tags || [];
+  const reviewed = Boolean(item.experiences_reviewed_at);
+  const names = tags.map((tag) => tag.name).join(", ");
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span
+        className={`text-xs font-medium px-2.5 py-1 rounded-full ${reviewed ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+        title={reviewed && item.experiences_reviewer?.name ? `Reviewed by ${item.experiences_reviewer.name}` : undefined}
+      >
+        {reviewed ? "Reviewed" : "Not reviewed"}
+      </span>
+      {tags.length === 0 ? (
+        <span className="text-xs text-amber-700">No experiences yet</span>
+      ) : (
+        <span className="max-w-48 truncate text-xs text-gray-500" title={names}>
+          {tags.length} · {names}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function ManageDestinations() {
   // A municipal admin adds and edits their own municipality's destinations; Featured and Tourism
@@ -87,6 +116,9 @@ export default function ManageDestinations() {
   const [items, setItems] = useState([]);
   const [municipalities, setMunicipalities] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [experienceTags, setExperienceTags] = useState([]);
+  // The saved review of the destination being edited ({ at, by }), shown while it stays reviewed.
+  const [savedReview, setSavedReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -167,12 +199,15 @@ export default function ManageDestinations() {
   };
 
   const loadMeta = async () => {
-    const [m, c] = await Promise.all([
+    const [m, c, tags] = await Promise.all([
       getMunicipalities(),
       getCategories("destination"),
+      // The form still works without the vocabulary (the Experiences section just stays empty).
+      getExperienceTags().catch(() => []),
     ]);
     setMunicipalities(m);
     setCategories(c);
+    setExperienceTags(tags);
   };
 
   useEffect(() => {
@@ -218,7 +253,11 @@ export default function ManageDestinations() {
       })),
 
       activities: (item.activities || []).map((activity) => activityDraft(activity)),
+
+      experience_tags: (item.experience_tags || []).map((tag) => tag.slug),
+      experiences_reviewed: Boolean(item.experiences_reviewed_at),
     });
+    setSavedReview(item.experiences_reviewed_at ? { at: item.experiences_reviewed_at, by: item.experiences_reviewer?.name } : null);
 
     setExistingImages(item.images || []);
     resetPhotoChanges();
@@ -268,6 +307,7 @@ export default function ManageDestinations() {
     setShowForm(false);
     setEditingId(null);
     setFormData(blankForm());
+    setSavedReview(null);
     setExistingImages([]);
     resetPhotoChanges();
   };
@@ -328,7 +368,7 @@ export default function ManageDestinations() {
 
       // Regular destination fields
       Object.keys(formData).forEach((key) => {
-        if (["images", "fees", "rates", "amenities", "activities"].includes(key)) return;
+        if (["images", "fees", "rates", "amenities", "activities", "experience_tags", "experiences_reviewed"].includes(key)) return;
         if (scope.isMunicipal && ["is_featured", "tourism_priority"].includes(key)) return;
 
         // Sent even when empty, so a classification can be cleared.
@@ -369,6 +409,11 @@ export default function ManageDestinations() {
       });
 
       // Activities (optional). The full list is sent so removed ones are deleted.
+      // The complete list of experiences (none clears them) and the review mark.
+      payload.append("experiences_present", "1");
+      formData.experience_tags.forEach((slug) => payload.append("experience_tags[]", slug));
+      payload.append("experiences_reviewed", formData.experiences_reviewed ? "1" : "0");
+
       payload.append("activities_present", "1");
       formData.activities.forEach((activity, index) => {
         const field = (name) => `activities[${index}][${name}]`;
@@ -880,6 +925,16 @@ export default function ManageDestinations() {
               <span className="mt-1 block text-xs text-gray-500">Only Indoor places are suggested as rainy-day alternatives.</span>
             </label>
           </div>
+
+          <DestinationExperiencesEditor
+            vocabulary={experienceTags}
+            selected={formData.experience_tags}
+            reviewed={formData.experiences_reviewed}
+            review={formData.experiences_reviewed ? savedReview : null}
+            onChange={(changes) => setFormData((prev) => ({ ...prev, ...changes }))}
+            form={form}
+          />
+
           <div className="flex gap-3">
             <button
               type="submit"
@@ -961,6 +1016,9 @@ export default function ManageDestinations() {
                   Category
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Experiences
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Status
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -996,6 +1054,9 @@ export default function ManageDestinations() {
                     <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-secondary-50 text-secondary-700">
                       {item.category?.name}
                     </span>
+                  </td>
+                  <td data-label="Experiences" className="px-4 py-4">
+                    <ExperienceStatus item={item} />
                   </td>
                   <td data-label="Status" className="px-4 py-4">
                     <span

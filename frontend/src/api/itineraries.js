@@ -99,6 +99,19 @@ export const getEligibleListingsForItinerary = async (id) => {
   return response.data
 }
 
+// The trip form's place picker: the published places in the chosen towns that the chosen
+// interests select, the same way generation picks them. Paginated ({ sightseeing, data,
+// current_page, last_page, total }); `signal` lets a newer request cancel this one. Quiet: the
+// form shows its own message when the list can't be loaded.
+export const getItineraryPlaces = async ({ municipalityIds, interests, page = 1, perPage = 100 }, { signal } = {}) => {
+  const response = await api.get('/itinerary-places', {
+    params: { municipality_ids: municipalityIds, interests, page, per_page: perPage },
+    signal,
+    quiet: true,
+  })
+  return response.data
+}
+
 export const getGenerationQuota = async () => {
   const response = await api.get('/itineraries/generation-quota')
   return response.data

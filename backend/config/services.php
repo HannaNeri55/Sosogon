@@ -37,6 +37,9 @@ return [
     'itinerary' => [
         // Which AI picks the destinations: 'gemini' (default) or 'claude'.
         'ai_provider' => env('AI_PROVIDER', 'gemini'),
+        // Whether destinations the tourism office has reviewed match interests through their
+        // confirmed experience tags (App\Services\InterestMatcher). Off: category matching only.
+        'match_by_tags' => filter_var(env('ITINERARY_MATCH_BY_TAGS', false), FILTER_VALIDATE_BOOLEAN),
         // Successful AI itinerary generations allowed per tourist per day (resets at midnight in 'timezone').
         'daily_limit' => (int) env('ITINERARY_DAILY_LIMIT', 10),
         // Generations allowed per guest (by IP address) per day, before logging in.

@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\Public\EventController;
 use App\Http\Controllers\Api\Public\FoodBeverageController;
 use App\Http\Controllers\Api\Public\HeroSlideController;
 use App\Http\Controllers\Api\Public\ItineraryFileController;
+use App\Http\Controllers\Api\Public\ItineraryPlaceController;
 use App\Http\Controllers\Api\Public\LocationController;
 use App\Http\Controllers\Api\Public\PageViewController;
 use App\Http\Controllers\Api\Public\PhotoCreditController;
@@ -117,6 +118,9 @@ Route::prefix('v1')->group(function () {
         ->where(['ticket' => '[A-Za-z0-9]{40}', 'mode' => 'download|view'])
         ->middleware('throttle:30,1')
         ->name('itinerary-files.show');
+
+    // The trip form's place picker (guests too): the destinations generation would accept for the chosen towns and interests.
+    Route::get('/itinerary-places', [ItineraryPlaceController::class, 'index'])->middleware('throttle:60,1');
 
     // Guest itinerary planner: returns a preview only; the full itinerary is claimed after login.
     Route::middleware('throttle:5,1')->group(function () {
@@ -272,6 +276,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::apiResource('/destinations', AdminDestinationController::class)->names('admin.destinations');
         Route::delete('/destinations/{id}/images/{imageId}', [AdminDestinationController::class, 'destroyImage']);
         Route::patch('/destinations/{id}/images/{imageId}/cover', [AdminDestinationController::class, 'setCoverImage']);
+        // The experience vocabulary for the destination form (any admin; tags are saved with the destination).
+        Route::get('/experience-tags', [AdminDestinationController::class, 'experienceTags']);
         // Featured and Tourism priority rank places across the province: provincial admins set them
         // on any municipality's destinations and events, including those managed by a municipal office.
         Route::patch('/destinations/{id}/ranking', [AdminDestinationController::class, 'updateRanking'])->middleware('admin.provincial');

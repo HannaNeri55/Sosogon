@@ -504,6 +504,12 @@ export const getBarangays = async (municipalityId) => {
   return response.data
 }
 
+// The experience vocabulary for the destination form: [{ slug, name, group, description }].
+export const getExperienceTags = async () => {
+  const response = await api.get('/admin/experience-tags')
+  return response.data
+}
+
 export const getCategories = async (type = '') => {
   const response = await api.get('/categories', {
     params: type ? { type } : {},

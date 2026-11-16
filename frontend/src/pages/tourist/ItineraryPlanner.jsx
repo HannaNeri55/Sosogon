@@ -20,8 +20,39 @@ import {
   FiLock,
   FiLogIn,
   FiUserPlus,
+  FiInfo,
 } from 'react-icons/fi'
 import { showApiError } from '../../utils/apiErrors'
+
+const PREFERRED_REASONS = {
+  outside_towns: 'outside your selected municipalities',
+  no_interest_match: "doesn't match your selected interests",
+}
+
+// Preferred places the trip couldn't include (the server checks them again when generating). An
+// unavailable place is only counted, never named.
+function PreferredNotice({ notice }) {
+  const named = (notice.destinations || []).filter((d) => d.name && PREFERRED_REASONS[d.reason])
+  const unavailable = (notice.destinations || []).filter((d) => d.reason === 'not_published').length
+  return (
+    <div role="status" className="mb-6 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <FiInfo size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <div>
+        <p>{notice.message}</p>
+        {(named.length > 0 || unavailable > 0) && (
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            {named.map((d) => (
+              <li key={d.id}>
+                {d.name}: {PREFERRED_REASONS[d.reason]}
+              </li>
+            ))}
+            {unavailable > 0 && <li>{unavailable === 1 ? 'One place is' : `${unavailable} places are`} no longer available</li>}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function labelFor(list, value) {
   const match = list.find((item) => item.value === value)
@@ -211,6 +242,8 @@ export default function ItineraryPlanner() {
   const [loading, setLoading] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [generatedItinerary, setGeneratedItinerary] = useState(null)
+  // Preferred places the planner couldn't include, and why ({ message, destinations }), or null.
+  const [preferredNotice, setPreferredNotice] = useState(null)
   // A guest's locked preview; restored from localStorage so it survives a refresh.
   const [guestPreview, setGuestPreview] = useState(() => readPendingItinerary()?.preview || null)
   const [quota, setQuota] = useState(null)
@@ -241,10 +274,12 @@ export default function ItineraryPlanner() {
     }
 
     setLoading(true)
+    setPreferredNotice(null)
     try {
       const data = await generateItinerary(preferences)
       if (data.quota) setQuota(data.quota)
       setGeneratedItinerary(data.itinerary)
+      setPreferredNotice(data.preferred_notice || null)
       toast.success('Itinerary generated successfully!')
     } catch (e) {
       if (e.response?.data?.quota) setQuota(e.response.data.quota)
@@ -390,6 +425,8 @@ export default function ItineraryPlanner() {
                     <FiMap size={11} /> {generatedItinerary.total_distance_km} km
                   </span>
                 </div>
+
+                {preferredNotice && <PreferredNotice notice={preferredNotice} />}
 
                 <ol className="relative mb-6 space-y-3 border-l-2 border-primary-100 pl-5">
                   {previewStops.map((stop, index) => {

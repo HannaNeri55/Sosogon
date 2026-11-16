@@ -21,6 +21,8 @@ class DatabaseSeeder extends Seeder
             MunicipalityProfileSeeder::class,
             BarangaySeeder::class,
             CategorySeeder::class,
+            // The experience vocabulary only; no destination is tagged by seeding.
+            ExperienceTagSeeder::class,
             SampleDestinationSeeder::class,
             SampleAccommodationSeeder::class,
             SampleFoodBeverageSeeder::class,

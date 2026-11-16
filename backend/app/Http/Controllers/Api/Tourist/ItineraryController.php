@@ -93,7 +93,11 @@ class ItineraryController extends Controller
             $limit,
             "You've reached today's limit of {$limit} itineraries. You can generate more after midnight (Philippine time).",
             ['user_id' => $user->id],
-            fn () => ['itinerary' => $this->withBackupOptions($this->itineraryService->generate($user, $validated)->load($this->relations()))]
+            fn () => [
+                'itinerary' => $this->withBackupOptions($this->itineraryService->generate($user, $validated)->load($this->relations())),
+                // Preferred destinations left out (unavailable, other towns, other interests), or null.
+                'preferred_notice' => $this->itineraryService->preferredNotice(),
+            ]
         );
     }
 
@@ -122,6 +126,7 @@ class ItineraryController extends Controller
                     'itinerary_id' => $itinerary->id,
                     'claim_token' => $token,
                     'preview' => $this->guestPreview($itinerary),
+                    'preferred_notice' => $this->itineraryService->preferredNotice(),
                 ];
             }
         );

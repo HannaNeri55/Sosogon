@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { differenceInCalendarDays, parseISO, format } from 'date-fns'
-import { INTERESTS, INTEREST_CATEGORY_IDS, TRAVEL_PACES, BUDGETS, CUISINE_PREFERENCES, ACCOMMODATION_TYPES, TRANSPORT_PREFERENCES } from '../../utils/constants'
+import { INTERESTS, TRAVEL_PACES, BUDGETS, CUISINE_PREFERENCES, ACCOMMODATION_TYPES, TRANSPORT_PREFERENCES } from '../../utils/constants'
 import { MdDirectionsCar, MdTwoWheeler, MdCarRental, MdDirectionsBus, MdAutoAwesome } from 'react-icons/md'
 import { getMunicipalities } from '../../api/admin'
-import { getDestinations } from '../../api/destinations'
+import { getItineraryPlaces } from '../../api/itineraries'
 import { getAccommodations } from '../../api/accommodations'
 import StayChoice from './StayChoice'
 import { stayOptions } from '../../utils/roomTypes'
@@ -40,11 +40,18 @@ import {
   FiUmbrella,
   FiFlag,
   FiNavigation,
+  FiBookOpen,
 } from 'react-icons/fi'
 
 const MAX_TRIP_DAYS = 30
 const MAX_TRAVELERS = 20
 const MAX_PREFERRED = 10
+// The place picker loads this many places at a time ("Load more" for the rest), a moment after the
+// towns or interests last changed.
+const PLACES_PER_PAGE = 100
+const PLACES_DEBOUNCE_MS = 300
+
+const placesById = (list) => Object.fromEntries(list.map((d) => [d.id, d]))
 
 const daysLabel = (n) => `${n} ${n === 1 ? 'day' : 'days'}`
 const townsLabel = (n) => `${n} ${n === 1 ? 'municipality' : 'municipalities'}`
@@ -77,6 +84,7 @@ const INTEREST_ICONS = {
   nature: FiSun,
   beaches: FiUmbrella,
   culture: FiCamera,
+  history: FiBookOpen,
   food: FiCoffee,
   adventure: FiCompass,
   shopping: FiShoppingBag,
@@ -214,9 +222,12 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   const [townsLoaded, setTownsLoaded] = useState(false)
   const [search, setSearch] = useState('')
   const [placeSearch, setPlaceSearch] = useState('')
-  // Published destinations of each selected town (town id => list, or 'error'), for the picker.
-  const [placesByTown, setPlacesByTown] = useState({})
-  const requestedTowns = useRef(new Set())
+  // The picker's places: the published destinations in the selected towns that the selected
+  // interests select, as the backend decides (the same rule generation uses). `key` says which
+  // towns and interests they are for; pages load one at a time.
+  const [places, setPlaces] = useState({ key: '', status: 'idle', sightseeing: true, items: [], page: 0, lastPage: 0, loadingMore: false, moreFailed: false })
+  // Every place a response has shown (id => place), so a picked place keeps its chip while a new list loads.
+  const [seenPlaces, setSeenPlaces] = useState({})
   // Approved stays of each selected town, with their rooms (town id => list, or 'error').
   const [staysByTown, setStaysByTown] = useState({})
   const requestedStayTowns = useRef(new Set())
@@ -317,16 +328,49 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
       .finally(() => setTownsLoaded(true))
   }, [])
 
+  // One request for all selected towns and interests, a moment after the last change; a newer
+  // selection cancels the request still running for an older one.
+  const townKey = [...formData.municipality_ids].map(Number).sort((a, b) => a - b).join(',')
+  const interestKey = [...formData.interests].sort().join(',')
+  const placesKey = `${townKey}|${interestKey}`
+  const placesWanted = townKey !== '' && interestKey !== ''
   useEffect(() => {
-    formData.municipality_ids
-      .filter((id) => !requestedTowns.current.has(id))
-      .forEach((id) => {
-        requestedTowns.current.add(id)
-        getDestinations({ municipality_id: id, per_page: 50 })
-          .then((data) => setPlacesByTown((prev) => ({ ...prev, [id]: data.data || [] })))
-          .catch(() => setPlacesByTown((prev) => ({ ...prev, [id]: 'error' })))
+    if (!placesWanted) return undefined
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setPlaces((prev) => ({ ...prev, key: placesKey, status: 'loading' }))
+      getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestKey.split(','), perPage: PLACES_PER_PAGE }, { signal: controller.signal })
+        .then((data) => {
+          const list = data.data || []
+          setSeenPlaces((prev) => ({ ...prev, ...placesById(list) }))
+          setPlaces({ key: placesKey, status: 'ready', sightseeing: Boolean(data.sightseeing), items: list, page: data.current_page || 1, lastPage: data.last_page || 1, loadingMore: false, moreFailed: false })
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPlaces((prev) => ({ ...prev, key: placesKey, status: 'error', items: [] }))
+        })
+    }, PLACES_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [placesWanted, placesKey, townKey, interestKey])
+
+  // The next page of the same list; ignored if the towns or interests changed meanwhile.
+  const loadMorePlaces = () => {
+    const { key, page } = places
+    setPlaces((prev) => ({ ...prev, loadingMore: true, moreFailed: false }))
+    getItineraryPlaces({ municipalityIds: townKey.split(',').map(Number), interests: interestKey.split(','), page: page + 1, perPage: PLACES_PER_PAGE })
+      .then((data) => {
+        const list = data.data || []
+        setSeenPlaces((prev) => ({ ...prev, ...placesById(list) }))
+        setPlaces((prev) => {
+          if (prev.key !== key || prev.page !== page) return prev
+          const known = new Set(prev.items.map((d) => d.id))
+          return { ...prev, items: [...prev.items, ...list.filter((d) => !known.has(d.id))], page: data.current_page || page + 1, lastPage: data.last_page || prev.lastPage, loadingMore: false }
+        })
       })
-  }, [formData.municipality_ids])
+      .catch(() => setPlaces((prev) => (prev.key !== key ? prev : { ...prev, loadingMore: false, moreFailed: true })))
+  }
 
   useEffect(() => {
     formData.municipality_ids
@@ -415,17 +459,19 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
     }, formData)
   }
 
-  const interestCategories = new Set(formData.interests.flatMap((i) => INTEREST_CATEGORY_IDS[i] || []))
-  const townLists = formData.municipality_ids.map((id) => placesByTown[id])
-  const placesLoading = townLists.some((list) => list === undefined)
-  const placesFailed = townLists.some((list) => list === 'error')
-  const matchingPlaces = townLists
-    .filter(Array.isArray)
-    .flat()
-    .filter((d) => interestCategories.has(Number(d.category_id)))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const placesCurrent = placesWanted && places.key === placesKey
+  const placesLoading = placesWanted && (!placesCurrent || places.status === 'loading')
+  const placesFailed = placesCurrent && places.status === 'error'
+  const matchingPlaces = placesCurrent && places.status === 'ready' ? places.items : []
+  // With no interest picked, or only Food and Shopping, there are no places to pick.
+  const sightseeingPicked = interestKey !== '' && (!placesCurrent || places.sightseeing)
+  const morePlaces = placesCurrent && places.status === 'ready' && places.page < places.lastPage
+  // A picked place stays picked while it is in the list. Once the whole list is loaded, one that
+  // isn't in it no longer matches and is dropped; until then (loading, more pages, an error) it is
+  // kept, and generation checks it again.
+  const placesComplete = !placesWanted || (placesCurrent && places.status === 'ready' && !morePlaces)
   const preferred = formData.preferred_destinations
-    .map((id) => matchingPlaces.find((d) => d.id === id))
+    .map((id) => matchingPlaces.find((d) => d.id === id) || (placesComplete ? null : seenPlaces[id]))
     .filter(Boolean)
   const placeQuery = placeSearch.trim().toLowerCase()
   const shownPlaces = placeQuery
@@ -895,9 +941,11 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-500">
                   {placesFailed
                     ? "We couldn't load the places in your towns. You can still continue without picking any."
-                    : interestCategories.size === 0
+                    : !sightseeingPicked
                       ? 'Food and Shopping are planned around restaurants and souvenir shops. Add a sightseeing interest to pick places.'
-                      : 'No verified places in your towns match the interests you picked.'}
+                      : townKey === ''
+                        ? 'Pick municipalities in the first step to choose places here. Otherwise SOSOGON chooses them for you.'
+                        : 'No verified places in your towns match the interests you picked.'}
                 </p>
               ) : (
                 <>
@@ -952,6 +1000,20 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                       )
                     })}
                   </ul>
+                  {morePlaces && (
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={loadMorePlaces}
+                        disabled={places.loadingMore}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {places.loadingMore && <FiLoader size={12} className="animate-spin" aria-hidden="true" />}
+                        Load more places
+                      </button>
+                      {places.moreFailed && <span role="alert" className="text-xs text-red-600">We couldn't load more places. Please try again.</span>}
+                    </div>
+                  )}
                   {preferred.length >= MAX_PREFERRED && <p className="text-xs text-gray-500 mt-2">You've picked {MAX_PREFERRED} places, the most we can plan around.</p>}
                 </>
               )}
