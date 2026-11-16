@@ -113,6 +113,15 @@ class ItineraryMultiTownTest extends TestCase
         ]);
     }
 
+    /** Straight-line km between two listings (haversine), as the planner measures it. */
+    private function km($from, $to): float
+    {
+        [$lat1, $lng1, $lat2, $lng2] = array_map('deg2rad', [(float) $from->latitude, (float) $from->longitude, (float) $to->latitude, (float) $to->longitude]);
+        $a = sin(($lat2 - $lat1) / 2) ** 2 + cos($lat1) * cos($lat2) * sin(($lng2 - $lng1) / 2) ** 2;
+
+        return 6371 * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
     private function day(int $number, string ...$destinations): array
     {
         return ['day_number' => $number, 'destinations' => array_map(fn ($d) => ['destination_id' => $this->ids[$d], 'reason' => 'Nice.'], $destinations)];
@@ -143,9 +152,12 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertSame($this->ids['inn'], $itinerary->accommodation_id);
         $this->assertEqualsCanonicalizing([$this->towns['bulan'], $this->towns['matnog']], $itinerary->municipalities->pluck('id')->all());
 
-        // Day 2 starts from where night 1 was spent: the drive from Bulan's inn to Matnog.
-        $firstVisit = $itinerary->items()->where('day_number', 2)->where('item_type', 'destination')->orderBy('sequence')->first();
-        $this->assertGreaterThan(20, (float) $firstVisit->distance_from_prev_km);
+        // Day 2 starts from where night 1 was spent: the drive from Bulan's inn (not from Matnog's
+        // resort), to whichever stop the route takes first (it may be a nearby-town place on the way).
+        $firstVisit = $itinerary->items()->with('destination')->where('day_number', 2)->where('item_type', 'destination')->orderBy('sequence')->first();
+        $inn = Accommodation::find($this->ids['inn']);
+        $this->assertEqualsWithDelta($this->km($inn, $firstVisit->destination), (float) $firstVisit->distance_from_prev_km, 0.05);
+        $this->assertGreaterThan(10, (float) $firstVisit->distance_from_prev_km);
     }
 
     public function test_every_day_stays_in_one_town_and_every_town_gets_a_day(): void

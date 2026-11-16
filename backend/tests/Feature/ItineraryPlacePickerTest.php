@@ -50,7 +50,8 @@ class ItineraryPlacePickerTest extends TestCase
         sort($ids);
         $this->assertSame($this->legacyIds(['beaches'], ['alpha']), $ids);
         $this->assertSame(['current_page', 'data', 'first_page_url', 'from', 'last_page', 'last_page_url', 'links', 'next_page_url', 'path', 'per_page', 'prev_page_url', 'to', 'total'],
-            collect($response->json())->except('sightseeing')->keys()->sort()->values()->all());
+            collect($response->json())->except(['sightseeing', 'unmatched_interests'])->keys()->sort()->values()->all());
+        $this->assertSame([], $response->json('unmatched_interests'));
         $this->assertContains('throttle:60,1', Route::getRoutes()->match(request()->create('/api/v1/itinerary-places'))->gatherMiddleware());
     }
 
@@ -99,6 +100,15 @@ class ItineraryPlacePickerTest extends TestCase
         $this->picker(['beaches'], [])->assertStatus(422)->assertJsonValidationErrors('municipality_ids');
         $this->getJson('/api/v1/itinerary-places?'.http_build_query(['municipality_ids' => [0], 'interests' => ['beaches']]))->assertStatus(422);
         $this->picker(['beaches'], ['alpha'], ['q' => str_repeat('a', 101)])->assertStatus(422)->assertJsonValidationErrors('q');
+    }
+
+    public function test_it_names_the_interests_no_place_in_the_towns_matches(): void
+    {
+        // Delta has only an Eco-Tourism mangrove: nothing for Beaches, Culture or History there.
+        $this->picker(['nature', 'beaches', 'culture', 'history', 'food'], ['delta'])->assertOk()
+            ->assertJsonPath('unmatched_interests', ['beaches', 'culture', 'history']);
+        $this->picker(['beaches', 'culture'], ['alpha', 'bravo'])->assertOk()->assertJsonPath('unmatched_interests', []);
+        $this->picker(['food'], ['delta'])->assertOk()->assertJsonPath('unmatched_interests', []);
     }
 
     public function test_unknown_towns_and_food_or_shopping_list_nothing(): void

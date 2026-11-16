@@ -41,11 +41,19 @@ class ItineraryPlaceController extends Controller
         if (! $sightseeing) {
             $places = new LengthAwarePaginator([], 0, $perPage, LengthAwarePaginator::resolveCurrentPage(), ['path' => $request->url()]);
 
-            return response()->json(['sightseeing' => false] + $places->toArray());
+            return response()->json(['sightseeing' => false, 'unmatched_interests' => []] + $places->toArray());
         }
 
+        $towns = array_map('intval', $validated['municipality_ids']);
+        // Sightseeing interests no place in these towns matches, so the form can say so (the
+        // planner may still bring one in from a nearby town).
+        $unmatched = array_values(array_filter($matcher->sightseeing($validated['interests']), fn ($interest) => ! Destination::published()
+            ->whereIn('municipality_id', $towns)
+            ->tap(fn ($query) => $matcher->constrain($query, [$interest]))
+            ->exists()));
+
         $places = Destination::published()
-            ->whereIn('municipality_id', array_map('intval', $validated['municipality_ids']))
+            ->whereIn('municipality_id', $towns)
             ->tap(fn ($query) => $matcher->constrain($query, $validated['interests']))
             ->when($validated['q'] ?? null, fn ($query, $search) => $query->where('name', 'like', "%{$search}%"))
             ->select('id', 'name', 'category_id', 'municipality_id')
@@ -71,6 +79,6 @@ class ItineraryPlaceController extends Controller
                 ];
             });
 
-        return response()->json(['sightseeing' => true] + $places->toArray());
+        return response()->json(['sightseeing' => true, 'unmatched_interests' => $unmatched] + $places->toArray());
     }
 }
