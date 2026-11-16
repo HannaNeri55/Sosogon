@@ -247,8 +247,8 @@ class ItineraryPlanningQualityTest extends TestCase
         $visit = $day1->firstWhere('item_type', 'destination');
         $this->assertNotNull($visit, 'The afternoon still has an attraction.');
         $this->assertLessThanOrEqual(17 * 60, $this->minutes($visit->time_slot)[1], 'It fits before the day ends.');
-        // The AI's Day 1 beach needs longer, so it moves to another day instead of being cut short.
-        $this->assertTrue(Itinerary::latest('id')->first()->items()->where('destination_id', $this->ids['northBeach'])->where('day_number', '>', 1)->exists());
+        // The AI's Day 1 beaches need longer, so one moves to another day instead of being cut short.
+        $this->assertTrue($this->dayOnePickMovedLater());
     }
 
     public function test_a_5pm_arrival_is_arrival_rest_and_dinner(): void
@@ -259,8 +259,8 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertStringStartsWith('Free time at Central Inn', $day1[1]->notes);
         $this->assertStringStartsWith('Dinner', $day1[2]->notes);
         $this->assertGreaterThanOrEqual(18 * 60, $this->minutes($day1[2]->time_slot)[0]);
-        // The AI's Day 1 pick isn't lost: it moves to a later day.
-        $this->assertTrue(Itinerary::latest('id')->first()->items()->where('destination_id', $this->ids['northBeach'])->where('day_number', '>', 1)->exists());
+        // The AI's Day 1 picks aren't lost: one moves to a later day.
+        $this->assertTrue($this->dayOnePickMovedLater());
     }
 
     public function test_a_4pm_arrival_has_no_sightseeing_only_rest_and_dinner(): void
@@ -270,7 +270,31 @@ class ItineraryPlanningQualityTest extends TestCase
         $this->assertEmpty($day1->where('item_type', 'destination'), 'No visit fits before the visiting day ends.');
         $this->assertEmpty($day1->filter(fn ($i) => preg_match('/^(Breakfast|Lunch|Afternoon merienda)/', (string) $i->notes)));
         $this->assertStringStartsWith('Dinner', $day1->last()->notes);
-        $this->assertTrue(Itinerary::latest('id')->first()->items()->where('destination_id', $this->ids['northBeach'])->where('day_number', '>', 1)->exists(), 'The Day 1 pick moves to a later day.');
+        $this->assertTrue($this->dayOnePickMovedLater(), 'A Day 1 pick moves to a later day.');
+    }
+
+    /**
+     * Whether one of the AI's Day 1 picks is on a later day. Which one depends on the rest of the
+     * trip: the planner prefers one that doesn't repeat an experience a later day already has.
+     */
+    private function dayOnePickMovedLater(): bool
+    {
+        return Itinerary::latest('id')->first()->items()->where('day_number', '>', 1)
+            ->whereIn('destination_id', [$this->ids['northBeach'], $this->ids['southBeach'], $this->ids['eastCove']])->exists();
+    }
+
+    public function test_a_long_free_afternoon_says_why_it_is_free(): void
+    {
+        $days = $this->days($this->generate(['arrival_time' => '17:00']));
+
+        // Every rest at the stay of two hours or more (other than the arrival day's) says why.
+        $long = $days->toBase()->except([1])->flatten(1)->filter(fn ($i) => $i->item_type === 'accommodation'
+            && preg_match('/^(Free time|Back to)/', (string) $i->notes)
+            && ($m = $this->minutes($i->time_slot)) && $m[1] - $m[0] >= 120);
+        $this->assertNotEmpty($long, 'The fixture has a long free afternoon.');
+        foreach ($long as $rest) {
+            $this->assertMatchesRegularExpression("/^Today's (sightseeing ends at|stops are planned for later)|^A breather/", (string) $rest->reason, $rest->notes);
+        }
     }
 
     public function test_a_late_night_arrival_has_no_dinner(): void

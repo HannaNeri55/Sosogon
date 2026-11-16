@@ -87,6 +87,34 @@ class ItineraryService
     /** Shortest sensible visit by kind (minutes), before the pace adjusts it. */
     private const MIN_VISIT = ['water' => 120, 'resort' => 120, 'highland' => 90, 'nature' => 60, 'culture' => 45];
 
+    /** Longest a visit's planned activities run at each pace: activities without a listed length share what's left. */
+    private const MAX_VISIT = ['relaxed' => 300, 'moderate' => 240, 'packed' => 180];
+
+    /**
+     * What a visitor actually does at a place, read from its listed activities (first match wins);
+     * an activity matching none counts as an experience of its own name. Kinds (experienceKind())
+     * are too coarse to tell a surf spot from a quiet swimming beach; these aren't.
+     */
+    private const EXPERIENCES = [
+        'surfing' => '/surf/',
+        'snorkeling or diving' => '/snorkel|\bdiv(e|ing)\b|freediv/',
+        'kayaking or paddling' => '/kayak|paddle|\bsup\b|canoe|raft/',
+        'boat or island trip' => '/island.?hopping|boat|banca|cruise|sandbar/',
+        'wildlife watching' => '/whale|butanding|firefl|bird|dolphin|turtle|wildlife|sanctuary|mangrove/',
+        'waterfall visit' => '/waterfall|falls\b/',
+        'spring bathing' => '/spring/',
+        'swimming' => '/swim|bath|dip\b|pool/',
+        'hiking' => '/hike|hiking|trek|climb|trail/',
+        'camping' => '/camp|bonfire/',
+        'picnic' => '/picnic/',
+        'viewpoint' => '/sunset|sunrise|view|watch|stargaz|sightsee|photo/',
+        'strolling' => '/stroll|walk|promenade/',
+        'museum' => '/museum|gallery|exhibit/',
+        'worship' => '/\bmass\b|prayer|pilgrim|shrine|chapel|church/',
+        'heritage' => '/heritage|histor|ruin|marker|lighthouse|ancestral/',
+        'farm visit' => '/farm|harvest|plantation|orchard/',
+    ];
+
     /** Day 1 is planned around this arrival (10:00 AM) when the tourist doesn't give one. */
     private const DEFAULT_ARRIVAL = 600;
 
@@ -947,10 +975,14 @@ class ItineraryService
                 default => 'not listed',
             };
             $activities = $d->activities->map(function ($a) {
-                $details = implode(', ', array_filter([$a->type, $a->best_time_to_visit ? "best: {$a->best_time_to_visit}" : null]));
+                // The listed best time; otherwise one the activity's name makes plain ("Sunset viewing").
+                $suits = $this->timeOfDay($a->name, null, 'anytime');
+                $when = $a->best_time_to_visit ? "best: {$a->best_time_to_visit}" : ($suits !== 'anytime' ? "suits the {$suits}" : null);
+                $details = implode(', ', array_filter([$a->type, $when]));
 
                 return $a->name.($details !== '' ? " ({$details})" : '');
             })->implode('; ');
+            $offers = $this->experiencesOf($d);
 
             $about = $this->promptExcerpt($d->description, 220);
             $amenities = $d->relationLoaded('amenities') ? $d->amenities->pluck('name')->take(8)->implode(', ') : '';
@@ -972,6 +1004,7 @@ class ItineraryService
                 .($standing !== [] ? ' | Standing: '.implode('; ', $standing) : '')
                 .($setting ? " | Setting: {$setting}" : '')
                 .($activities !== '' ? " | Activities: {$activities}" : '')
+                .($d->activities->isNotEmpty() ? ' | Experience: '.implode(', ', $offers) : '')
                 .($amenities !== '' ? " | Amenities: {$amenities}" : '')
                 .($food !== '' ? " | Food on site: {$food}" : '')
                 .($d->visitor_guidelines ? ' | Visitor notes: '.$this->promptExcerpt($d->visitor_guidelines, 160) : '')
@@ -1074,6 +1107,7 @@ class ItineraryService
         $prompt .= "1. Use ONLY destination IDs from the list above. Never invent places, and never use the same destination twice in the trip.\n";
         $prompt .= "2. Up to {$perDay} destinations per day ({$firstDay} on Day 1). Put destinations that are close to each other on the same day, in an order that avoids backtracking. Different days should feature different experiences.\n";
         $prompt .= "3. Vary each day: never two beach or swimming spots on the same day, and mix water, nature, viewpoints, heritage and resorts. Don't put two physically demanding stops back to back. A sunrise spot goes first in its day, and a sunset or night-time spot (one whose activities are best in the evening) last.\n";
+        $prompt .= "3b. Never put two places with the same \"Experience\" on one day (two swimming beaches feel like one), and don't repeat an experience on the next day when the list offers another. Follow each activity's best time: a place whose activities suit the morning goes early in its day, one that suits the afternoon later.\n";
         $waterOnly = $destinations->filter(fn ($d) => in_array((int) $d->municipality_id, $this->waterOnlyTowns, true))
             ->map(fn ($d) => $d->municipality?->name)->filter()->unique()->values()->all();
         if ($waterOnly !== []) {
@@ -1346,15 +1380,17 @@ class ItineraryService
                 $near = collect($ids ?: ($previous['destination_ids'] ?? []))->map(fn ($id) => $byId[$id]);
                 $town = $near->isNotEmpty() ? (int) $near->first()->municipality_id : (int) $preferences['municipality_ids'][0];
                 $kinds = collect($ids)->map(fn ($id) => $this->experienceKind($byId[$id]))->all();
+                // Stops on the trip's other days, so the same experience isn't repeated day after day.
+                $elsewhere = collect(array_diff($used, $ids))->map(fn ($id) => $byId[$id]);
                 // Selected interests no stop in the trip represents yet.
                 $uncovered = array_diff(
                     $this->interestsOf($preferences, null),
                     array_merge([], ...array_map(fn ($id) => $this->interestsOf($preferences, $byId[$id]), $used))
                 );
 
-                // Among the places that fit the day, the closest, preferring a kind the day lacks,
-                // more strongly an interest the trip doesn't cover yet, and most a place the
-                // tourist asked for.
+                // Among the places that fit the day, the closest, preferring a kind the day lacks
+                // and an experience the rest of the trip doesn't already offer, more strongly an
+                // interest the trip doesn't cover yet, and most a place the tourist asked for.
                 $preferred = $this->preferredIds($preferences);
                 // A day built around a highlight isn't padded with unranked places just to add stops.
                 $hasHighlight = collect($ids)->contains(fn ($id) => $this->priorityScore($byId[$id]) >= self::PRIORITY_POINTS['popular']);
@@ -1367,6 +1403,7 @@ class ItineraryService
                     // Any place in the day's own town comes before one across the town line.
                     ->sortBy(fn ($d) => ($near->isEmpty() ? 0 : $near->min(fn ($s) => $this->travelMinutes($s, $d)))
                         + (in_array($this->experienceKind($d), $kinds, true) ? 30 : 0)
+                        + ($elsewhere->contains(fn ($s) => $this->sameExperience($s, $d)) ? 45 : 0)
                         - (array_intersect($uncovered, $this->interestsOf($preferences, $d)) !== [] ? 60 : 0)
                         - (in_array((int) $d->id, $preferred, true) ? 120 : 0)
                         - $this->priorityScore($d)
@@ -1469,7 +1506,8 @@ class ItineraryService
      * day rules: open that day; on Day 1, fits after the arrival; otherwise room at the pace,
      * same town as the day's first stop (or the day's one nearby-town place) and within
      * MAX_DAY_LEG_MINUTES of it, within KIND_LIMITS (WATER_ONLY_TOWN_LIMIT water stops in a
-     * town with nothing but water stops), and not a second sunrise or sunset stop.
+     * town with nothing but water stops), not the same experience as a stop already in the day
+     * (sameExperience()), and not a second sunrise or sunset stop.
      */
     private function fitsDay(array $ids, Destination $candidate, int $n, Collection $byId, array $preferences): bool
     {
@@ -1498,6 +1536,9 @@ class ItineraryService
             && $sameArea
             && $this->travelMinutes($first, $candidate) <= self::MAX_DAY_LEG_MINUTES
             && $stops->filter(fn ($d) => $this->experienceKind($d) === $kind)->count() < $kindLimit
+            // Never two places offering the same thing (two swimming beaches) on one day; heritage
+            // stops are short and often visited together, so they may.
+            && ($kind === 'culture' || ! $stops->contains(fn ($d) => $this->sameExperience($d, $candidate)))
             && ! ($this->isAnchor($candidate) && $stops->contains(fn ($d) => $this->isAnchor($d)))
             && ($preferences['travel_pace'] === 'relaxed' || ! ($this->hasDawn($candidate) && $stops->contains(fn ($d) => $this->hasDawn($d))));
     }
@@ -1671,6 +1712,49 @@ class ItineraryService
         return $category === 'resort' ? 'resort' : 'nature';
     }
 
+    /**
+     * The experiences a destination offers (keys of EXPERIENCES, or an activity's own name), from
+     * its listed activities; with none listed, its category. Never guessed from the description.
+     *
+     * @return array<int, string>
+     */
+    private function experiencesOf(Destination $destination): array
+    {
+        $found = $destination->activities->map(function ($activity) {
+            $name = mb_strtolower(trim((string) $activity->name));
+            foreach (self::EXPERIENCES as $experience => $pattern) {
+                if (preg_match($pattern, $name)) {
+                    return $experience;
+                }
+            }
+
+            return $name;
+        })->filter()->unique()->values()->all();
+
+        return $found ?: array_values(array_filter([mb_strtolower((string) $destination->category?->name)]));
+    }
+
+    /** Whether two places offer mostly the same thing: at least half of what they offer between them is shared. */
+    private function sameExperience(Destination $a, Destination $b): bool
+    {
+        $one = $this->experiencesOf($a);
+        $two = $this->experiencesOf($b);
+        $all = count(array_unique([...$one, ...$two]));
+
+        return $all > 0 && count(array_intersect($one, $two)) * 2 >= $all;
+    }
+
+    /** The part of the day a place's listed activities point to ('morning' or 'afternoon') when they agree, else null. */
+    private function preferredPart(Destination $destination): ?string
+    {
+        $parts = $destination->activities
+            ->map(fn ($a) => $this->timeOfDay($a->name, $a->best_time_to_visit, 'anytime'))
+            ->filter(fn ($label) => in_array($label, ['morning', 'afternoon'], true))
+            ->unique();
+
+        return $parts->count() === 1 ? $parts->first() : null;
+    }
+
     private function kindLabel(string $kind): string
     {
         return [
@@ -1710,9 +1794,10 @@ class ItineraryService
     /**
      * The order to visit a day's destinations: a sunrise stop first (when it can be done) and
      * a sunset/evening stop last. In between, the day's highlight (its clearly highest-ranked
-     * place) comes first, while the morning is fresh and its morning activities are possible;
-     * the rest each the nearest to where the tourist is, unless that repeats the kind of
-     * experience just had and another kind is left.
+     * place) comes first, while the morning is fresh and its morning activities are possible,
+     * unless its activities are best in the afternoon; the rest each the nearest to where the
+     * tourist is, unless that repeats the kind of experience just had and another kind is left,
+     * places best in the morning before those best in the afternoon.
      */
     private function orderStops(Collection $stops, ?Accommodation $home, string $pace, bool $arrivalDay): Collection
     {
@@ -1724,7 +1809,8 @@ class ItineraryService
         $from = $dawn ?? $home;
         $lastKind = $dawn ? $this->experienceKind($dawn) : null;
         $ranked = $rest->sortByDesc(fn ($d) => $this->priorityScore($d))->values();
-        if ($ranked->count() > 1 && $this->priorityScore($ranked[0]) > $this->priorityScore($ranked[1])) {
+        // A highlight whose activities are best in the afternoon waits for its time.
+        if ($ranked->count() > 1 && $this->priorityScore($ranked[0]) > $this->priorityScore($ranked[1]) && $this->preferredPart($ranked[0]) !== 'afternoon') {
             $ordered[] = $ranked[0];
             $rest = $rest->reject(fn ($d) => $d === $ranked[0])->values();
             $from = $ranked[0];
@@ -1732,7 +1818,10 @@ class ItineraryService
         }
         while ($rest->isNotEmpty()) {
             $otherKinds = $rest->contains(fn ($d) => $this->experienceKind($d) !== $lastKind);
+            // A place best in the morning goes before one best in the afternoon unless that costs
+            // over an hour more on the road.
             $next = $rest->sortBy(fn ($d) => ($otherKinds && $this->experienceKind($d) === $lastKind ? 10000 : 0)
+                + ($rest->count() > 1 ? ['morning' => 0, 'afternoon' => 60][$this->preferredPart($d)] ?? 30 : 0)
                 + ($from ? $this->travelMinutes($from, $d) : 0))->first();
             $ordered[] = $next;
             $rest = $rest->reject(fn ($d) => $d === $next)->values();
@@ -2368,7 +2457,7 @@ class ItineraryService
             $freeMorning = function () use (&$clock, $base, $lastDay, $restAt, $restNotes, $endsInTime) {
                 $until = self::LUNCH_START - 15;
                 if ($base && ! $lastDay && $endsInTime($until) && $until - $clock >= self::IDLE_MINUTES) {
-                    $restAt($base, $until, $restNotes('before lunch'), '');
+                    $restAt($base, $until, $restNotes('before lunch'), "Today's stops are planned for later in the day, so the morning is free instead of spent waiting around.");
                 }
             };
             // Lunch at 11:30 AM – 12:30 PM, at a place the tourist can reach by 11:30: near where
@@ -2508,7 +2597,11 @@ class ItineraryService
                     $from = max($clock + $this->travelMinutes($prev, $base), $checkInAt ?? 0);
                     $restAt($base, max($dinnerTarget - 15, $from + 30), $restNotes('before dinner'), '', 30);
                 } elseif ($dinnerTarget - $clock >= ($arrivalDay ? 45 : self::IDLE_MINUTES)) {
-                    $restAt($base, $dinnerTarget - 15, $restNotes('before dinner'), '', $arrivalDay ? 30 : 90);
+                    // A long free afternoon says why it's free.
+                    $why = $dinnerTarget - $clock >= self::IDLE_MINUTES
+                        ? "Today's sightseeing ends at {$this->formatMinutes($clock)}, so the time until dinner is yours: rest, enjoy the stay or wander nearby."
+                        : '';
+                    $restAt($base, $dinnerTarget - 15, $restNotes('before dinner'), $why, $arrivalDay ? 30 : 90);
                 }
             };
             // Dinner (6:00 – 7:30 PM: starting by 6:30) near where the tourist is, then on the way
@@ -3166,13 +3259,20 @@ class ItineraryService
             ];
         }
 
+        // Activities without a listed length share what MAX_VISIT leaves after the listed ones
+        // (at least 30 minutes each), so a long list of them doesn't take the whole day.
+        $lengths = $destination->activities->map(fn ($a) => $a->duration_minutes > 0 ? min((int) $a->duration_minutes, 240) : null);
+        $unlisted = $lengths->filter(fn ($minutes) => $minutes === null)->count();
+        $share = $unlisted > 0 ? intdiv(intdiv(max(0, (self::MAX_VISIT[$pace] ?? self::MAX_VISIT['moderate']) - $lengths->sum()), $unlisted), 5) * 5 : 0;
+        $unlistedMinutes = max(30, min($this->activityMinutes($pace), $share));
+
         $planned = [];
         foreach ($destination->activities as $activity) {
             $label = $this->timeOfDay($activity->name, $activity->best_time_to_visit, 'anytime');
             $entry = [
                 'name' => $activity->name,
                 // The activity's own listed length when it has one.
-                'duration' => $activity->duration_minutes > 0 ? min((int) $activity->duration_minutes, 240) : $this->activityMinutes($pace),
+                'duration' => $activity->duration_minutes > 0 ? min((int) $activity->duration_minutes, 240) : $unlistedMinutes,
                 'label' => $label,
                 'window' => self::WINDOWS[$label] ?? null,
                 'description' => $activity->description,
@@ -4199,7 +4299,8 @@ class ItineraryService
                 'dawn' => '/sunrise|dawn/',
                 'sunset' => '/sunset|golden hour|late afternoon|dusk/',
                 'morning' => '/morning/',
-                'midday' => '/midday|noon/',
+                // "\bnoon", so "afternoon" isn't read as midday.
+                'midday' => '/midday|\bnoon/',
                 'afternoon' => '/afternoon/',
                 'evening' => '/evening|night|moonless/',
             ] as $label => $pattern) {
