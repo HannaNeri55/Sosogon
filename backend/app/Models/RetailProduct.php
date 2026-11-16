@@ -68,13 +68,15 @@ class RetailProduct extends Model
         return $this->morphMany(Rating::class, 'rateable');
     }
 
-    // Publicly listable: approved, and not under a sample shop unless samples are shown (config/listings.php).
+    // Publicly listable: approved, and its shop is publicly listed too (approved, and not a sample
+    // shop unless samples are shown: RetailShop::scopeApproved). A product of a shop still in
+    // drafts or under review stays hidden with its shop.
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved')
-            ->when(! config('listings.show_samples'), fn ($q) => $q->where(fn ($q) => $q
+            ->where(fn ($q) => $q
                 ->whereNull('retail_shop_id')
-                ->orWhereHas('shop', fn ($shop) => $shop->where('is_sample', false))));
+                ->orWhereHas('shop', fn ($shop) => $shop->approved()));
     }
 
     public function scopePending($query)
