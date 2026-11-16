@@ -312,7 +312,7 @@ class ItineraryController extends Controller
             'accommodation_id' => 'nullable|integer',
             'room_id' => 'nullable|integer',
             'food_preference' => 'nullable|string|in:filipino_bicolano,seafood,fast_food,fine_dining,street_food,vegetarian,no_preference',
-            'accommodation_type' => 'nullable|string|in:resort,hotel,homestay,budget,no_preference',
+            'accommodation_type' => 'nullable|string|in:resort,hotel,hotel_resort,homestay,budget,no_preference',
             // How the tourist plans to get around: sets the travel times (public transport is slower, with waits) and the AI's brief.
             'transport_preference' => 'nullable|string|in:private_car,motorcycle,rented_vehicle,public_transport,no_preference',
             'additional_preferences' => 'nullable|string|max:1000',

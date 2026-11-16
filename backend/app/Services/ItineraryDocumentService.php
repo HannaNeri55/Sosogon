@@ -124,7 +124,7 @@ class ItineraryDocumentService
             'Travel pace' => $this->label($itinerary->travel_pace),
             'Budget' => $this->label($itinerary->budget),
             'Food' => $this->label($itinerary->food_preference),
-            'Stay type' => $this->label($itinerary->accommodation_type),
+            'Stay type' => $itinerary->accommodation_type === 'hotel_resort' ? 'Hotel & Resort' : $this->label($itinerary->accommodation_type),
         ]);
         if (! $shared && filled($itinerary->additional_preferences)) {
             $rows['Your notes'] = $itinerary->additional_preferences;

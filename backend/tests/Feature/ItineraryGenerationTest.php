@@ -157,7 +157,8 @@ class ItineraryGenerationTest extends TestCase
             'start_date' => now()->addDays(3)->toDateString(),
             'end_date' => now()->addDays(5)->toDateString(),
             'food_preference' => 'seafood',
-            'accommodation_type' => 'resort',
+            // No homestay is listed, so the central hotel is the stay and the note says why.
+            'accommodation_type' => 'homestay',
             'additional_preferences' => $notes,
         ]))->assertCreated();
 
@@ -328,8 +329,8 @@ class ItineraryGenerationTest extends TestCase
         $stay = $itinerary->stays()->sole();
         $this->assertSame($this->ids['hotel'], $stay->accommodation_id);
         $this->assertSame([1, 2], $stay->night_days);
-        $this->assertStringContainsString('Resort', $itinerary->accommodation_note);
-        $this->assertStringContainsString('Central Hotel', $itinerary->accommodation_note);
+        $this->assertStringContainsString('is listed as a Homestay / BnB yet', $itinerary->accommodation_note);
+        $this->assertStringContainsString('Central Hotel instead: a Hotel', $itinerary->accommodation_note);
 
         // The hill eatery is Filipino and moderate, not the seafood/budget the form asked for.
         $hillLunch = $itinerary->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill']);
