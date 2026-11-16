@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\FoodBeverage;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -43,7 +44,7 @@ class FoodBeverageController extends Controller
 
         $perPage = $this->perPage($request, 12, 50);
 
-        return response()->json($query->orderBy('name')->paginate($perPage));
+        return response()->json(PublicData::strip($query->orderBy('name')->paginate($perPage)));
     }
 
     public function show(int $id): JsonResponse
@@ -64,8 +65,9 @@ class FoodBeverageController extends Controller
             ])
             ->findOrFail($id);
 
-        $item->increment('view_count');
+        // Quietly: a page view isn't an edit, so no "listing updated" handling runs (it would load the owner).
+        $item->incrementQuietly('view_count');
 
-        return response()->json($item->toArray() + $this->nearbyPlaces($item, 6));
+        return response()->json(PublicData::strip($item)->toArray() + $this->nearbyPlaces($item, 6));
     }
 }

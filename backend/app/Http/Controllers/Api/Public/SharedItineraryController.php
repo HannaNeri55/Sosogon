@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Itinerary;
 use App\Services\ItineraryDocumentService;
 use App\Services\ItineraryService;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -28,8 +29,10 @@ class SharedItineraryController extends Controller
     public function show(string $token): JsonResponse
     {
         $itinerary = $this->shared($token)->makeHidden(self::PRIVATE_FIELDS);
+        // Plan B first (it loads more of the trip's places), then the listings' admin-only fields go.
+        $backupOptions = (object) $this->itineraries->backupOptions($itinerary);
 
-        return response()->json($itinerary->setAttribute('backup_options', (object) $this->itineraries->backupOptions($itinerary)));
+        return response()->json(PublicData::strip($itinerary)->setAttribute('backup_options', $backupOptions));
     }
 
     public function pdf(string $token): Response

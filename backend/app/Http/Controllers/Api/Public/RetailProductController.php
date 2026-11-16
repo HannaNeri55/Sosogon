@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\RetailProduct;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -46,7 +47,7 @@ class RetailProductController extends Controller
 
         $perPage = $this->perPage($request, 12, 50);
 
-        return response()->json($query->paginate($perPage));
+        return response()->json(PublicData::strip($query->paginate($perPage)));
     }
 
     public function show(int $id): JsonResponse
@@ -55,10 +56,11 @@ class RetailProductController extends Controller
             ->with(['municipality', 'barangay', 'images', 'ratings' => fn ($query) => $query->visible()->with('user:id,name')])
             ->findOrFail($id);
 
-        $product->increment('view_count');
+        // Quietly: a page view isn't an edit, so no "item updated" handling runs (it would load the shop and its owner).
+        $product->incrementQuietly('view_count');
         $product->setAttribute('average_rating', round((float) $product->ratings->avg('score'), 2));
         $product->setAttribute('total_reviews', $product->ratings->count());
 
-        return response()->json($product);
+        return response()->json(PublicData::strip($product));
     }
 }

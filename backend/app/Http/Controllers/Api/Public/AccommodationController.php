@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\Accommodation;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -62,7 +63,7 @@ class AccommodationController extends Controller
         $perPage = $this->perPage($request, 12, 50);
 
         return response()->json(
-            $query->orderBy('name')->paginate($perPage)
+            PublicData::strip($query->orderBy('name')->paginate($perPage))
         );
     }
 
@@ -92,8 +93,9 @@ class AccommodationController extends Controller
             ])
             ->findOrFail($id);
 
-        $accommodation->increment('view_count');
+        // Quietly: a page view isn't an edit, so no "listing updated" handling runs (it would load the owner).
+        $accommodation->incrementQuietly('view_count');
 
-        return response()->json($accommodation->toArray() + $this->nearbyPlaces($accommodation, 6));
+        return response()->json(PublicData::strip($accommodation)->toArray() + $this->nearbyPlaces($accommodation, 6));
     }
 }

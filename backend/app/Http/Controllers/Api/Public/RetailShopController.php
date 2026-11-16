@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\RetailShop;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,7 +36,7 @@ class RetailShopController extends Controller
 
         $perPage = $this->perPage($request, 12, 50);
 
-        return response()->json($query->orderBy('name')->paginate($perPage));
+        return response()->json(PublicData::strip($query->orderBy('name')->paginate($perPage)));
     }
 
     public function show(int $id): JsonResponse
@@ -56,10 +57,11 @@ class RetailShopController extends Controller
             ])
             ->findOrFail($id);
 
-        $shop->increment('view_count');
+        // Quietly: a page view isn't an edit, so no "listing updated" handling runs (it would load the owner).
+        $shop->incrementQuietly('view_count');
         $shop->setAttribute('average_rating', round((float) $shop->ratings->avg('score'), 2));
         $shop->setAttribute('total_reviews', $shop->ratings->count());
 
-        return response()->json($shop->toArray() + $this->nearbyPlaces($shop, 6));
+        return response()->json(PublicData::strip($shop)->toArray() + $this->nearbyPlaces($shop, 6));
     }
 }

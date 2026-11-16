@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\Destination;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -52,7 +53,7 @@ class DestinationController extends Controller
         $perPage = $this->perPage($request, 12, 50);
         $destinations = $query->paginate($perPage);
 
-        return response()->json($destinations);
+        return response()->json(PublicData::strip($destinations));
     }
 
     public function show(int $id): JsonResponse
@@ -80,10 +81,11 @@ class DestinationController extends Controller
 
             ->findOrFail($id);
 
-        $destination->increment('view_count');
+        // Quietly: a page view isn't an edit, so no "listing updated" handling runs.
+        $destination->incrementQuietly('view_count');
 
         // Ranked purely by straight-line distance; a destination without usable
         // coordinates gets empty lists rather than a same-municipality guess.
-        return response()->json(['destination' => $destination] + $this->nearbyPlaces($destination, precision: 3));
+        return response()->json(['destination' => PublicData::strip($destination)] + $this->nearbyPlaces($destination, precision: 3));
     }
 }
