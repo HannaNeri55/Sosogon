@@ -87,6 +87,9 @@ class ItineraryService
     /** Shortest sensible visit by kind (minutes), before the pace adjusts it. */
     private const MIN_VISIT = ['water' => 120, 'resort' => 120, 'highland' => 90, 'nature' => 60, 'culture' => 45];
 
+    /** How long a full-day destination's visit lasts when the day has room (lunch comes on top). */
+    private const FULL_DAY_VISIT = 360;
+
     /** Longest a visit's planned activities run at each pace: activities without a listed length share what's left. */
     private const MAX_VISIT = ['relaxed' => 300, 'moderate' => 240, 'packed' => 180];
 
@@ -278,7 +281,8 @@ class ItineraryService
     private ?array $preferredNotice = null;
 
     /**
-     * Destinations in towns the tourist didn't choose that may fill a day its own town can't:
+     * On a trip the planner chose the towns for, destinations in SOSOGON's other curated towns
+     * that may fill a day its own town can't:
      * at most one per day, only on a day that has a stop of its own town (which decides the
      * day's town; the route may still visit the nearby place first when it's on the way), and
      * only when no place in the day's town fits (see nearbyDestinations()).
@@ -297,6 +301,7 @@ class ItineraryService
         private ItineraryAI $ai,
         private GoogleMapsService $maps,
         private InterestMatcher $interests = new InterestMatcher,
+        private PriorityDestinations $priorities = new PriorityDestinations,
     ) {}
 
     /**
@@ -306,8 +311,9 @@ class ItineraryService
     public function generate(?User $user, array $preferences, ?string $claimTokenHash = null): Itinerary
     {
         $preferences['municipality_ids'] = $this->townIds($preferences);
-        // No municipality chosen: the tourist leaves it to us, so the province's best-known
-        // attractions decide which towns the trip covers.
+        $this->priorities->forget();
+        // No municipality chosen: the tourist leaves it to us, so the best-known attractions of
+        // SOSOGON's default towns (PriorityDestinations) decide which towns the trip covers.
         $this->chosenTowns = null;
         $this->preferredNotice = null;
         if ($preferences['municipality_ids'] === []) {
@@ -676,7 +682,10 @@ class ItineraryService
             return collect();
         }
 
-        $destinations = $this->plannedDestinations($preferences, fn ($query) => $query->whereIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids']))
+        // Towns the planner chose stay within SOSOGON's curated destinations (from a town outside
+        // the default towns, only its priority destination); towns the tourist chose are theirs in full.
+        $destinations = $this->plannedDestinations($preferences, fn ($query) => $query->whereIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids'])
+            ->when($this->chosenTowns !== null, fn ($query) => $this->priorities->constrain($query)))
             ->each(fn ($d) => $this->planningTown($d));
         $this->interests->warnAboutFallbacks($destinations);
 
@@ -702,16 +711,20 @@ class ItineraryService
     }
 
     /**
-     * Destinations in towns the tourist didn't choose, within NEARBY_TOWN_KM of the trip's own
-     * places and matching the same interests, that may fill a day its town has run out of places
-     * for (see fitsDay() and shapeDays()). A preferred place in another town stays out: the
-     * tourist was told it isn't part of this trip (preferredNotice()).
+     * On a trip the planner chose the towns for, destinations in SOSOGON's other curated towns
+     * within NEARBY_TOWN_KM of the trip's own places and matching the same interests, that may
+     * fill a day its town has run out of places for (see fitsDay() and shapeDays()). None when
+     * the tourist chose the municipalities: the trip then stays in them.
      */
     private function nearbyDestinations(array $preferences, Collection $pool): Collection
     {
+        if ($this->chosenTowns === null) {
+            return collect();
+        }
         $preferred = $this->preferredIds($preferences);
 
-        return $this->plannedDestinations($preferences, fn ($query) => $query->whereNotIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids']))
+        return $this->plannedDestinations($preferences, fn ($query) => $query->whereNotIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids'])
+            ->tap(fn ($query) => $this->priorities->constrain($query)))
             ->reject(fn ($d) => in_array((int) $d->id, $preferred, true))
             ->filter(fn ($d) => $pool->contains(fn ($p) => $this->kmBetween($p, $d) <= self::NEARBY_TOWN_KM))
             ->values();
@@ -1009,6 +1022,7 @@ class ItineraryService
                 .($food !== '' ? " | Food on site: {$food}" : '')
                 .($d->visitor_guidelines ? ' | Visitor notes: '.$this->promptExcerpt($d->visitor_guidelines, 160) : '')
                 .($about !== '' ? " | About: {$about}" : '')
+                .($this->priorities->isFullDay($d) ? ' | Full-day destination: give it a day of its own, with no other destination that day' : '')
                 .(in_array((int) $d->id, $preferred, true) ? ' | The tourist asked for this place' : '');
         })->implode("\n");
 
@@ -1255,7 +1269,7 @@ class ItineraryService
             }
         }
 
-        $days = $this->keepNearbyBehind($this->promoteHighlights($this->shapeDays($this->groupDaysByTown($days, $destinations), $destinations, $preferences), $destinations, $preferences));
+        $days = $this->keepNearbyBehind($this->promoteHighlights($this->shapeDays($this->giveFullDays($this->groupDaysByTown($days, $destinations), $destinations), $destinations, $preferences), $destinations, $preferences));
 
         $title = $this->cleanText($parsed['title'] ?? null);
 
@@ -1345,6 +1359,24 @@ class ItineraryService
             ->all();
 
         return array_combine(range(1, count($ordered)), $ordered);
+    }
+
+    /**
+     * A day with a full-day destination (Subic Beach: PriorityDestinations) is that destination's
+     * alone: the day's other picks leave it, and may fill other days (shapeDays()).
+     */
+    private function giveFullDays(array $days, Collection $destinations): array
+    {
+        $byId = $destinations->keyBy(fn ($d) => (int) $d->id);
+        foreach ($days as $n => $day) {
+            $fullDay = collect($day['destination_ids'])->first(fn ($id) => $this->priorities->isFullDay($byId[$id]));
+            if ($fullDay !== null && count($day['destination_ids']) > 1) {
+                $days[$n]['destination_ids'] = [$fullDay];
+                $days[$n]['reasons'] = array_intersect_key($day['reasons'] ?? [], [$fullDay => true]);
+            }
+        }
+
+        return $days;
     }
 
     /**
@@ -1512,7 +1544,8 @@ class ItineraryService
      * same town as the day's first stop (or the day's one nearby-town place) and within
      * MAX_DAY_LEG_MINUTES of it, within KIND_LIMITS (WATER_ONLY_TOWN_LIMIT water stops in a
      * town with nothing but water stops), not the same experience as a stop already in the day
-     * (sameExperience()), and not a second sunrise or sunset stop.
+     * (sameExperience()), and not a second sunrise or sunset stop. A full-day destination only
+     * starts a day, and nothing joins it.
      */
     private function fitsDay(array $ids, Destination $candidate, int $n, Collection $byId, array $preferences): bool
     {
@@ -1528,6 +1561,10 @@ class ItineraryService
             return $this->dayTarget($n, $preferences) > 0;
         }
         $stops = collect($ids)->map(fn ($id) => $byId[$id]);
+        // A full-day destination has its day to itself.
+        if ($this->priorities->isFullDay($candidate) || $stops->contains(fn ($d) => $this->priorities->isFullDay($d))) {
+            return false;
+        }
         $first = $stops->first();
         $kind = $this->experienceKind($candidate);
         // The day's own town, or one nearby-town place on a day that started in its own town.
@@ -2708,9 +2745,12 @@ class ItineraryService
                 }
             };
 
+            // A full-day destination fills a whole day; on the arrival day or before a departure it
+            // gets the time there is, like any other visit.
+            $wholeDay = ! $arrivalDay && $dayEnd === null;
             $plans = $stops->mapWithKeys(fn ($d) => [$d->id => $this->stretchVisit(
                 $this->plannedActivities($d, $d, $pace, $this->openingHours($d->operating_hours, $date), $arrivalDay),
-                $this->minimumVisit($d, $pace)
+                $wholeDay && $this->priorities->isFullDay($d) ? max(self::FULL_DAY_VISIT, $this->minimumVisit($d, $pace)) : $this->minimumVisit($d, $pace)
             )])->all();
             $first = $stops->first();
             $sunriseDay = $first && collect($plans[$first->id])->contains(fn ($a) => $a['label'] === 'dawn');
@@ -3113,6 +3153,8 @@ class ItineraryService
                     'preference_note' => $this->joinNotes(
                         $note,
                         isset($movedFrom[$destination->id]) ? "Moved here from Day {$movedFrom[$destination->id]}, where it didn't fit the time left that day." : null,
+                        $this->priorities->isFullDay($destination) && $layout['end'] - $layout['start'] < self::FULL_DAY_VISIT
+                            ? "{$destination->name} is best as a whole day; today's schedule leaves time for a shorter visit, so add a day to enjoy all of it." : null,
                         $this->visitTips($destination, $kind),
                     ),
                 ] + $this->entranceCost($destination, $travelers), $prev);
@@ -3357,8 +3399,11 @@ class ItineraryService
      */
     private function splitAt(array $planned, int $minutes): array
     {
+        $planned = array_values($planned);
         $elapsed = 0;
-        foreach ($planned as $i => $activity) {
+        // In the order the visit does them (layoutVisit()), not the order they're listed in.
+        foreach ($this->layoutOrder($planned) as $i) {
+            $activity = $planned[$i];
             if (isset($activity['at']) || in_array($activity['label'], ['dawn', 'sunset', 'evening'], true)) {
                 continue;
             }
@@ -3407,8 +3452,9 @@ class ItineraryService
     {
         $adjust = ['relaxed' => 30, 'packed' => -15][$pace] ?? 0;
 
-        // A major attraction deserves more time than a quick stop.
-        $major = $this->priorityScore($destination) >= self::PRIORITY_POINTS['popular'] ? 30 : 0;
+        // A major attraction deserves more time than a quick stop. A full-day destination gets its
+        // whole day when there is one, and on a short day the time there is.
+        $major = ! $this->priorities->isFullDay($destination) && $this->priorityScore($destination) >= self::PRIORITY_POINTS['popular'] ? 30 : 0;
 
         return (self::MIN_VISIT[$this->experienceKind($destination)] ?? 60) + $adjust + $major;
     }
@@ -3447,6 +3493,9 @@ class ItineraryService
         $activityNames = $destination->activities->pluck('name')->implode(' ').' '.$destination->name;
         if ((int) $destination->category_id === 8 || preg_match('/island.?hopping|sland hopping|boat|banca|bangka/i', $activityNames)) {
             $tips[] = 'Confirm the boat and the weather before you go (check Coast Guard or PAGASA advisories; trips are cancelled in rough seas), and bring a waterproof bag for your phone and valuables.';
+            if ($this->priorities->isFullDay($destination)) {
+                $tips[] = 'The whole day is planned here. Which stops an island-hopping trip includes, and its fee, depend on your boat arrangement: agree on them with the boatman or operator before setting off.';
+            }
         }
         if (preg_match('/whale shark|butanding/i', $activityNames)) {
             $tips[] = 'Whale shark sightings depend on the season and conditions and are never guaranteed; confirm with the local tourism office or operator before you go.';
@@ -3754,9 +3803,17 @@ class ItineraryService
         $categoryIds = $this->interests->categoryIds($preferences['interests'] ?? []);
         $picked = ! empty($preferences['accommodation_id']) ? Accommodation::find($preferences['accommodation_id']) : null;
 
+        // Only SOSOGON's curated towns (PriorityDestinations); a stay the tourist picked elsewhere is
+        // still their stay, but doesn't bring its town's places into the trip.
+        $defaultTowns = $this->priorities->townIds();
+        $inDefaultTowns = fn ($query) => $query->when($defaultTowns !== [], fn ($query) => $query->whereIn('municipality_id', $defaultTowns));
+        if ($picked && $defaultTowns !== [] && ! in_array((int) $picked->municipality_id, $defaultTowns, true)) {
+            $picked = null;
+        }
+
         if ($categoryIds === []) {
-            $counts = FoodBeverage::approved()->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id');
-            foreach ($this->souvenirShopQuery()->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id') as $town => $n) {
+            $counts = FoodBeverage::approved()->tap($inDefaultTowns)->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id');
+            foreach ($this->souvenirShopQuery()->tap($inDefaultTowns)->selectRaw('municipality_id, count(*) as n')->groupBy('municipality_id')->pluck('n', 'municipality_id') as $town => $n) {
                 $counts[$town] = ($counts[$town] ?? 0) + $n;
             }
             $towns = collect($counts)->sortDesc()->keys()->map(fn ($t) => (int) $t)->take(min($days, 2))->values()->all();
@@ -3773,11 +3830,14 @@ class ItineraryService
         }
 
         $places = Destination::published()->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests'] ?? []))->whereNotNull('latitude')->whereNotNull('longitude')
+            ->tap(fn ($query) => $this->priorities->constrain($query))
             ->select(['id', 'name', 'municipality_id', 'latitude', 'longitude', 'is_featured', 'tourism_priority', 'view_count'])
             ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get();
         if ($places->isEmpty()) {
-            throw new ItineraryNotPossibleException('No published destinations in Sorsogon match those interests yet. Please pick other interests.');
+            throw new ItineraryNotPossibleException($defaultTowns === []
+                ? 'No published destinations in Sorsogon match those interests yet. Please pick other interests.'
+                : "No published destinations in SOSOGON's featured towns match those interests yet. Please pick other interests, or choose a municipality.");
         }
         $byTown = $places->groupBy('municipality_id');
         $worth = $byTown->map(function ($group) {
@@ -3896,7 +3956,8 @@ class ItineraryService
      */
     private function priorityScore(Destination $destination): int
     {
-        $score = self::PRIORITY_POINTS[$destination->tourism_priority] ?? 0;
+        // SOSOGON's priority destinations rank as must-visit places.
+        $score = max(self::PRIORITY_POINTS[$destination->tourism_priority] ?? 0, $this->priorities->isPriority($destination) ? self::PRIORITY_POINTS['iconic'] : 0);
         $score += $destination->is_featured ? 40 : 0;
         // Only genuine visitor ratings count; a place without enough of them gets no rating points.
         if ($rated = $this->genuineRating($destination)) {
@@ -3944,6 +4005,7 @@ class ItineraryService
     {
         $labels = array_filter([
             self::PRIORITY_LABELS[$destination->tourism_priority] ?? null,
+            $this->priorities->isPriority($destination) ? 'one of SOSOGON\'s priority destinations' : null,
             $destination->is_featured ? 'featured by the tourism office' : null,
         ]);
 
@@ -4093,6 +4155,16 @@ class ItineraryService
         ]);
     }
 
+    /** The keys of a visit's activities in the order layoutVisit() does them: registering, then by time of day. */
+    private function layoutOrder(array $planned): array
+    {
+        $rank = ['prep' => -1, 'dawn' => 0, 'morning' => 1, 'midday' => 2, 'anytime' => 2, 'afternoon' => 3, 'sunset' => 4, 'evening' => 5];
+        $order = array_keys($planned);
+        usort($order, fn ($a, $b) => [$rank[$planned[$a]['label']] ?? 2, $a] <=> [$rank[$planned[$b]['label']] ?? 2, $b]);
+
+        return $order;
+    }
+
     /**
      * Lays a visit's activities out one after another from $arrival: a sunrise activity first,
      * then the others by time of day, then sunset and evening ones. Sunrise, sunset and evening
@@ -4104,9 +4176,7 @@ class ItineraryService
      */
     private function layoutVisit(int $arrival, array $planned, array $blocks = []): array
     {
-        $rank = ['prep' => -1, 'dawn' => 0, 'morning' => 1, 'midday' => 2, 'anytime' => 2, 'afternoon' => 3, 'sunset' => 4, 'evening' => 5];
-        $order = array_keys($planned);
-        usort($order, fn ($a, $b) => [$rank[$planned[$a]['label']] ?? 2, $a] <=> [$rank[$planned[$b]['label']] ?? 2, $b]);
+        $order = $this->layoutOrder($planned);
 
         $busy = array_map(fn ($b) => [$b[0], $b[1]], $blocks);
         foreach ($planned as $activity) {
