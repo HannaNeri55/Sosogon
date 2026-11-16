@@ -95,7 +95,8 @@ class ItineraryPlacePickerTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors('municipality_ids');
 
         $this->picker(['swimming'], ['alpha'])->assertStatus(422)->assertJsonValidationErrors('interests.0');
-        $this->picker([], ['alpha'])->assertStatus(422)->assertJsonValidationErrors('interests');
+        // No interests is allowed: the trip is then a balanced one, so its places are listed.
+        $this->picker([], ['alpha'])->assertOk();
         $this->picker(['beaches', 'beaches'], ['alpha'])->assertStatus(422)->assertJsonValidationErrors('interests.0');
         $this->picker(['beaches'], [])->assertStatus(422)->assertJsonValidationErrors('municipality_ids');
         $this->getJson('/api/v1/itinerary-places?'.http_build_query(['municipality_ids' => [0], 'interests' => ['beaches']]))->assertStatus(422);

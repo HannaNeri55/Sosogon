@@ -16,6 +16,7 @@ use App\Models\Municipality;
 use App\Models\RetailProduct;
 use App\Models\RetailShop;
 use App\Models\User;
+use App\Services\InterestMatcher;
 use App\Services\ItineraryService;
 use Carbon\CarbonInterface;
 use Closure;
@@ -214,6 +215,13 @@ class ItineraryController extends Controller
         $validated['municipality_ids'] = array_values(array_unique(array_map('intval', $ids)));
         unset($validated['municipality_id']);
 
+        // What the tourist left open, SOSOGON decides: no interests is a balanced trip (saved as
+        // those interests, so edits plan the same way), and no pace or budget a moderate one.
+        $validated['interests_balanced'] = empty($validated['interests']);
+        $validated['interests'] = $validated['interests_balanced'] ? InterestMatcher::BALANCED : array_values(array_unique($validated['interests']));
+        $validated['travel_pace'] ??= 'moderate';
+        $validated['budget'] ??= 'moderate';
+
         $days = (int) $validated['num_days'];
         $towns = count($validated['municipality_ids']);
         // Two nearby municipalities can share a day (the planner checks they're close enough).
@@ -294,12 +302,14 @@ class ItineraryController extends Controller
             'municipality_ids.*' => 'integer|distinct|exists:municipalities,id',
             'municipality_id' => 'nullable|integer|exists:municipalities,id',
             'num_days' => 'required|integer|min:1|max:30',
-            'interests' => 'required|array|min:1',
+            // Empty (or left out): SOSOGON plans a balanced trip (InterestMatcher::BALANCED).
+            'interests' => 'nullable|array',
             // Added 'history' to the allowed interests
             'interests.*' => 'string|in:nature,beaches,culture,food,adventure,shopping,relaxation,history',
-            'travel_pace' => 'required|in:relaxed,moderate,packed',
+            // Left out: a moderate pace and a moderate (mid-range) budget.
+            'travel_pace' => 'nullable|in:relaxed,moderate,packed',
             // Added 'medium' to the allowed budgets
-            'budget' => 'required|in:budget,moderate,luxury,medium',
+            'budget' => 'nullable|in:budget,moderate,luxury,medium',
             'travelers' => 'nullable|integer|min:1|max:20',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after_or_equal:start_date',
@@ -312,7 +322,7 @@ class ItineraryController extends Controller
             'accommodation_id' => 'nullable|integer',
             'room_id' => 'nullable|integer',
             'food_preference' => 'nullable|string|in:filipino_bicolano,seafood,fast_food,fine_dining,street_food,vegetarian,no_preference',
-            'accommodation_type' => 'nullable|string|in:resort,hotel,homestay,budget,no_preference',
+            'accommodation_type' => 'nullable|string|in:resort,hotel,hotel_resort,homestay,budget,no_preference',
             // How the tourist plans to get around: sets the travel times (public transport is slower, with waits) and the AI's brief.
             'transport_preference' => 'nullable|string|in:private_car,motorcycle,rented_vehicle,public_transport,no_preference',
             'additional_preferences' => 'nullable|string|max:1000',

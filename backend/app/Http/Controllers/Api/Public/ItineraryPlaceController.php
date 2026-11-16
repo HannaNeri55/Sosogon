@@ -28,13 +28,16 @@ class ItineraryPlaceController extends Controller
             // Unknown towns simply match nothing (no lookup per ID).
             'municipality_ids' => 'required|array|min:1|max:30',
             'municipality_ids.*' => 'integer|min:1|distinct',
-            'interests' => 'required|array|min:1|max:8',
+            // None: the balanced trip's interests, as generation plans it.
+            'interests' => 'nullable|array|max:8',
             'interests.*' => 'string|distinct|in:'.implode(',', array_keys(InterestMatcher::INTEREST_CATEGORIES)),
             'q' => 'nullable|string|max:100',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1',
         ]);
         $perPage = $this->perPage($request, self::PER_PAGE, self::MAX_PER_PAGE);
+        $balanced = empty($validated['interests']);
+        $validated['interests'] = $balanced ? InterestMatcher::BALANCED : $validated['interests'];
         $sightseeing = $matcher->sightseeing($validated['interests']) !== [];
 
         // Food and Shopping only: they're planned from restaurants and shops, so there are no places to pick.
@@ -46,8 +49,8 @@ class ItineraryPlaceController extends Controller
 
         $towns = array_map('intval', $validated['municipality_ids']);
         // Sightseeing interests no place in these towns matches, so the form can say so (the
-        // planner may still bring one in from a nearby town).
-        $unmatched = array_values(array_filter($matcher->sightseeing($validated['interests']), fn ($interest) => ! Destination::published()
+        // planner may still bring one in from a nearby town). None when the tourist chose no interests.
+        $unmatched = $balanced ? [] : array_values(array_filter($matcher->sightseeing($validated['interests']), fn ($interest) => ! Destination::published()
             ->whereIn('municipality_id', $towns)
             ->tap(fn ($query) => $matcher->constrain($query, [$interest]))
             ->exists()));

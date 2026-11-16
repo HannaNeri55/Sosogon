@@ -52,6 +52,7 @@ export const TRANSPORT_PREFERENCES = [
 export const ACCOMMODATION_TYPES = [
   { value: 'resort', label: 'Resort' },
   { value: 'hotel', label: 'Hotel' },
+  { value: 'hotel_resort', label: 'Hotel & Resort' },
   { value: 'homestay', label: 'Homestay / BnB' },
   { value: 'budget', label: 'Budget / Backpacker' },
   { value: 'no_preference', label: 'No Preference' },

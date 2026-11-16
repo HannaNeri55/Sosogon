@@ -55,6 +55,13 @@ class InterestMatcher
         'shopping' => [],
     ];
 
+    /**
+     * The interests of a trip the tourist chose none for: every sightseeing interest and Food, so
+     * the planner mixes the province's kinds of places instead of returning nothing. Shopping
+     * stays out (the last day's souvenir stop is planned anyway).
+     */
+    public const BALANCED = ['nature', 'beaches', 'culture', 'history', 'adventure', 'relaxation', 'food'];
+
     /** Why a reviewed destination is matched by its category after all. */
     public const FALLBACK_NO_TAGS = 'no_tags';
 

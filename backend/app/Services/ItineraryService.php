@@ -902,8 +902,8 @@ class ItineraryService
         $line = fn ($place, string $kind) => "- {$place->name} ({$townNames[$place->municipality_id]}; {$kind}): ".$this->promptExcerpt($place->description, 140);
 
         $groups = [
-            'Places to stay' => ! $this->needsStay($preferences) ? collect() : Accommodation::approved()->whereIn('municipality_id', $towns)->with(['rooms' => fn ($q) => $q->approved()->select('id', 'accommodation_id', 'name', 'sort_order')])->limit(8)->get(['id', 'name', 'municipality_id', 'type', 'price_range', 'description', 'dining_details'])
-                ->map(fn ($a) => $line($a, trim("{$a->type}, {$a->price_range}", ', '))
+            'Places to stay' => ! $this->needsStay($preferences) ? collect() : Accommodation::approved()->whereIn('municipality_id', $towns)->with(['rooms' => fn ($q) => $q->approved()->select('id', 'accommodation_id', 'name', 'sort_order')])->limit(8)->get(['id', 'name', 'municipality_id', 'type', 'classifications', 'price_range', 'description', 'dining_details'])
+                ->map(fn ($a) => $line($a, trim("{$this->stayKindLabel($a)}, {$a->price_range}", ', '))
                     .($a->dining_details ? ' Dining: '.$this->promptExcerpt($a->dining_details, 120) : '')
                     .($a->rooms->isNotEmpty() ? ' Options: '.$a->rooms->pluck('name')->filter()->unique()->take(6)->implode(', ').'.' : '')),
             'Food places' => FoodBeverage::approved()->whereIn('municipality_id', $towns)->limit(8)->get(['name', 'municipality_id', 'cuisine_type', 'price_range', 'description', 'meals_served', 'specialties'])
@@ -1052,7 +1052,9 @@ class ItineraryService
 
         $prompt .= "TOURIST PREFERENCES:\n";
         $prompt .= "- Duration: {$numDays} day(s)\n";
-        $prompt .= "- Interests: {$interestsFormatted}\n";
+        $prompt .= ! empty($preferences['interests_balanced'])
+            ? "- Interests: none chosen. The tourist left it to you, so plan a balanced trip that mixes the kinds of places below ({$interestsFormatted}).\n"
+            : "- Interests: {$interestsFormatted}\n";
         $prompt .= "- Travel Pace: {$travelPace}\n";
         $prompt .= "- Budget: {$budget}\n";
         $prompt .= '- Getting around: '.(self::TRANSPORT_LABELS[$this->transport] ?? 'no preference')."\n";
@@ -1123,7 +1125,10 @@ class ItineraryService
         }
         $prompt .= "5. Respect operating hours and keep entrance fees in line with the tourist's budget.\n";
         if (count($sightseeing) > 1) {
-            $prompt .= '5a. Represent every selected interest ('.implode(', ', $sightseeing).") at least once in the trip where a suitable destination exists; they don't need equal numbers.\n";
+            $prompt .= '5a. Represent every selected interest ('.implode(', ', $sightseeing).") at least once in the trip where a suitable destination exists; they don't need equal numbers. "
+                ."Mix them within days where the places are close (a heritage stop and a beach on the same day) rather than giving each interest a day of its own.\n";
+        } elseif (count($sightseeing) === 1) {
+            $prompt .= '5a. '.reset($sightseeing)." is the tourist's one interest: every destination serves it, so make each stop a different experience of it rather than adding unrelated places.\n";
         }
         if ($preferred !== []) {
             $prompt .= "5c. Include every destination marked \"The tourist asked for this place\" where it fits these rules (town, day capacity, opening hours, travel time); never break a rule to fit one in.\n";
@@ -2142,9 +2147,12 @@ class ItineraryService
     }
 
     /**
-     * The approved accommodation nearest $center, in $town when it has any (the whole province
-     * otherwise). Among those within PREFERENCE_RADIUS_KM of the nearest, one matching the
-     * tourist's type and budget wins; when that isn't possible the note says so.
+     * The approved accommodation for $town's days, in $town when it has any (else among the stays
+     * about as near as the nearest one elsewhere). The stay type the tourist asked for comes
+     * first (stayMatch()): an exact match whenever one is listed, however much nearer another
+     * kind is; else a close kind; else any stay. Among those, the nearest to $center, preferring
+     * the tourist's budget within PREFERENCE_RADIUS_KM of it. Anything but an exact match in the
+     * town and budget comes with a note that says so, and what kind of stay it is instead.
      *
      * @return array{0: ?Accommodation, 1: ?string, 2: ?string}
      */
@@ -2156,22 +2164,24 @@ class ItineraryService
         if (! $inTown) {
             $pool = Accommodation::approved()->with(['municipality:id,name', 'estimates'])
                 ->whereNotNull('latitude')->whereNotNull('longitude')->get();
+            // The right type at the far end of the province isn't worth a long drive every day.
+            $nearest = $pool->min(fn ($a) => $this->km($center, $a));
+            $pool = $pool->filter(fn ($a) => $this->km($center, $a) <= $nearest + self::NEARBY_TOWN_KM)->values();
         }
-
-        $typeMatches = $this->accommodationTypeMatcher($preferences);
-        $budget = $this->budgetLevel($preferences);
-        $pick = $this->pickPlace($pool, [], fn ($a) => $this->km($center, $a), null, fn () => true,
-            fn ($a) => ($typeMatches === null || $typeMatches($a) ? 2 : 0) + ($a->price_range === $budget ? 1 : 0));
-
-        if (! $pick) {
+        if ($pool->isEmpty()) {
             return [null, null, null];
         }
 
+        $rank = fn ($a) => ['exact' => 2, 'close' => 1][$this->stayMatch($preferences, $a)] ?? 0;
+        $best = $pool->max($rank);
+        $budget = $this->budgetLevel($preferences);
+        $pick = $this->pickPlace($pool->filter(fn ($a) => $rank($a) === $best), [], fn ($a) => $this->km($center, $a), null, fn () => true,
+            fn ($a) => $a->price_range === $budget ? 1 : 0);
+
         $stay = $pick['place'];
         $km = number_format($pick['km'], 1);
-        $typeMatched = $typeMatches === null || $typeMatches($stay);
-        // Whether any stay in the pool is listed under the type asked for (many are just "Accommodation").
-        $typeListed = $typeMatches === null || $pool->contains(fn ($a) => $typeMatches($a));
+        $match = $this->stayMatch($preferences, $stay);
+        $typeMatched = $match === 'exact';
         // A cheaper stay than the budget is no reason to apologize.
         $levels = ['budget' => 1, 'moderate' => 2, 'luxury' => 3];
         $budgetMatched = ($levels[$stay->price_range] ?? 0) <= ($levels[$budget] ?? 3);
@@ -2183,18 +2193,21 @@ class ItineraryService
         }
 
         $typeLabel = $this->accommodationTypeLabel($preferences);
-        $wanted = ($typeMatched || ! $typeListed ? 'accommodation' : $typeLabel)
-            .($budgetMatched ? '' : ' in the '.ucfirst($budget).' price range');
-        $unlisted = $typeMatched || $typeListed ? '' : "None of the verified stays in {$townName} is listed as a {$typeLabel} yet. ";
+        $priced = $budgetMatched ? '' : ' in the '.ucfirst($budget).' price range';
         $note = $inTown
-            ? $unlisted.($wanted === 'accommodation' ? '' : "We're sorry — we couldn't find a verified {$wanted} near your destinations in {$townName}. ")
+            ? match ($match) {
+                'exact' => '',
+                'close' => "None of the verified stays in {$townName} is an exact match for a {$typeLabel}. ",
+                default => "None of the verified stays in {$townName} is listed as a {$typeLabel} yet. ",
+            }
+                .($budgetMatched ? '' : "We're sorry — we couldn't find a verified accommodation{$priced} near your destinations in {$townName}. ")
             : "We're sorry — there's no verified accommodation in {$townName} yet"
-                .($typeMatched && $budgetMatched ? '' : ", and no {$wanted} close by").'. ';
-        // A stay listed only as "Accommodation" doesn't say what kind it is.
-        $kind = in_array(mb_strtolower(trim((string) $stay->type)), ['', 'accommodation'], true) ? 'verified stay whose type isn\'t specified' : $stay->type;
-        $note .= "We recommended {$stay->name} instead: {$this->describeListing($kind, $stay->price_range)}, {$km} km from the center of your destinations in {$townName}"
+                .($typeMatched && $budgetMatched ? '' : ', and no '.($typeMatched ? 'accommodation' : "verified {$typeLabel}")."{$priced} close by").'. ';
+        $note .= "We recommended {$stay->name} instead: {$this->describeListing($this->stayKindLabel($stay), $stay->price_range)}, {$km} km from the center of your destinations in {$townName}"
             .($inTown ? '' : ' (in '.($stay->municipality?->name ?? 'a nearby town').')')
-            .', so those days\' travel stays short.';
+            .', so those days\' travel stays short.'
+            // A related kind is an alternative, never passed off as what was asked for.
+            .($match === 'close' ? " It's the closest alternative to a {$typeLabel}, not an exact match: {$this->closeMatchReason($preferences, $stay)}." : '');
 
         return [$stay, $reason, $note];
     }
@@ -4405,17 +4418,61 @@ class ItineraryService
         return $budget === 'medium' ? 'moderate' : $budget;
     }
 
-    private function accommodationTypeMatcher(array $preferences): ?callable
+    /**
+     * How well a stay fits the stay type the tourist asked for, judged only by its listed
+     * categories (its classifications, else its main type), never by its amenities: a pool
+     * doesn't make a hotel a resort. 'exact'; 'close', a related kind offered only as a labelled
+     * alternative (a Hotel & Resort for a tourist who asked for a hotel); or null, another kind.
+     * Every stay is 'exact' when no type was asked for. A stay listed only as a Hotel whose own
+     * name says it's a resort ("… Hotel and Resort") isn't an exact hotel until its categories
+     * say what it is: it's 'close'.
+     */
+    private function stayMatch(array $preferences, Accommodation $stay): ?string
     {
-        $types = match ($preferences['accommodation_type'] ?? null) {
-            'resort' => ['Resort', 'Beach Resort'],
-            'hotel' => ['Hotel'],
-            'homestay' => ['Homestay'],
-            'budget' => ['Inn', 'Homestay', 'Guesthouse'],
-            default => [],
-        };
+        $categories = $stay->classifications ?: [$stay->type];
+        $hotel = in_array('Hotel', $categories, true);
+        $resort = array_intersect(['Resort', 'Beach Resort'], $categories) !== [];
+        $namedResort = (bool) preg_match('/\bresort\b/i', (string) $stay->name);
+        $has = fn (array $kinds) => array_intersect($kinds, $categories) !== [];
 
-        return $types ? fn ($a) => array_intersect($types, array_merge([$a->type], $a->classifications ?? [])) !== [] : null;
+        return match ($preferences['accommodation_type'] ?? null) {
+            'hotel' => $hotel ? (! $resort && ! $namedResort ? 'exact' : 'close') : null,
+            'resort' => $resort ? 'exact' : ($hotel && $namedResort ? 'close' : null),
+            'hotel_resort' => $hotel && $resort ? 'exact' : ($hotel || $resort ? 'close' : null),
+            'homestay' => $has(['Homestay']) ? 'exact' : ($has(['Guesthouse']) ? 'close' : null),
+            'budget' => $has(['Inn', 'Homestay', 'Guesthouse']) ? 'exact' : null,
+            default => 'exact',
+        };
+    }
+
+    /** Why a 'close' stay isn't an exact match for the type the tourist asked for. */
+    private function closeMatchReason(array $preferences, Accommodation $stay): string
+    {
+        $categories = $stay->classifications ?: [$stay->type];
+        $resort = array_intersect(['Resort', 'Beach Resort'], $categories) !== [];
+
+        return match ($preferences['accommodation_type'] ?? null) {
+            'hotel' => $resort
+                ? 'it is a hotel and resort, so resort facilities are part of the stay'
+                : 'it is listed as a hotel, but its name says it is also a resort, which its listing doesn\'t confirm yet',
+            'resort' => 'it is listed as a hotel; its name says it is also a resort, which its listing doesn\'t confirm yet',
+            'hotel_resort' => 'it is listed only as a '.($resort ? 'resort' : 'hotel'),
+            'homestay' => 'it is a guesthouse rather than a homestay',
+            default => 'it is a different kind of stay',
+        };
+    }
+
+    /** A stay's kind as its badge shows it ("Hotel", "Hotel & Resort"), or a plain phrase when its listing doesn't say. */
+    private function stayKindLabel(Accommodation $stay): string
+    {
+        $names = array_values(array_intersect(Accommodation::CLASSIFICATIONS, $stay->classifications ?? []));
+        if ($names === []) {
+            $type = trim((string) $stay->type);
+
+            return in_array(mb_strtolower($type), ['', 'accommodation'], true) ? 'verified stay whose type isn\'t specified' : $type;
+        }
+
+        return count($names) < 2 ? $names[0] : implode(', ', array_slice($names, 0, -1)).' & '.end($names);
     }
 
     private function accommodationTypeLabel(array $preferences): string
@@ -4423,6 +4480,7 @@ class ItineraryService
         return match ($preferences['accommodation_type'] ?? null) {
             'resort' => 'Resort',
             'hotel' => 'Hotel',
+            'hotel_resort' => 'Hotel & Resort',
             'homestay' => 'Homestay / BnB',
             'budget' => 'Budget / Backpacker stay',
             default => 'accommodation',
