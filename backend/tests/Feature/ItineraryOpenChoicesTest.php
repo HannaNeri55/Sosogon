@@ -180,22 +180,11 @@ class ItineraryOpenChoicesTest extends TestCase
         $this->assertStringContainsString('Mix them within days where the places are close', $this->ai->prompts[0]);
     }
 
-    /**
-     * The chosen towns' places all come first. A place from another town only fills a day the
-     * chosen towns can't, only from just across the town line (never the far-off towns), and says so.
-     */
+    /** Every stop is in the chosen towns: none is brought in from another town, not even next door. */
     private function assertKeptTo(Itinerary $itinerary, array $towns): void
     {
-        $stops = $this->stops($itinerary);
-        $own = Destination::published()->whereIn('municipality_id', $towns)->pluck('id')->all();
-        $others = $stops->reject(fn ($i) => in_array((int) $i->destination->municipality_id, $towns, true));
-        if ($others->isNotEmpty()) {
-            $this->assertEqualsCanonicalizing($own, array_values(array_intersect($stops->pluck('destination_id')->all(), $own)), 'Every place of the chosen towns is used first.');
-        }
-        foreach ($others as $stop) {
-            $this->assertNotContains($stop->destination->municipality_id, [$this->towns['highland'], $this->towns['quietville']], $stop->destination->name);
-            $this->assertStringStartsWith('A short drive away in', (string) $stop->reason);
-        }
+        $others = $this->stops($itinerary)->reject(fn ($i) => in_array((int) $i->destination->municipality_id, $towns, true));
+        $this->assertSame([], $others->pluck('destination.name')->all());
     }
 
     public function test_one_municipality_keeps_the_trip_there(): void

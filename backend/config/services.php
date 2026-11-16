@@ -53,6 +53,27 @@ return [
             'souvenirs_per_person' => [200, 800],
         ],
         'timezone' => 'Asia/Manila',
+        // Where SOSOGON plans a trip the tourist chose no municipality for (App\Services\
+        // PriorityDestinations): these towns, by name, and nowhere else. A municipality the
+        // tourist does choose is always used instead.
+        'default_towns' => ['Sorsogon City', 'Gubat', 'Bulusan', 'Matnog', 'Juban', 'Irosin', 'Bulan', 'Santa Magdalena'],
+        // The tourism office's priority destinations, by town and exact listing name; a name not
+        // found in that town is ignored, never guessed. They rank like must-visit places. One in a
+        // town outside default_towns is the only place from that town a default trip may use.
+        'priority_destinations' => [
+            'Sorsogon City' => ['Paguriran Lagoon', 'Museo Sorsogon'],
+            'Gubat' => ['Lola Sayong Eco-Surfing Camp', 'Gubat Tourism Hub "Mini Siargao"'],
+            'Bulusan' => ['Bulusan Lake'],
+            'Matnog' => ['Subic Beach'],
+            'Juban' => ['Tangke Nature Spring'],
+            'Irosin' => ['San Benon Resort'],
+            'Castilla' => ['Malawmawan Island'],
+            'Casiguran' => ['Orok Cold Spring Resort'],
+        ],
+        // Destinations with enough to do for a day of their own (no other stop that day).
+        'full_day_destinations' => [
+            'Matnog' => ['Subic Beach'],
+        ],
     ],
 
     'google_maps' => [

@@ -92,7 +92,7 @@ const INTEREST_ICONS = {
 }
 
 const STEPS = [
-  { key: 'destinations', title: 'Destinations', heading: 'Where in Sorsogon would you like to go?', description: "Pick the municipalities you'd like to visit, or leave it to SOSOGON to choose the best-known places across the province. Nearby municipalities can share a day.", icon: FiMapPin },
+  { key: 'destinations', title: 'Destinations', heading: 'Where in Sorsogon would you like to go?', description: "Pick the municipalities you'd like to visit, or leave it to SOSOGON to plan around Sorsogon's best-known destinations. Nearby municipalities can share a day.", icon: FiMapPin },
   { key: 'details', title: 'Trip Details', heading: 'When are you travelling, and with how many?', description: 'Your dates set the number of days; your arrival time shapes Day 1.', icon: FiCalendar },
   { key: 'preferences', title: 'Preferences', heading: 'What kind of trip would you enjoy?', description: 'Your interests, pace and budget guide which places, meals and stays we recommend.', icon: FiSliders },
   { key: 'review', title: 'Review', heading: 'Review your trip', description: "Check your choices before we build your itinerary. You can edit any section without starting over.", icon: FiClipboard },
@@ -302,7 +302,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
 
   // What stops each step from being complete (null when it's fine).
   const problems = [
-    // No municipality is fine: SOSOGON then chooses them, province-wide.
+    // No municipality is fine: SOSOGON then chooses them from its featured towns.
     null,
     !formData.start_date || !formData.end_date
       ? 'Choose your arrival and departure dates.'
@@ -554,7 +554,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 </ul>
               ) : (
                 <p className="text-xs text-gray-500 mt-1.5">
-                  Tap a municipality below to add it, or leave this empty and SOSOGON will choose the best-known destinations across Sorsogon for you.
+                  Tap a municipality below to add it, or leave this empty and SOSOGON will plan around Sorsogon's best-known destinations, such as Subic Beach, Bulusan Lake and Paguriran Lagoon.
                 </p>
               )}
             </div>

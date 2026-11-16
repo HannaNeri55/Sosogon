@@ -133,19 +133,18 @@ class ItineraryFillDaysTest extends TestCase
         $this->assertStringNotContainsString('3a. Exception', end($this->ai->prompts));
     }
 
-    public function test_a_nearby_town_fills_a_day_the_chosen_town_cannot(): void
+    public function test_a_chosen_town_that_runs_out_of_places_is_never_filled_from_a_neighbouring_town(): void
     {
+        // The tourist chose Surfside: the church just across the town line stays out (the
+        // tourism office's rule since 2026-11-17), and the time is left free instead.
         $response = $this->generate('surfside', ['beaches', 'culture'])->assertCreated();
         $days = $this->days($response->json('itinerary.id'));
-        $itinerary = Itinerary::with('items')->find($response->json('itinerary.id'));
+        $itinerary = Itinerary::with('items.destination')->find($response->json('itinerary.id'));
 
-        $this->assertContains($this->ids['church'], collect($days)->flatten()->all(), 'The church across the town line fills a day.');
-        foreach ($days as $day => $ids) {
-            $this->assertNotSame([], array_diff($ids, [$this->ids['church']]), "Day {$day} has a stop in the chosen town.");
-        }
-        $this->assertStringStartsWith('A short drive away in Neighbor.', $itinerary->items->firstWhere('destination_id', $this->ids['church'])->reason);
-        $this->assertNotContains($this->ids['museum'], collect($days)->flatten()->all(), 'Too far to join a day.');
-        // The AI only ever sees the chosen town's places.
+        $this->assertNotContains($this->ids['church'], collect($days)->flatten()->all());
+        $this->assertNotContains($this->ids['museum'], collect($days)->flatten()->all());
+        $this->assertSame([$this->towns['surfside']], $itinerary->items->where('item_type', 'destination')->pluck('destination.municipality_id')->map(fn ($t) => (int) $t)->unique()->values()->all());
+        $this->assertStringNotContainsString('A short drive away in', (string) $itinerary->items->pluck('reason')->implode(' '));
         $this->assertStringNotContainsString('Neighbor Heritage Church', $this->ai->prompts[0]);
     }
 
