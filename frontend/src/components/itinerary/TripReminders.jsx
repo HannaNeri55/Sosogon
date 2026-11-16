@@ -1,4 +1,5 @@
-import { FiAlertCircle, FiCheckSquare, FiInfo } from 'react-icons/fi'
+import { useState } from 'react'
+import { FiAlertCircle, FiCheckSquare, FiChevronDown, FiChevronUp, FiInfo } from 'react-icons/fi'
 import { costNoteIsEstimate } from '../../utils/estimates'
 
 /**
@@ -73,17 +74,32 @@ function Section({ icon: Icon, title, items }) {
   )
 }
 
+// Folded by default, so the days come first; one tap opens the checklist.
 export default function TripReminders({ itinerary }) {
+  const [open, setOpen] = useState(false)
   const { bring, arrange, safety, notes } = tripReminders(itinerary)
   return (
-    <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-100 mb-6">
-      <p className="text-primary-600 font-medium mb-4">Before you go</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <Section icon={FiCheckSquare} title="What to bring" items={bring} />
-        <Section icon={FiCheckSquare} title="Arrange ahead" items={arrange} />
-        <Section icon={FiAlertCircle} title="Safety" items={safety} />
-        <Section icon={FiInfo} title="Important notes" items={notes} />
-      </div>
+    <div className="bg-white rounded-xl border border-gray-100 mb-6">
+      <button
+        type="button"
+        onClick={() => setOpen((shown) => !shown)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 p-4 sm:px-6 text-left"
+      >
+        <span>
+          <span className="block text-primary-600 font-medium">Before you go</span>
+          <span className="block text-sm text-gray-500">What to bring, what to arrange, and safety reminders</span>
+        </span>
+        {open ? <FiChevronUp size={18} className="shrink-0 text-gray-500" aria-hidden="true" /> : <FiChevronDown size={18} className="shrink-0 text-gray-500" aria-hidden="true" />}
+      </button>
+      {open && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 px-4 pb-5 sm:px-6">
+          <Section icon={FiCheckSquare} title="What to bring" items={bring} />
+          <Section icon={FiCheckSquare} title="Arrange ahead" items={arrange} />
+          <Section icon={FiAlertCircle} title="Safety" items={safety} />
+          <Section icon={FiInfo} title="Important notes" items={notes} />
+        </div>
+      )}
     </div>
   )
 }

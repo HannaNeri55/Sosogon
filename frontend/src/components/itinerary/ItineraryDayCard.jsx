@@ -9,7 +9,6 @@ import {
   FiTrash2,
   FiRotateCcw,
   FiPlus,
-  FiThumbsUp,
   FiRepeat,
   FiAlertTriangle,
   FiCoffee,
@@ -156,13 +155,31 @@ const BACKUP_LINKS = { destination: '/destinations', food_beverage: '/food-bever
 
 // The day's Plan B for rain or delays: nearby indoor places not in the trip, and which outdoor
 // stop is easiest to shorten or skip (worked out by the server from verified listings).
+// Folded until the tourist needs it, so it doesn't lengthen the day.
 function PlanB({ backup }) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-        <FiCloudRain size={15} className="text-primary-600 shrink-0" aria-hidden="true" /> Plan B: rain or delays
-      </p>
-      {backup.flexible && <p className="mt-1.5 text-sm text-gray-600 leading-relaxed">{backup.flexible}</p>}
+    <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50">
+      <button
+        type="button"
+        onClick={() => setOpen((shown) => !shown)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-gray-900"
+      >
+        <span className="flex items-center gap-1.5">
+          <FiCloudRain size={15} className="text-primary-600 shrink-0" aria-hidden="true" /> Plan B: rain or delays
+        </span>
+        {open ? <FiChevronUp size={15} aria-hidden="true" /> : <FiChevronDown size={15} aria-hidden="true" />}
+      </button>
+      {open && <PlanBDetails backup={backup} />}
+    </div>
+  )
+}
+
+function PlanBDetails({ backup }) {
+  return (
+    <div className="px-4 pb-4">
+      {backup.flexible && <p className="text-sm text-gray-600 leading-relaxed">{backup.flexible}</p>}
       {backup.places?.length > 0 && (
         <>
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Indoor alternatives nearby</p>
@@ -200,6 +217,13 @@ function dayTheme(stops) {
   const kinds = [...new Set(visits.map((stop) => stop.destination.category?.name).filter(Boolean))]
   const what = kinds.length > 0 ? kinds.join(' & ') : visits.length === 0 && stops.length > 0 ? 'Rest and local food' : ''
   return [towns.join(', '), what].filter(Boolean).join(' · ')
+}
+
+// The towns the day is spent in (its attractions' towns, else its other stops'), e.g. "Gubat, Bulusan".
+function dayTowns(stops) {
+  const visits = stops.filter((stop) => stop.item_type === 'destination' && stop.destination)
+  const townsOf = (list) => [...new Set(list.map((stop) => placeFor(stop).listing?.municipality?.name).filter(Boolean))]
+  return (visits.length > 0 ? townsOf(visits) : townsOf(stops)).join(', ')
 }
 
 // The name of the day's main highlight, when it's still one of the day's stops.
@@ -296,13 +320,79 @@ function PicksList({ title, options, picks }) {
   )
 }
 
-// action: a button shown beside the place's name.
+// The names of the recommended dishes or souvenirs, for the stop's one-line summary.
+function pickNames(options, picks) {
+  const byId = new Map(options.map((o) => [o.id, o.name]))
+  return picks.map((pick) => byId.get(pick.id)).filter(Boolean)
+}
+
+// The planner's default opener ("Visit Subic Beach.") says nothing the stop's name doesn't.
+function shownNotes(stop, listing) {
+  const notes = visitNotes(stop, listing)
+  const opener = `Visit ${listing?.name}.`
+  return notes.startsWith(opener) ? notes.slice(opener.length).trim() : notes
+}
+
+/**
+ * A stop at the trip's stay (arriving, checking in or out, a meal or a rest there): one slim
+ * row, since the stay itself is shown with its photo above the days.
+ */
+function StayStopRow({ stop, action = null }) {
+  const { listing, badge } = placeFor(stop)
+  const [open, setOpen] = useState(false)
+  const notes = shownNotes(stop, listing)
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700">
+          <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
+        </span>
+        {badge && <span className="font-medium text-gray-800">{badge}</span>}
+        <span className="text-gray-500">· {listing?.name || 'Your stay'}</span>
+        {action}
+      </div>
+      {notes && <p className="mt-1 text-sm text-gray-600 leading-relaxed line-clamp-2">{notes}</p>}
+      {stop.preference_note && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((shown) => !shown)}
+            aria-expanded={open}
+            className="mt-1 inline-flex items-center gap-1 py-0.5 text-xs font-semibold text-primary-600 hover:text-primary-700"
+          >
+            {open ? 'Hide note' : 'Note'} {open ? <FiChevronUp size={13} aria-hidden="true" /> : <FiChevronDown size={13} aria-hidden="true" />}
+          </button>
+          {open && <PreferenceNote note={stop.preference_note} className="mt-2" />}
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One stop, kept short so the day reads at a glance: when, where, why in a line or two, and
+ * what to do there as a timed list. The rest (the place's description, tips and reminders,
+ * what each activity involves, the dishes or souvenirs with photos) opens under "More details".
+ * action: a button shown beside the place's name.
+ */
 function StopDetails({ stop, compact = false, action = null, hideDescription = false }) {
   const { listing, link, badge } = placeFor(stop)
+  const [open, setOpen] = useState(false)
+  const picks = stop.item_type === 'food_beverage'
+    ? { title: 'Recommended dishes', options: dishOptions(stop), picks: picksFrom(stop.dishes) }
+    : stop.item_type === 'retail_shop'
+      ? { title: 'Recommended souvenirs', options: souvenirOptions(stop), picks: picksFrom(stop.souvenirs) }
+      : null
+  const picked = picks ? pickNames(picks.options, picks.picks) : []
+  const notes = shownNotes(stop, listing)
+  const described = (stop.activities || []).filter((activity) => activity.description)
+  const description = listing?.description && !hideDescription ? listing.description : ''
+  const hasMore = Boolean(description || stop.preference_note || described.length > 0 || picked.length > 0)
+  const detailsId = `stop-details-${stop.id ?? stop.tempId ?? listing?.id ?? 'x'}`
 
   return (
-    <div className={`flex flex-col sm:flex-row gap-4 ${compact ? '' : 'p-3 sm:p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors'}`}>
-      <div className={`${compact ? 'w-full h-28 sm:w-20 sm:h-20' : 'w-full h-32 sm:w-24 sm:h-24'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
+    <div className={`flex gap-3 sm:gap-4 ${compact ? '' : 'p-3 sm:p-4 rounded-xl border border-gray-100 bg-white'}`}>
+      <div className={`${compact ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-16 h-16 sm:w-20 sm:h-20'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
         <img
           src={getImageUrl(listing?.images?.[0]?.image_path)}
           alt={listing?.name || 'Stop'}
@@ -312,14 +402,14 @@ function StopDetails({ stop, compact = false, action = null, hideDescription = f
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
-            <FiClock size={11} /> {stop.time_slot}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="inline-flex items-center gap-1 font-semibold text-primary-700">
+            <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
           </span>
-          {badge && <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{badge}</span>}
-        </div>
+          {badge && <span className="font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{badge}</span>}
+        </p>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1">
           {link ? (
             <Link to={link} className="font-heading font-semibold text-gray-900 hover:text-primary-600 transition-colors">
               {listing.name}
@@ -330,58 +420,67 @@ function StopDetails({ stop, compact = false, action = null, hideDescription = f
           {action}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
           {listing?.average_rating > 0 && <StarDisplay rating={listing.average_rating} size={12} />}
           {listing?.municipality?.name && (
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              <FiMapPin size={11} /> {listing.municipality.name}
+            <span className="flex items-center gap-1">
+              <FiMapPin size={11} aria-hidden="true" /> {listing.municipality.name}
             </span>
           )}
-          {stop.duration_minutes > 0 && <span className="text-xs text-gray-500">{stop.duration_minutes} min</span>}
-          {stop.cost_note && (
-            <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
-              {Number(stop.cost_max) > 0 && `${formatPesoRange(stop.cost_min, stop.cost_max)} · `}
-              <span className="font-normal text-gray-500">{stop.cost_note}</span>
-            </span>
-          )}
+          {stop.duration_minutes > 0 && <span>{stop.duration_minutes} min</span>}
+          {Number(stop.cost_max) > 0
+            ? <span className="font-medium text-gray-700">{formatPesoRange(stop.cost_min, stop.cost_max)}</span>
+            : stop.cost_note && <span>{stop.cost_note}</span>}
         </div>
 
-        {listing?.description && !hideDescription && (
-          <p className={`text-sm text-gray-500 mt-2 leading-relaxed ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>{listing.description}</p>
-        )}
-
-        {visitNotes(stop, listing) && <p className="text-sm text-gray-600 mt-2 leading-relaxed">{visitNotes(stop, listing)}</p>}
-
-        {stop.reason && (
-          <p className="flex gap-1.5 text-sm text-gray-700 mt-2 leading-relaxed">
-            <FiThumbsUp size={13} className="text-primary-500 shrink-0 mt-1" />
-            <span>
-              <span className="font-medium">Why we recommend it:</span> {stop.reason}
-            </span>
+        {stop.reason && <p className="text-sm text-gray-700 mt-2 leading-relaxed line-clamp-2">{stop.reason}</p>}
+        {notes && <p className="text-sm text-gray-600 mt-1.5 leading-relaxed line-clamp-2">{notes}</p>}
+        {picked.length > 0 && (
+          <p className="text-sm text-gray-700 mt-1.5">
+            <span className="font-medium">Try:</span> {picked.join(', ')}
           </p>
         )}
 
-        <PreferenceNote note={stop.preference_note} />
-
-        {stop.item_type === 'food_beverage' && (
-          <PicksList title="Recommended dishes" options={dishOptions(stop)} picks={picksFrom(stop.dishes)} />
-        )}
-        {stop.item_type === 'retail_shop' && (
-          <PicksList title="Recommended souvenirs" options={souvenirOptions(stop)} picks={picksFrom(stop.souvenirs)} />
-        )}
-
         {stop.activities?.length > 0 && (
-          <ol className="mt-3 space-y-2 border-l-2 border-primary-100 pl-3">
+          <ul className="mt-2.5 space-y-1 text-sm">
             {stop.activities.map((activity, i) => (
-              <li key={`${i}-${activity.name}`} className="text-sm">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-primary-600">
-                  <FiClock size={10} /> {activity.time}
-                </span>
-                <p className="font-medium text-gray-800">{activity.name}</p>
-                {activity.description && <p className="text-xs text-gray-500 leading-relaxed">{activity.description}</p>}
+              <li key={`${i}-${activity.name}`} className="flex gap-3">
+                <span className="w-[7.5rem] sm:w-36 shrink-0 whitespace-nowrap text-[11px] sm:text-xs font-medium text-gray-500 pt-0.5 tabular-nums">{activity.time}</span>
+                <span className="text-gray-800">{activity.name}</span>
               </li>
             ))}
-          </ol>
+          </ul>
+        )}
+
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setOpen((shown) => !shown)}
+            aria-expanded={open}
+            aria-controls={detailsId}
+            className="mt-2.5 inline-flex items-center gap-1 py-1 text-xs font-semibold text-primary-600 hover:text-primary-700"
+          >
+            {open ? 'Less details' : stop.preference_note ? 'More details & tips' : 'More details'}
+            {open ? <FiChevronUp size={13} aria-hidden="true" /> : <FiChevronDown size={13} aria-hidden="true" />}
+          </button>
+        )}
+
+        {hasMore && open && (
+          <div id={detailsId} className="mt-2 space-y-3 border-t border-gray-100 pt-3">
+            {description && <p className="text-sm text-gray-600 leading-relaxed">{description}</p>}
+            {described.length > 0 && (
+              <ul className="space-y-1.5 text-sm">
+                {described.map((activity, i) => (
+                  <li key={`${i}-${activity.name}`} className="text-gray-600 leading-relaxed">
+                    <span className="font-medium text-gray-800">{activity.name}:</span> {activity.description}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {stop.cost_note && Number(stop.cost_max) > 0 && <p className="text-xs text-gray-500">Cost: {stop.cost_note}</p>}
+            <PreferenceNote note={stop.preference_note} className="" />
+            {picks && <PicksList title={picks.title} options={picks.options} picks={picks.picks} />}
+          </div>
         )}
       </div>
     </div>
@@ -572,23 +671,18 @@ export default function ItineraryDayCard({
           <div className="w-10 h-10 rounded-full bg-primary-500 text-white font-heading font-bold text-sm flex items-center justify-center shrink-0">
             {dayNumber}
           </div>
-          <div>
-            <h3 className="text-xl font-heading font-semibold text-gray-900">
+          {/* Three short lines: which day, what it's about, where and when. */}
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">
               Day {dayNumber}
-              {dateLabel && ` — ${dateLabel}`}
+              {dateLabel && ` · ${dateLabel}`}
+            </p>
+            <h3 className="text-lg sm:text-xl font-heading font-semibold text-gray-900">
+              {(plan?.title && !/^Day \d+$/i.test(plan.title.trim()) ? plan.title : null) || highlightName(stops, plan) || dayTheme(stops) || `Day ${dayNumber}`}
             </h3>
-            {plan?.title && <p className="text-base font-heading font-semibold text-gray-800">{plan.title}</p>}
-            {stops.length > 0 && dayTheme(stops) && (
-              <p className="text-sm font-medium text-primary-700">{dayTheme(stops)}</p>
-            )}
-            {highlightName(stops, plan) && !plan.title?.includes(highlightName(stops, plan)) && (
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-accent-700">Highlight:</span> {highlightName(stops, plan)}
-              </p>
-            )}
             {stops.length > 0 && (
               <p className="text-sm text-gray-500">
-                {stops.length} stop{stops.length !== 1 ? 's' : ''} • {slotStart(stops[0].time_slot)} – {slotEnd(stops[stops.length - 1].time_slot)}
+                {[dayTowns(stops), `${slotStart(stops[0].time_slot)} – ${slotEnd(stops[stops.length - 1].time_slot)}`].filter(Boolean).join(' · ')}
               </p>
             )}
           </div>
@@ -649,23 +743,23 @@ export default function ItineraryDayCard({
                 {!isLast && <div className="w-0.5 flex-1 bg-gray-200 my-1" />}
               </div>
 
-              <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-5'}`}>
-                <StopDetails
-                  stop={stop}
-                  hideDescription={Boolean(repeatedStops?.has(stop.id))}
-                  action={
-                    roadTravel && !alreadyThere && stop.id != null && navIndexFor(stop) >= 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setNavigatingTo(navIndexFor(stop))}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 hover:bg-primary-100"
-                        aria-label={`Start navigation to ${placeFor(stop).listing?.name || 'this stop'}`}
-                      >
-                        <FiNavigation size={12} aria-hidden="true" /> Navigate here
-                      </button>
-                    ) : null
-                  }
-                />
+              <div className={`flex-1 min-w-0 ${isLast ? 'pb-0' : 'pb-4'}`}>
+                {(() => {
+                  const navigate = roadTravel && !alreadyThere && stop.id != null && navIndexFor(stop) >= 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setNavigatingTo(navIndexFor(stop))}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+                      aria-label={`Start navigation to ${placeFor(stop).listing?.name || 'this stop'}`}
+                    >
+                      <FiNavigation size={12} aria-hidden="true" /> Navigate here
+                    </button>
+                  ) : null
+                  // Time at the stay is a slim row; a free day there keeps its planned activities.
+                  return stop.item_type === 'accommodation' && !(stop.activities?.length > 0)
+                    ? <StayStopRow stop={stop} action={navigate} />
+                    : <StopDetails stop={stop} hideDescription={Boolean(repeatedStops?.has(stop.id))} action={navigate} />
+                })()}
 
                 {lunch && (
                   <div className="mt-3 ml-2 sm:ml-6 rounded-lg border border-dashed border-primary-200 bg-primary-50/40 p-3">
