@@ -6,6 +6,7 @@ use App\Models\Accommodation;
 use App\Models\Destination;
 use App\Models\FoodBeverage;
 use App\Models\RetailShop;
+use App\Support\PublicData;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -31,7 +32,7 @@ trait FindsNearbyPlaces
                 $query->whereKeyNot($from->getKey());
             }
 
-            return $this->nearest($query, $from, $limit, $with, $radiusKm, $precision);
+            return PublicData::strip($this->nearest($query, $from, $limit, $with, $radiusKm, $precision));
         };
 
         return [

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,6 +17,6 @@ class AnnouncementController extends Controller
             ->orderByDesc('created_at')
             ->paginate($this->perPage($request, 10, 50));
 
-        return response()->json($announcements);
+        return response()->json(PublicData::strip($announcements));
     }
 }

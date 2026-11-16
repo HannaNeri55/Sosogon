@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,7 +26,7 @@ class EventController extends Controller
 
         $events = $query->paginate($this->perPage($request, 10, 50));
 
-        return response()->json($events);
+        return response()->json(PublicData::strip($events));
     }
 
     public function calendar(Request $request): JsonResponse
@@ -48,13 +49,13 @@ class EventController extends Controller
             ->orderBy('start_date')
             ->get();
 
-        return response()->json($events);
+        return response()->json(PublicData::strip($events));
     }
 
     public function show(int $id): JsonResponse
     {
         $event = Event::published()->with('municipality')->findOrFail($id);
 
-        return response()->json($event);
+        return response()->json(PublicData::strip($event));
     }
 }
