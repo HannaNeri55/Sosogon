@@ -17,7 +17,7 @@ use Tests\TestCase;
  * Days in a town with few kinds of places still get filled: in a town where every matching place
  * is a beach or water spot a day may have two of them, and when the chosen town has nothing left
  * that fits, one place just across the town line may join a day (never as its first stop).
- * - Surfside: three beaches, nothing else.
+ * - Surfside: three beaches (surfing, swimming, snorkeling), nothing else.
  * - Mixtown: two beaches and a park.
  * - Neighbor (~10 km from Surfside): a heritage church.
  * - Faraway (~25 km): a museum, too far to join a day.
@@ -70,9 +70,9 @@ class ItineraryFillDaysTest extends TestCase
             DB::table('categories')->insert(['id' => $id, 'name' => $name, 'type' => 'destination', 'created_at' => now(), 'updated_at' => now()]);
         }
 
-        $this->place('surfA', 'Surf Point', 1, 'surfside', 12.670, 123.880, 'Swimming');
+        $this->place('surfA', 'Surf Point', 1, 'surfside', 12.670, 123.880, 'Surfing lessons');
         $this->place('surfB', 'Quiet Cove', 1, 'surfside', 12.672, 123.882, 'Swimming');
-        $this->place('surfC', 'Sandbar Beach', 1, 'surfside', 12.668, 123.884, 'Swimming');
+        $this->place('surfC', 'Reef Beach', 1, 'surfside', 12.668, 123.884, 'Snorkeling');
         $this->place('mixA', 'Mix Beach One', 1, 'mixtown', 12.500, 123.700, 'Swimming');
         $this->place('mixB', 'Mix Beach Two', 1, 'mixtown', 12.502, 123.702, 'Swimming');
         $this->place('mixPark', 'Mix Plaza Park', 6, 'mixtown', 12.501, 123.701, 'Evening stroll');
