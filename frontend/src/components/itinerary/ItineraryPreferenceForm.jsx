@@ -297,12 +297,9 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
       : null
   const departureBeforeArrival =
     numDays === 1 && formData.arrival_time && formData.departure_time && formData.departure_time <= formData.arrival_time
-  // Leaving before 10 AM on the last day of a longer trip leaves that day almost empty; it's
-  // usually AM picked for PM, so the form says so and offers the PM time (not an error).
+  // Leaving before 10 AM on the last day of a longer trip leaves that day almost empty, so the
+  // form says so (a reminder, not an error).
   const earlyDeparture = numDays !== null && numDays > 1 && Boolean(formData.departure_time) && formData.departure_time.slice(0, 5) < '10:00'
-  const departurePm = earlyDeparture
-    ? `${String(Number(formData.departure_time.slice(0, 2)) + 12).padStart(2, '0')}${formData.departure_time.slice(2, 5)}`
-    : null
 
   // What stops each step from being complete (null when it's fine).
   const problems = [
@@ -710,10 +707,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                   <p className="text-xs text-red-600 mt-1.5">For a one-day trip, leave after you arrive.</p>
                 ) : earlyDeparture ? (
                   <div role="status" className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    You leave at {clockTime(formData.departure_time)} on Day {numDays}, so that day only has time to check out.{' '}
-                    <button type="button" onClick={() => set({ departure_time: departurePm })} className="font-semibold underline hover:no-underline">
-                      Change to {clockTime(departurePm)}
-                    </button>
+                    You leave at {clockTime(formData.departure_time)} on Day {numDays}, so that day only has time to check out.
                   </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-1.5">Your last day's plan ends by then. Leave blank if you're not sure and it runs through dinner.</p>
@@ -1080,12 +1074,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 <ReviewRow label="Departure time">
                   {formData.departure_time ? clockTime(formData.departure_time) : "Not set — the last day runs through dinner"}
                   {earlyDeparture && (
-                    <span className="block text-xs text-amber-700 mt-0.5">
-                      Early: Day {numDays} only has time to check out.{' '}
-                      <button type="button" onClick={() => set({ departure_time: departurePm })} className="font-semibold underline hover:no-underline">
-                        Change to {clockTime(departurePm)}
-                      </button>
-                    </span>
+                    <span className="block text-xs text-amber-700 mt-0.5">Early: Day {numDays} only has time to check out.</span>
                   )}
                 </ReviewRow>
                 <ReviewRow label="Trip length">{numDays ? daysLabel(numDays) : '—'}</ReviewRow>
