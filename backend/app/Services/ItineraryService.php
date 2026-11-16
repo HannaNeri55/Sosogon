@@ -72,6 +72,18 @@ class ItineraryService
     /** At most this many stops of one kind per day, so a day isn't beach after beach. */
     private const KIND_LIMITS = ['water' => 1, 'highland' => 1];
 
+    /**
+     * Water stops a day may have in a town where every matching place is a beach or other water
+     * spot (see waterOnlyTowns()): one would leave most of each day empty.
+     */
+    private const WATER_ONLY_TOWN_LIMIT = 2;
+
+    /**
+     * How far (straight line, km) a place in a town the tourist didn't choose may be from the
+     * trip's places to fill a day the chosen town can't (see nearbyDestinations()).
+     */
+    private const NEARBY_TOWN_KM = 20;
+
     /** Shortest sensible visit by kind (minutes), before the pace adjusts it. */
     private const MIN_VISIT = ['water' => 120, 'resort' => 120, 'highland' => 90, 'nature' => 60, 'culture' => 45];
 
@@ -237,6 +249,17 @@ class ItineraryService
     /** The tourist's preferred destinations this trip couldn't include, and why (see preferredNotice()). */
     private ?array $preferredNotice = null;
 
+    /**
+     * Destinations in towns the tourist didn't choose that may fill a day its own town can't:
+     * at most one per day, only on a day that has a stop of its own town (which decides the
+     * day's town; the route may still visit the nearby place first when it's on the way), and
+     * only when no place in the day's town fits (see nearbyDestinations()).
+     */
+    private array $nearbyIds = [];
+
+    /** Towns (planning ids) whose matching places are all beach or water stops (see waterOnlyTowns()). */
+    private array $waterOnlyTowns = [];
+
     /** Towns more than this far from the rest of the trip cost a day's worth of travel by public transport. */
     private const TOWN_GAP_KM_PUBLIC = 1.5;
 
@@ -269,6 +292,11 @@ class ItineraryService
         $preferences['municipality_ids'] = array_values(array_unique(array_map(fn ($t) => $this->townOf[$t] ?? $t, $preferences['municipality_ids'])));
         $destinations = $this->getEligibleDestinations($preferences);
         $this->preferredNotice = $this->ignoredPreferred($preferences, $destinations);
+        $this->waterOnlyTowns = $this->waterOnlyTowns($destinations);
+        // Places just across the town line, to fill days the chosen towns run out of places for.
+        // They aren't offered to the AI: the planner adds them only where its own rules allow.
+        $nearby = $destinations->isEmpty() ? collect() : $this->nearbyDestinations($preferences, $destinations);
+        $this->nearbyIds = $nearby->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         $this->roadLegs = [];
         $this->transport = $preferences['transport_preference'] ?? 'no_preference';
@@ -288,6 +316,8 @@ class ItineraryService
         $this->roadLegs = collect($distanceMatrix)->where('source', 'google')
             ->mapWithKeys(fn ($leg) => ["{$leg['from']}-{$leg['to']}" => $leg])->all();
         $prompt = $parsedItinerary ? null : $this->buildPrompt($preferences, $destinations, $distanceMatrix);
+        // From here on the nearby places are part of the trip's pool (see nearbyIds).
+        $destinations = $destinations->concat($nearby)->values();
 
         $maxAttempts = $parsedItinerary ? 0 : 2;
 
@@ -618,8 +648,21 @@ class ItineraryService
             return collect();
         }
 
-        $destinations = Destination::published()
-            ->whereIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids'])
+        $destinations = $this->plannedDestinations($preferences, fn ($query) => $query->whereIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids']))
+            ->each(fn ($d) => $this->planningTown($d));
+        $this->interests->warnAboutFallbacks($destinations);
+
+        return $destinations;
+    }
+
+    /**
+     * Published destinations matching the selected interests, in the towns $inTowns narrows the
+     * query to, with everything planning a visit needs loaded.
+     */
+    private function plannedDestinations(array $preferences, \Closure $inTowns): Collection
+    {
+        return Destination::published()
+            ->tap($inTowns)
             ->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests']))
             ->with(['category:id,name', 'municipality:id,name', 'activities:id,destination_id,name,description,type,best_time_to_visit,duration_minutes,what_to_wear', 'estimates', 'fees', 'amenities:id,destination_id,name'])
             ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
@@ -627,11 +670,55 @@ class ItineraryService
             ->tap(fn ($query) => $this->interests->prepare($query))
             ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get()
-            ->each(fn ($d) => $this->applyEstimates($d))
-            ->each(fn ($d) => $this->planningTown($d));
-        $this->interests->warnAboutFallbacks($destinations);
+            ->each(fn ($d) => $this->applyEstimates($d));
+    }
 
-        return $destinations;
+    /**
+     * Destinations in towns the tourist didn't choose, within NEARBY_TOWN_KM of the trip's own
+     * places and matching the same interests, that may fill a day its town has run out of places
+     * for (see fitsDay() and shapeDays()). A preferred place in another town stays out: the
+     * tourist was told it isn't part of this trip (preferredNotice()).
+     */
+    private function nearbyDestinations(array $preferences, Collection $pool): Collection
+    {
+        $preferred = $this->preferredIds($preferences);
+
+        return $this->plannedDestinations($preferences, fn ($query) => $query->whereNotIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids']))
+            ->reject(fn ($d) => in_array((int) $d->id, $preferred, true))
+            ->filter(fn ($d) => $pool->contains(fn ($p) => $this->kmBetween($p, $d) <= self::NEARBY_TOWN_KM))
+            ->values();
+    }
+
+    /** Whether a destination is one of this trip's nearby-town places (see nearbyDestinations()). */
+    private function isNearby(Destination $destination): bool
+    {
+        return in_array((int) $destination->id, $this->nearbyIds, true);
+    }
+
+    /**
+     * Each day's nearby-town place after the day's own places, and gone from a day with none of
+     * its own left: a day always starts in, and belongs to, one of the chosen towns.
+     */
+    private function keepNearbyBehind(array $days): array
+    {
+        foreach ($days as $n => $day) {
+            $own = array_values(array_filter($day['destination_ids'], fn ($id) => ! in_array((int) $id, $this->nearbyIds, true)));
+            $nearby = array_values(array_diff($day['destination_ids'], $own));
+            $days[$n]['destination_ids'] = $own === [] ? [] : [...$own, ...$nearby];
+        }
+
+        return $days;
+    }
+
+    /**
+     * The towns whose matching places are all beach or water stops (planning town ids): there a
+     * day may have WATER_ONLY_TOWN_LIMIT of them instead of one, or most of each day stays empty.
+     */
+    private function waterOnlyTowns(Collection $destinations): array
+    {
+        return $destinations->groupBy(fn ($d) => (int) $d->municipality_id)
+            ->filter(fn ($places) => $places->every(fn ($d) => $this->experienceKind($d) === 'water'))
+            ->keys()->map(fn ($town) => (int) $town)->values()->all();
     }
 
     /**
@@ -987,6 +1074,12 @@ class ItineraryService
         $prompt .= "1. Use ONLY destination IDs from the list above. Never invent places, and never use the same destination twice in the trip.\n";
         $prompt .= "2. Up to {$perDay} destinations per day ({$firstDay} on Day 1). Put destinations that are close to each other on the same day, in an order that avoids backtracking. Different days should feature different experiences.\n";
         $prompt .= "3. Vary each day: never two beach or swimming spots on the same day, and mix water, nature, viewpoints, heritage and resorts. Don't put two physically demanding stops back to back. A sunrise spot goes first in its day, and a sunset or night-time spot (one whose activities are best in the evening) last.\n";
+        $waterOnly = $destinations->filter(fn ($d) => in_array((int) $d->municipality_id, $this->waterOnlyTowns, true))
+            ->map(fn ($d) => $d->municipality?->name)->filter()->unique()->values()->all();
+        if ($waterOnly !== []) {
+            $prompt .= '3a. Exception: every listed place in '.$this->naturalList($waterOnly).' is a beach or water spot, so a day there may have two of them; '
+                ."make them different experiences (for example a surf or kayak spot and a quiet beach), one in the morning and one in the afternoon.\n";
+        }
         if ($townCount > 1) {
             $prompt .= "4. Give EVERY selected town ({$townNames}) at least one day, and keep the days spent in the same town consecutive (finish one town before moving to the next).\n";
         } elseif ($destinationCount < $numDays) {
@@ -1053,7 +1146,8 @@ class ItineraryService
         }
 
         $numDays = (int) $preferences['num_days'];
-        $validIds = $destinations->pluck('id')->map(fn ($id) => (int) $id)->all();
+        // The AI only knows the chosen towns' places (nearby-town ones weren't in its list).
+        $validIds = array_values(array_diff($destinations->pluck('id')->map(fn ($id) => (int) $id)->all(), $this->nearbyIds));
 
         $byDay = [];
         $titles = [];
@@ -1113,7 +1207,7 @@ class ItineraryService
             $used = array_merge(...array_values(array_column($days, 'destination_ids')));
             $previous = collect($days)->filter(fn ($d, $m) => $m < $n && $d['destination_ids'] !== [])->last();
             $town = $previous ? (int) $byId[$previous['destination_ids'][0]]->municipality_id : null;
-            $unused = $destinations->reject(fn ($d) => in_array((int) $d->id, $used, true));
+            $unused = $destinations->reject(fn ($d) => in_array((int) $d->id, $used, true) || $this->isNearby($d));
             $pool = $town !== null && $unused->contains('municipality_id', $town) ? $unused->where('municipality_id', $town) : $unused;
             $center = $this->centroid($destinations->whereIn('id', $used)) ?? $this->centroid($destinations);
             $pick = $pool->sortBy(fn ($d) => ($center ? $this->km($center, $d) : 0) - $this->priorityScore($d) / 2)->first();
@@ -1122,7 +1216,7 @@ class ItineraryService
             }
         }
 
-        $days = $this->promoteHighlights($this->shapeDays($this->groupDaysByTown($days, $destinations), $destinations, $preferences), $destinations, $preferences);
+        $days = $this->keepNearbyBehind($this->promoteHighlights($this->shapeDays($this->groupDaysByTown($days, $destinations), $destinations, $preferences), $destinations, $preferences));
 
         $title = $this->cleanText($parsed['title'] ?? null);
 
@@ -1267,13 +1361,16 @@ class ItineraryService
                 $pick = $destinations
                     ->reject(fn ($d) => in_array((int) $d->id, $used, true))
                     ->reject(fn ($d) => $hasHighlight && count($ids) >= 2 && $this->priorityScore($d) < self::PRIORITY_POINTS['hidden_gem'])
-                    ->filter(fn ($d) => (int) $d->municipality_id === $town && $fits($ids, $d, $n))
+                    // A nearby-town place only joins a day that already has a stop of its own town.
+                    ->filter(fn ($d) => ((int) $d->municipality_id === $town || ($ids !== [] && $this->isNearby($d))) && $fits($ids, $d, $n))
                     // Worth counts as much as closeness: a must-visit place is worth ~100 minutes more.
+                    // Any place in the day's own town comes before one across the town line.
                     ->sortBy(fn ($d) => ($near->isEmpty() ? 0 : $near->min(fn ($s) => $this->travelMinutes($s, $d)))
                         + (in_array($this->experienceKind($d), $kinds, true) ? 30 : 0)
                         - (array_intersect($uncovered, $this->interestsOf($preferences, $d)) !== [] ? 60 : 0)
                         - (in_array((int) $d->id, $preferred, true) ? 120 : 0)
-                        - $this->priorityScore($d))
+                        - $this->priorityScore($d)
+                        + ($this->isNearby($d) ? 1000 : 0))
                     ->first();
                 if (! $pick) {
                     continue;
@@ -1282,6 +1379,7 @@ class ItineraryService
                 $days[$n]['destination_ids'][] = (int) $pick->id;
                 $adds = array_intersect($uncovered, $this->interestsOf($preferences, $pick));
                 $days[$n]['reasons'][(int) $pick->id] = (in_array((int) $pick->id, $preferred, true) ? 'One of the places you asked for. ' : '')
+                    .($this->isNearby($pick) ? "A short drive away in {$pick->municipality?->name}. " : '')
                     .($adds !== [] ? 'Brings your '.ucfirst(reset($adds)).' interest into the trip. ' : '')
                     .$this->addedReason($pick, $ids === [] ? null : $byId[end($ids)]);
                 // Planner-added (not the AI's pick): may give way to an AI pick moved from an earlier day.
@@ -1369,8 +1467,9 @@ class ItineraryService
     /**
      * Whether day $n, already visiting $ids (keys of $byId), can also take $candidate under the
      * day rules: open that day; on Day 1, fits after the arrival; otherwise room at the pace,
-     * same town as the day's first stop and within MAX_DAY_LEG_MINUTES of it, within
-     * KIND_LIMITS, and not a second sunrise or sunset stop.
+     * same town as the day's first stop (or the day's one nearby-town place) and within
+     * MAX_DAY_LEG_MINUTES of it, within KIND_LIMITS (WATER_ONLY_TOWN_LIMIT water stops in a
+     * town with nothing but water stops), and not a second sunrise or sunset stop.
      */
     private function fitsDay(array $ids, Destination $candidate, int $n, Collection $byId, array $preferences): bool
     {
@@ -1386,12 +1485,19 @@ class ItineraryService
             return $this->dayTarget($n, $preferences) > 0;
         }
         $stops = collect($ids)->map(fn ($id) => $byId[$id]);
+        $first = $stops->first();
         $kind = $this->experienceKind($candidate);
+        // The day's own town, or one nearby-town place on a day that started in its own town.
+        $sameArea = (int) $candidate->municipality_id === (int) $first->municipality_id
+            || ($this->isNearby($candidate) && ! $this->isNearby($first) && ! $stops->contains(fn ($d) => $this->isNearby($d)));
+        $kindLimit = $kind === 'water' && in_array((int) $first->municipality_id, $this->waterOnlyTowns, true)
+            ? self::WATER_ONLY_TOWN_LIMIT
+            : (self::KIND_LIMITS[$kind] ?? PHP_INT_MAX);
 
         return count($ids) < $this->dayTarget($n, $preferences)
-            && (int) $candidate->municipality_id === (int) $stops->first()->municipality_id
-            && $this->travelMinutes($stops->first(), $candidate) <= self::MAX_DAY_LEG_MINUTES
-            && $stops->filter(fn ($d) => $this->experienceKind($d) === $kind)->count() < (self::KIND_LIMITS[$kind] ?? PHP_INT_MAX)
+            && $sameArea
+            && $this->travelMinutes($first, $candidate) <= self::MAX_DAY_LEG_MINUTES
+            && $stops->filter(fn ($d) => $this->experienceKind($d) === $kind)->count() < $kindLimit
             && ! ($this->isAnchor($candidate) && $stops->contains(fn ($d) => $this->isAnchor($d)))
             && ($preferences['travel_pace'] === 'relaxed' || ! ($this->hasDawn($candidate) && $stops->contains(fn ($d) => $this->hasDawn($d))));
     }
@@ -3359,7 +3465,8 @@ class ItineraryService
      *   has no activity in the break (the trip to and from the food place included);
      * - stops are in time order without overlaps, each starting after the one before it ends
      *   plus the travel between them, and activities fit inside their stop;
-     * - the trip has the requested number of days, stays in the selected towns, never repeats a
+     * - the trip has the requested number of days, stays in the selected towns (apart from a
+     *   day's one nearby-town place, see nearbyDestinations()), never repeats a
      *   destination or visits one outside its opening hours, and public-transport trips carry
      *   public-transport travel times.
      *
@@ -3463,7 +3570,7 @@ class ItineraryService
                     if ($place && ! $this->isOpen($place, $from, $to, $date)) {
                         $add("{$label} is outside {$place->name}'s opening hours.");
                     }
-                    if ($place && $towns !== [] && ! in_array((int) $place->municipality_id, $towns, true)) {
+                    if ($place && $towns !== [] && ! in_array((int) $place->municipality_id, $towns, true) && ! $this->isNearby($place)) {
                         $add("{$label} ({$place->name}) is outside the selected municipalities.");
                     }
                     $visit = [$from, $to];
@@ -3798,7 +3905,8 @@ class ItineraryService
             }
         }
 
-        return $this->skipResortsAtResortStay($this->shapeDays($days, $pool, $preferences), $plan, $pool, $preferences);
+        // A day whose own stops are gone doesn't keep just its nearby-town place.
+        return $this->skipResortsAtResortStay($this->keepNearbyBehind($this->shapeDays($this->keepNearbyBehind($days), $pool, $preferences)), $plan, $pool, $preferences);
     }
 
     /**

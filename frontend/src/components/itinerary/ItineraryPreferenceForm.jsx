@@ -225,7 +225,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   // The picker's places: the published destinations in the selected towns that the selected
   // interests select, as the backend decides (the same rule generation uses). `key` says which
   // towns and interests they are for; pages load one at a time.
-  const [places, setPlaces] = useState({ key: '', status: 'idle', sightseeing: true, items: [], page: 0, lastPage: 0, loadingMore: false, moreFailed: false })
+  const [places, setPlaces] = useState({ key: '', status: 'idle', sightseeing: true, unmatched: [], items: [], page: 0, lastPage: 0, loadingMore: false, moreFailed: false })
   // Every place a response has shown (id => place), so a picked place keeps its chip while a new list loads.
   const [seenPlaces, setSeenPlaces] = useState({})
   // Approved stays of each selected town, with their rooms (town id => list, or 'error').
@@ -297,6 +297,12 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
       : null
   const departureBeforeArrival =
     numDays === 1 && formData.arrival_time && formData.departure_time && formData.departure_time <= formData.arrival_time
+  // Leaving before 10 AM on the last day of a longer trip leaves that day almost empty; it's
+  // usually AM picked for PM, so the form says so and offers the PM time (not an error).
+  const earlyDeparture = numDays !== null && numDays > 1 && Boolean(formData.departure_time) && formData.departure_time.slice(0, 5) < '10:00'
+  const departurePm = earlyDeparture
+    ? `${String(Number(formData.departure_time.slice(0, 2)) + 12).padStart(2, '0')}${formData.departure_time.slice(2, 5)}`
+    : null
 
   // What stops each step from being complete (null when it's fine).
   const problems = [
@@ -343,7 +349,7 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
         .then((data) => {
           const list = data.data || []
           setSeenPlaces((prev) => ({ ...prev, ...placesById(list) }))
-          setPlaces({ key: placesKey, status: 'ready', sightseeing: Boolean(data.sightseeing), items: list, page: data.current_page || 1, lastPage: data.last_page || 1, loadingMore: false, moreFailed: false })
+          setPlaces({ key: placesKey, status: 'ready', sightseeing: Boolean(data.sightseeing), unmatched: data.unmatched_interests || [], items: list, page: data.current_page || 1, lastPage: data.last_page || 1, loadingMore: false, moreFailed: false })
         })
         .catch(() => {
           if (!controller.signal.aborted) setPlaces((prev) => ({ ...prev, key: placesKey, status: 'error', items: [] }))
@@ -466,6 +472,11 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
   // With no interest picked, or only Food and Shopping, there are no places to pick.
   const sightseeingPicked = interestKey !== '' && (!placesCurrent || places.sightseeing)
   const morePlaces = placesCurrent && places.status === 'ready' && places.page < places.lastPage
+  // Sightseeing interests no place in the chosen towns matches (e.g. "Culture or History").
+  const unmatchedInterests = placesCurrent && places.status === 'ready' ? places.unmatched.map((value) => labelOf(INTERESTS, value)) : []
+  const unmatchedText = unmatchedInterests.length > 1
+    ? `${unmatchedInterests.slice(0, -1).join(', ')} or ${unmatchedInterests[unmatchedInterests.length - 1]}`
+    : unmatchedInterests[0]
   // A picked place stays picked while it is in the list. Once the whole list is loaded, one that
   // isn't in it no longer matches and is dropped; until then (loading, more pages, an error) it is
   // kept, and generation checks it again.
@@ -697,6 +708,13 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 />
                 {departureBeforeArrival ? (
                   <p className="text-xs text-red-600 mt-1.5">For a one-day trip, leave after you arrive.</p>
+                ) : earlyDeparture ? (
+                  <div role="status" className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    You leave at {clockTime(formData.departure_time)} on Day {numDays}, so that day only has time to check out.{' '}
+                    <button type="button" onClick={() => set({ departure_time: departurePm })} className="font-semibold underline hover:no-underline">
+                      Change to {clockTime(departurePm)}
+                    </button>
+                  </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-1.5">Your last day's plan ends by then. Leave blank if you're not sure and it runs through dinner.</p>
                 )}
@@ -915,6 +933,11 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
               <p className="text-xs text-gray-500 -mt-1.5 mb-3">
                 Verified places in your towns that match your interests. We'll include them where they fit your days, opening hours and route.
               </p>
+              {unmatchedInterests.length > 0 && (
+                <p role="status" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Your chosen {townCount === 1 ? 'municipality has' : 'municipalities have'} no {unmatchedText} places. The planner may add one from a nearby municipality if it fits your day.
+                </p>
+              )}
 
               {preferred.length > 0 && (
                 <ul className="flex flex-wrap gap-2 mb-3">
@@ -1054,7 +1077,17 @@ export default function ItineraryPreferenceForm({ onSubmit, loading, limitReache
                 <ReviewRow label="Arrival">{longDate(formData.start_date) || '—'}</ReviewRow>
                 <ReviewRow label="Arrival time">{formData.arrival_time ? clockTime(formData.arrival_time) : 'Not set — Day 1 assumes about 10:00 AM'}</ReviewRow>
                 <ReviewRow label="Departure">{longDate(formData.end_date) || '—'}</ReviewRow>
-                <ReviewRow label="Departure time">{formData.departure_time ? clockTime(formData.departure_time) : "Not set — the last day runs through dinner"}</ReviewRow>
+                <ReviewRow label="Departure time">
+                  {formData.departure_time ? clockTime(formData.departure_time) : "Not set — the last day runs through dinner"}
+                  {earlyDeparture && (
+                    <span className="block text-xs text-amber-700 mt-0.5">
+                      Early: Day {numDays} only has time to check out.{' '}
+                      <button type="button" onClick={() => set({ departure_time: departurePm })} className="font-semibold underline hover:no-underline">
+                        Change to {clockTime(departurePm)}
+                      </button>
+                    </span>
+                  )}
+                </ReviewRow>
                 <ReviewRow label="Trip length">{numDays ? daysLabel(numDays) : '—'}</ReviewRow>
                 <ReviewRow label="Travelers">{travelerCount} traveler{travelerCount > 1 ? 's' : ''}</ReviewRow>
               </dl>
