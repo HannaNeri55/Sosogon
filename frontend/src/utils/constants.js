@@ -1,25 +1,15 @@
+// The interests a tourist can pick (the backend's accepted list). Which places each one selects is
+// decided by the backend (InterestMatcher); the trip form asks it through getItineraryPlaces().
 export const INTERESTS = [
   { value: 'nature', label: 'Nature' },
   { value: 'beaches', label: 'Beaches' },
   { value: 'culture', label: 'Culture' },
+  { value: 'history', label: 'History' },
   { value: 'food', label: 'Food' },
   { value: 'adventure', label: 'Adventure' },
   { value: 'shopping', label: 'Shopping' },
   { value: 'relaxation', label: 'Relaxation' },
 ]
-
-// Destination category IDs each interest plans from — the same map as the backend's
-// ItineraryService::INTEREST_CATEGORIES (keep them in step). Food and Shopping plan restaurants
-// and souvenir shops, not destinations.
-export const INTEREST_CATEGORY_IDS = {
-  nature: [1, 2, 3, 7, 8],
-  beaches: [1, 8],
-  culture: [4, 5],
-  adventure: [2, 3, 7, 8],
-  relaxation: [1, 6, 8, 9],
-  food: [],
-  shopping: [],
-}
 
 // How many travelers one room of each type sleeps — the backend's ItineraryService::ROOM_CAPACITY
 // (keep them in step); any other room type sleeps 2.

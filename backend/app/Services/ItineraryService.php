@@ -50,22 +50,6 @@ class ItineraryService
 
     private const LAST_DAY_SHOP_KM = 15;
 
-    /**
-     * Destination categories each interest selects. Food and Shopping select none: they're
-     * planned from approved restaurants and souvenir shops instead (see foodScore() and the
-     * daily souvenir stop).
-     */
-    private const INTEREST_CATEGORIES = [
-        'nature' => [1, 2, 3, 7, 8],      // Beach, Mountain, Waterfall, Eco-Tourism, Island
-        'beaches' => [1, 8],              // Beach, Island
-        'culture' => [4, 5],              // Historical, Church
-        'history' => [4, 5],
-        'adventure' => [2, 3, 7, 8],
-        'relaxation' => [1, 6, 8, 9],     // Beach, Park, Island, Resort (day-use resorts)
-        'food' => [],
-        'shopping' => [],
-    ];
-
     /** With Food selected, a verified restaurant this far away beats a meal at the stay. */
     private const FOOD_NEARBY_KM = 6;
 
@@ -250,6 +234,9 @@ class ItineraryService
     /** The towns the planner chose when the tourist chose none: ['towns' => ids, 'note' => why, 'highlights' => names]. */
     private ?array $chosenTowns = null;
 
+    /** The tourist's preferred destinations this trip couldn't include, and why (see preferredNotice()). */
+    private ?array $preferredNotice = null;
+
     /** Towns more than this far from the rest of the trip cost a day's worth of travel by public transport. */
     private const TOWN_GAP_KM_PUBLIC = 1.5;
 
@@ -257,7 +244,8 @@ class ItineraryService
 
     public function __construct(
         private ItineraryAI $ai,
-        private GoogleMapsService $maps
+        private GoogleMapsService $maps,
+        private InterestMatcher $interests = new InterestMatcher,
     ) {}
 
     /**
@@ -270,6 +258,7 @@ class ItineraryService
         // No municipality chosen: the tourist leaves it to us, so the province's best-known
         // attractions decide which towns the trip covers.
         $this->chosenTowns = null;
+        $this->preferredNotice = null;
         if ($preferences['municipality_ids'] === []) {
             $this->chosenTowns = $this->chooseTowns($preferences);
             $preferences['municipality_ids'] = $this->chosenTowns['towns'];
@@ -279,6 +268,7 @@ class ItineraryService
         $this->townOf = $this->shareDays($preferences['municipality_ids'], (int) $preferences['num_days']);
         $preferences['municipality_ids'] = array_values(array_unique(array_map(fn ($t) => $this->townOf[$t] ?? $t, $preferences['municipality_ids'])));
         $destinations = $this->getEligibleDestinations($preferences);
+        $this->preferredNotice = $this->ignoredPreferred($preferences, $destinations);
 
         $this->roadLegs = [];
         $this->transport = $preferences['transport_preference'] ?? 'no_preference';
@@ -616,31 +606,72 @@ class ItineraryService
     }
 
     /**
-     * Published destinations in the selected towns whose category matches a selected interest.
-     * Food and Shopping match no destination category (they're planned from restaurants and
-     * shops). A preferred destination is only marked in the prompt and favoured when filling a
-     * day, so it can never get past the town and interest filters.
+     * Published destinations in the selected towns that match a selected interest (by category,
+     * or for a reviewed destination by its confirmed experience tags: InterestMatcher). Food and
+     * Shopping match no destination (they're planned from restaurants and shops). A preferred
+     * destination is only marked in the prompt and favoured when filling a day, so it can never
+     * get past the town and interest filters.
      */
     private function getEligibleDestinations(array $preferences): Collection
     {
-        $categoryIds = array_values(array_unique(array_merge(...array_map(
-            fn ($interest) => self::INTEREST_CATEGORIES[$interest] ?? [],
-            array_values($preferences['interests'])
-        ))));
-        if ($categoryIds === []) {
+        if ($this->interests->categoryIds($preferences['interests']) === []) {
             return collect();
         }
 
-        return Destination::published()
+        $destinations = Destination::published()
             ->whereIn('municipality_id', $preferences['all_town_ids'] ?? $preferences['municipality_ids'])
-            ->whereIn('category_id', $categoryIds)
+            ->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests']))
             ->with(['category:id,name', 'municipality:id,name', 'activities:id,destination_id,name,description,type,best_time_to_visit,duration_minutes,what_to_wear', 'estimates', 'fees', 'amenities:id,destination_id,name'])
             ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
                 'is_featured', 'tourism_priority', 'setting', 'view_count')
+            ->tap(fn ($query) => $this->interests->prepare($query))
             ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get()
             ->each(fn ($d) => $this->applyEstimates($d))
             ->each(fn ($d) => $this->planningTown($d));
+        $this->interests->warnAboutFallbacks($destinations);
+
+        return $destinations;
+    }
+
+    /**
+     * The tourist's preferred destinations that aren't in this trip's eligible pool, so they're
+     * left out, for a notice: null when every one is eligible. An unpublished one is reported
+     * without its name.
+     */
+    private function ignoredPreferred(array $preferences, Collection $destinations): ?array
+    {
+        $missing = array_values(array_diff($this->preferredIds($preferences), $destinations->pluck('id')->map(fn ($id) => (int) $id)->all()));
+        if ($missing === []) {
+            return null;
+        }
+
+        $towns = array_map('intval', $preferences['all_town_ids'] ?? $preferences['municipality_ids']);
+        $found = Destination::whereIn('id', $missing)->get(['id', 'name', 'status', 'municipality_id'])->keyBy('id');
+        $ignored = array_map(function (int $id) use ($found, $towns) {
+            $destination = $found[$id] ?? null;
+            if (! $destination || $destination->status !== 'published') {
+                return ['id' => null, 'name' => null, 'reason' => 'not_published'];
+            }
+
+            return [
+                'id' => $id,
+                'name' => $destination->name,
+                'reason' => in_array((int) $destination->municipality_id, $towns, true) ? 'no_interest_match' : 'outside_towns',
+            ];
+        }, $missing);
+
+        return [
+            'message' => 'Some of your preferred destinations could not be included because they are unavailable, outside your selected municipalities, '
+                .'or do not match your selected interests. Your itinerary will continue using other eligible destinations.',
+            'destinations' => $ignored,
+        ];
+    }
+
+    /** The preferred destinations the last generated trip left out, and why; null when none were. */
+    public function preferredNotice(): ?array
+    {
+        return $this->preferredNotice;
     }
 
     /** The destination IDs the tourist asked for (preferred_destinations), as integers. */
@@ -845,8 +876,12 @@ class ItineraryService
                 ($rated = $this->genuineRating($d)) ? 'rated '.round($rated['average'], 1)."/5 by {$rated['count']} visitors" : null,
             ]);
             $setting = ['indoor' => 'indoors', 'outdoor' => 'open-air', 'mixed' => 'partly covered'][$d->setting] ?? null;
+            // Only what the tourism office confirmed on a reviewed destination; never draft tags.
+            $experiences = $this->interests->confirmedExperiences($d);
 
-            return "ID:{$d->id} | {$d->name} | Town: {$d->municipality?->name} | Category: {$d->category->name} | Coords: {$d->latitude},{$d->longitude} | Hours: {$hours} | Fee: {$fee}"
+            return "ID:{$d->id} | {$d->name} | Town: {$d->municipality?->name} | Category: {$d->category->name}"
+                .($experiences !== [] ? ' | Experiences (confirmed by the tourism office): '.implode(', ', $experiences) : '')
+                ." | Coords: {$d->latitude},{$d->longitude} | Hours: {$hours} | Fee: {$fee}"
                 .($standing !== [] ? ' | Standing: '.implode('; ', $standing) : '')
                 .($setting ? " | Setting: {$setting}" : '')
                 .($activities !== '' ? " | Activities: {$activities}" : '')
@@ -943,7 +978,11 @@ class ItineraryService
         $prompt .= "HOW TO CHOOSE (like a knowledgeable local guide, not a map search):\n";
         $prompt .= "- First decide each town's highlights: places with a Standing (Must-visit, Popular, featured, well rated), then the attractions Sorsogon is best known for that you can recognise in the list. These come first; build each day around one highlight.\n";
         $prompt .= "- Then add only places that make that day better: close to the highlight, a different kind of experience, worth the time. Never pick a place just because it is near another one, and prefer two worthwhile stops to four ordinary ones.\n";
-        $prompt .= "- Lesser-known places are welcome when they offer something genuinely worthwhile (a hidden gem), not as filler.\n\n";
+        $prompt .= "- Lesser-known places are welcome when they offer something genuinely worthwhile (a hidden gem), not as filler.\n";
+        if ($destinations->contains(fn ($d) => $this->interests->confirmedExperiences($d) !== [])) {
+            $prompt .= "- \"Experiences\", where a place lists them, were confirmed by the tourism office: they describe what the place actually offers and take precedence over its Category, which is only a general classification. Still describe only what the place's listed activities and details show.\n";
+        }
+        $prompt .= "\n";
         $prompt .= "RULES:\n";
         $prompt .= "1. Use ONLY destination IDs from the list above. Never invent places, and never use the same destination twice in the trip.\n";
         $prompt .= "2. Up to {$perDay} destinations per day ({$firstDay} on Day 1). Put destinations that are close to each other on the same day, in an order that avoids backtracking. Different days should feature different experiences.\n";
@@ -1314,16 +1353,17 @@ class ItineraryService
     }
 
     /**
-     * The selected sightseeing interests a destination represents (by its category), or with
-     * null, all the selected ones that select destinations at all (not Food or Shopping).
+     * The selected sightseeing interests a destination represents (InterestMatcher: by category,
+     * or by confirmed tags), or with null, all the selected ones that select destinations at all
+     * (not Food or Shopping).
      *
      * @return array<int, string>
      */
     private function interestsOf(array $preferences, ?Destination $destination): array
     {
-        return array_values(array_filter(array_values($preferences['interests'] ?? []), fn ($interest) => $destination
-            ? in_array((int) $destination->category_id, self::INTEREST_CATEGORIES[$interest] ?? [], true)
-            : (self::INTEREST_CATEGORIES[$interest] ?? []) !== []));
+        $interests = $preferences['interests'] ?? [];
+
+        return $destination ? $this->interests->interestsOf($destination, $interests) : $this->interests->sightseeing($interests);
     }
 
     /**
@@ -2038,7 +2078,7 @@ class ItineraryService
         // With Food selected, meals look a little farther for a verified restaurant before falling back to the stay.
         $mealKm = in_array('food', $preferences['interests'] ?? [], true) ? self::FOOD_NEARBY_KM : self::NEARBY_KM;
         // Food and/or Shopping without any sightseeing interest: days have no destinations by design.
-        $sightseeing = array_filter($preferences['interests'] ?? [], fn ($i) => (self::INTEREST_CATEGORIES[$i] ?? []) !== []);
+        $sightseeing = $this->interests->sightseeing($preferences['interests'] ?? []);
         $foodScore = fn ($f) => $this->foodScore($f, $preferences);
         // Whether the trip's towns list any place of the cuisine asked for; when none do, the
         // first meal says so once rather than every meal apologizing.
@@ -3491,7 +3531,7 @@ class ItineraryService
     private function chooseTowns(array $preferences): array
     {
         $days = max(1, (int) $preferences['num_days']);
-        $categoryIds = array_values(array_unique(array_merge(...array_map(fn ($i) => self::INTEREST_CATEGORIES[$i] ?? [], array_values($preferences['interests'] ?? [])))));
+        $categoryIds = $this->interests->categoryIds($preferences['interests'] ?? []);
         $picked = ! empty($preferences['accommodation_id']) ? Accommodation::find($preferences['accommodation_id']) : null;
 
         if ($categoryIds === []) {
@@ -3512,7 +3552,7 @@ class ItineraryService
             return ['towns' => $towns, 'highlights' => [], 'note' => 'You let SOSOGON choose the municipalities: '.$this->naturalList(array_map(fn ($t) => $names[$t] ?? '', $towns)).' have the most listed places to eat and shop.'];
         }
 
-        $places = Destination::published()->whereIn('category_id', $categoryIds)->whereNotNull('latitude')->whereNotNull('longitude')
+        $places = Destination::published()->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests'] ?? []))->whereNotNull('latitude')->whereNotNull('longitude')
             ->select(['id', 'name', 'municipality_id', 'latitude', 'longitude', 'is_featured', 'tourism_priority', 'view_count'])
             ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get();
