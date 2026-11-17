@@ -287,6 +287,24 @@ class ItineraryCuratedDestinationsTest extends TestCase
         $this->assertGreaterThanOrEqual(360, (int) $subic->duration_minutes, 'Its activities are given the whole day.');
     }
 
+    public function test_a_late_start_at_subic_beach_still_includes_every_activity(): void
+    {
+        // Arriving at 11 AM, lunch comes right after registering, so the island hopping follows
+        // it and the swim's best time (midday) has passed by its turn: it's still done, and says
+        // when it's best, rather than being left out.
+        $itinerary = $this->generate(['municipality_ids' => [$this->towns['Matnog']], 'interests' => ['beaches'], 'arrival_time' => '11:00'], 2);
+
+        $subic = $this->stops($itinerary)->firstWhere('destination_id', $this->ids['subic']);
+        $this->assertNotNull($subic);
+        $this->assertSame(1, (int) $subic->day_number, 'Not pushed to another day.');
+        $activities = collect($subic->activities);
+        foreach (['Island hopping', 'Swimming & Snorkeling', 'Pink Sand Beach Walk'] as $name) {
+            $this->assertTrue($activities->contains('name', $name), $name);
+        }
+        $this->assertStringContainsString('Best enjoyed around midday', (string) $activities->firstWhere('name', 'Swimming & Snorkeling')['description']);
+        $this->assertTrue($activities->contains(fn ($a) => str_starts_with($a['name'], 'Lunch')), 'Lunch is part of the day.');
+    }
+
     public function test_subic_beach_on_a_short_day_gets_the_time_there_is_and_says_so(): void
     {
         $itinerary = $this->generate(['municipality_ids' => [$this->towns['Matnog']], 'interests' => ['beaches'], 'arrival_time' => '14:00'], 1);
