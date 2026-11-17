@@ -138,10 +138,10 @@ function BudgetCard({ itinerary }) {
       </div>
       <dl className="divide-y divide-gray-100">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4 py-2.5">
-            <dt className="min-w-0">
+          <div key={row.label} className="flex items-start justify-between gap-4 py-2.5">
+            <dt className="min-w-0 break-words">
               <p className="text-sm font-medium text-gray-800">{row.label}</p>
-              <p className="text-xs text-gray-500 truncate">{row.detail}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{row.detail}</p>
             </dt>
             <dd className="text-sm font-semibold text-gray-800 shrink-0">{row.note ?? (row.unknown && !row.value ? 'Not listed' : formatPesoRange(row.min, row.value))}</dd>
           </div>

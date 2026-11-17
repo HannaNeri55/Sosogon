@@ -307,7 +307,7 @@ function PicksList({ title, options, picks }) {
             <li key={pick.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
               <img src={getImageUrl(option.image)} alt={option.name} className="w-10 h-10 rounded-md object-cover shrink-0 bg-gray-200" loading="lazy" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{option.name}</p>
+                <p className="text-sm font-medium text-gray-800 break-words">{option.name}</p>
                 <p className="text-xs text-gray-500">
                   {formatPeso(option.price)}
                   {pick.quantity > 1 && ` × ${pick.quantity}`}
@@ -366,7 +366,7 @@ function StayStopRow({ stop, action = null }) {
   const { listing, badge } = placeFor(stop)
   const notes = shownNotes(stop, listing)
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 sm:px-4">
+    <div className="min-w-0 break-words rounded-xl border border-gray-100 bg-gray-50/70 p-3 sm:px-4">
       <div className="flex gap-3">
         <img
           src={getImageUrl(listing?.images?.[0]?.image_path)}
@@ -395,13 +395,13 @@ function StayStopRow({ stop, action = null }) {
 
 /**
  * One stop, in clear sections: the photo beside when, where and what it costs; the place's
- * description (two lines, "Read more" for the rest); why it's recommended; the schedule there,
- * one activity per row; the recommended dishes or souvenirs; and the reminders as a list.
+ * description in full; why it's recommended; the schedule there, one activity per row; the
+ * recommended dishes or souvenirs; and the reminders as a list. Nothing is clipped: the card
+ * grows with its text, and long words or links wrap instead of widening the page.
  * action: a button shown beside the place's name.
  */
 function StopDetails({ stop, compact = false, action = null, hideDescription = false }) {
   const { listing, link, badge } = placeFor(stop)
-  const [readMore, setReadMore] = useState(false)
   const picks = stop.item_type === 'food_beverage'
     ? { title: 'Recommended dishes', options: dishOptions(stop), picks: picksFrom(stop.dishes) }
     : stop.item_type === 'retail_shop'
@@ -411,7 +411,7 @@ function StopDetails({ stop, compact = false, action = null, hideDescription = f
   const description = listing?.description && !hideDescription ? listing.description : ''
 
   return (
-    <div className={compact ? '' : 'rounded-xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm'}>
+    <div className={`min-w-0 break-words ${compact ? '' : 'rounded-xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm'}`}>
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className={`${compact ? 'w-full h-28 sm:w-24 sm:h-20' : 'w-full h-44 sm:w-40 sm:h-28'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
           <img
@@ -457,16 +457,8 @@ function StopDetails({ stop, compact = false, action = null, hideDescription = f
             )}
           </div>
 
-          {description && (
-            <div className="mt-2">
-              <p className={`text-sm text-gray-500 leading-relaxed ${readMore ? '' : 'line-clamp-2'}`}>{description}</p>
-              {description.length > 140 && (
-                <button type="button" onClick={() => setReadMore((open) => !open)} className="mt-0.5 text-xs font-semibold text-primary-600 hover:text-primary-700">
-                  {readMore ? 'Show less' : 'Read more'}
-                </button>
-              )}
-            </div>
-          )}
+          {/* The whole description, however long: opening hours and other details are often at its end. */}
+          {description && <p className="mt-2 text-sm text-gray-600 leading-relaxed">{description}</p>}
           {notes && <p className="text-sm text-gray-700 mt-1.5 leading-relaxed">{notes}</p>}
         </div>
       </div>
@@ -486,7 +478,7 @@ function StopDetails({ stop, compact = false, action = null, hideDescription = f
           <ol className="divide-y divide-gray-100 rounded-lg border border-gray-100">
             {stop.activities.map((activity, i) => (
               <li key={`${i}-${activity.name}`} className="flex gap-3 px-3 py-2">
-                <span className="w-[7.5rem] sm:w-36 shrink-0 whitespace-nowrap pt-0.5 text-[11px] sm:text-xs font-semibold text-primary-700 tabular-nums">{activity.time}</span>
+                <span className="w-30 sm:w-36 shrink-0 whitespace-nowrap pt-0.5 text-[11px] sm:text-xs font-semibold text-primary-700 tabular-nums">{activity.time}</span>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800">{activity.name}</p>
                   {activity.description && <p className="text-xs text-gray-500 leading-relaxed">{activity.description}</p>}
@@ -559,11 +551,11 @@ function StopEditor({ stop, isNew = false, edits = {}, isDeleted = false, onFiel
             )}
             {isDeleted && <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Will be removed</span>}
           </div>
-          <p className={`font-heading font-semibold text-gray-900 truncate ${isDeleted ? 'line-through' : ''}`}>
+          <p className={`font-heading font-semibold text-gray-900 break-words ${isDeleted ? 'line-through' : ''}`}>
             {shown?.name || 'Listing no longer available'}
           </p>
-          {swapped && <p className="text-xs text-gray-500 truncate">Replaces {listing?.name}</p>}
-          {!swapped && shown?.subtitle && <p className="text-xs text-gray-500 truncate">{shown.subtitle}</p>}
+          {swapped && <p className="text-xs text-gray-500 break-words">Replaces {listing?.name}</p>}
+          {!swapped && shown?.subtitle && <p className="text-xs text-gray-500 break-words">{shown.subtitle}</p>}
         </div>
         {/* Phones: actions get their own full-width row so the place name keeps its width. */}
         <div className="flex w-full gap-2 sm:w-auto sm:flex-col sm:items-end shrink-0">
