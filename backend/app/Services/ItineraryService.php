@@ -2748,10 +2748,19 @@ class ItineraryService
             // A full-day destination fills a whole day; on the arrival day or before a departure it
             // gets the time there is, like any other visit.
             $wholeDay = ! $arrivalDay && $dayEnd === null;
-            $plans = $stops->mapWithKeys(fn ($d) => [$d->id => $this->stretchVisit(
-                $this->plannedActivities($d, $d, $pace, $this->openingHours($d->operating_hours, $date), $arrivalDay),
-                $wholeDay && $this->priorities->isFullDay($d) ? max(self::FULL_DAY_VISIT, $this->minimumVisit($d, $pace)) : $this->minimumVisit($d, $pace)
-            )])->all();
+            $plans = $stops->mapWithKeys(function ($d) use ($pace, $date, $arrivalDay, $wholeDay) {
+                $planned = $this->stretchVisit(
+                    $this->plannedActivities($d, $d, $pace, $this->openingHours($d->operating_hours, $date), $arrivalDay),
+                    $wholeDay && $this->priorities->isFullDay($d) ? max(self::FULL_DAY_VISIT, $this->minimumVisit($d, $pace)) : $this->minimumVisit($d, $pace)
+                );
+                // The day is spent at a full-day destination, so an activity whose best time of day
+                // has passed (island hopping after a late arrival) is still done, noting when it's best.
+                if ($this->priorities->isFullDay($d)) {
+                    $planned = array_map(fn ($a) => in_array($a['label'], ['morning', 'midday', 'afternoon'], true) ? $a + ['keep' => true] : $a, $planned);
+                }
+
+                return [$d->id => $planned];
+            })->all();
             $first = $stops->first();
             $sunriseDay = $first && collect($plans[$first->id])->contains(fn ($a) => $a['label'] === 'dawn');
             $morningNote = null;
@@ -3056,6 +3065,20 @@ class ItineraryService
                 if ($limit !== null && $layout['end'] > $limit) {
                     $planned = $this->shortenVisit($planned, $layout['end'] - $limit);
                     $layout = $this->layoutVisit($arrival(), $planned);
+                }
+                // A full-day destination keeps room for the lunch eaten during it, and when even that
+                // doesn't fit, its activities kept past their best time make way, latest first.
+                if ($limit !== null && $this->priorities->isFullDay($destination)) {
+                    $room = $limit - (! $hadLunch && $layout['start'] <= self::LUNCH_START ? self::MEAL_MINUTES : 0);
+                    if ($layout['end'] > $room) {
+                        $planned = $this->shortenVisit($planned, $layout['end'] - $room);
+                        $layout = $this->layoutVisit($arrival(), $planned);
+                    }
+                    while ($layout['end'] > $room && ($kept = array_key_last(array_filter($planned, fn ($a) => ! empty($a['keep'])))) !== null) {
+                        unset($planned[$kept]);
+                        $planned = array_values($planned);
+                        $layout = $this->layoutVisit($arrival(), $planned);
+                    }
                 }
                 // Still too long to leave for lunch in time: its last activities wait for another visit.
                 while ($lunchAfter && ! $hadLunch && $layout['end'] > $breakFrom && count(array_filter($planned, fn ($a) => $a['label'] !== 'prep')) > 1) {
@@ -4204,11 +4227,12 @@ class ItineraryService
             $length = $activity['duration'] ?? 60;
             $start = $cursor;
             // An activity whose time has already passed (sunrise viewing at 11 AM, morning swimming
-            // at night) is left out, unless it's the visit's only one: then it stays, noting its best time.
+            // at night) is left out, unless it's the visit's only one or marked 'keep' (a full-day
+            // destination's): then it stays, noting its best time.
             $timed = $activity['window'] && in_array($activity['label'], ['dawn', 'morning', 'midday', 'afternoon', 'sunset', 'evening'], true);
             $pinned = in_array($activity['label'], ['dawn', 'sunset', 'evening'], true);
             if ($timed && ($pinned ? $cursor + $length > $activity['window'][1] : $cursor >= $activity['window'][1])) {
-                if ($done > 0 || $remaining > 0) {
+                if (($done > 0 || $remaining > 0) && empty($activity['keep'])) {
                     continue;
                 }
                 $activity = $this->outsideWindow($activity);
