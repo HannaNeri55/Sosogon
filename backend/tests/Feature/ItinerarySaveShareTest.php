@@ -12,7 +12,9 @@ use App\Models\User;
 use App\Services\ItineraryDocumentService;
 use App\Services\ItineraryPdfDownloads;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ItinerarySaveShareTest extends TestCase
@@ -181,6 +183,33 @@ class ItinerarySaveShareTest extends TestCase
         $lunch = strpos($schedule, 'Lunch break · 11:30 AM – 12:30 PM');
         $photos = strpos($schedule, 'Sunset photos');
         $this->assertTrue($swim !== false && $lunch !== false && $photos !== false && $swim < $lunch && $lunch < $photos);
+    }
+
+    public function test_restaurants_have_their_photo_in_the_document_like_destinations(): void
+    {
+        Storage::fake('public');
+        $photo = UploadedFile::fake()->image('grill.jpg', 800, 600);
+        Storage::disk('public')->putFileAs('food-beverages/1', $photo, 'grill.jpg');
+        $grill = FoodBeverage::create([
+            'user_id' => $this->tourist->id, 'name' => 'Sea Grill', 'description' => 'A grill.', 'municipality_id' => $this->itinerary->municipality_id,
+            'address' => 'Bulan', 'latitude' => 12.71, 'longitude' => 123.91, 'price_range' => 'moderate', 'status' => 'approved',
+        ]);
+        $grill->images()->create(['image_path' => 'food-beverages/1/grill.jpg', 'thumbnail_path' => 'food-beverages/1/grill.jpg', 'sort_order' => 0]);
+        $html = fn () => $this->actingAs($this->tourist)->getJson($this->url('/document'))->assertOk()->json('html');
+
+        // A meal stop of its own.
+        $meal = ItineraryItem::create([
+            'itinerary_id' => $this->itinerary->id, 'item_type' => 'food_beverage', 'food_beverage_id' => $grill->id,
+            'day_number' => 1, 'sequence' => 3, 'time_slot' => '1:30 PM – 2:30 PM', 'notes' => 'Lunch near Dancalan Beach.',
+        ]);
+        $this->assertSame(1, substr_count($html(), 'data:image/jpeg;base64'), 'The restaurant stop has its photo.');
+
+        // A lunch break during a visit.
+        $lagoon = ItineraryItem::where('itinerary_id', $this->itinerary->id)->where('sequence', 1)->firstOrFail();
+        $lagoon->update(['time_slot' => '8:00 AM – 1:00 PM']);
+        $meal->update(['sequence' => 1, 'time_slot' => '11:30 AM – 12:30 PM', 'notes' => 'Lunch break during your visit to Paguriran Lagoon.']);
+        $box = substr($html(), strpos($html(), 'class="meal-box"'));
+        $this->assertStringContainsString('data:image/jpeg;base64', substr($box, 0, strpos($box, 'Sea Grill') + 400));
     }
 
     public function test_the_document_escapes_what_a_tourist_typed(): void

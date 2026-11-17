@@ -102,6 +102,7 @@
     .meal-box { margin-top: 5px; padding: 6px 9px; background: #fff7ed; border-left: 3px solid #ea580c; border-radius: 0 6px 6px 0; }
     .meal-label { font-size: 7.5px; font-weight: bold; letter-spacing: 1px; color: #9a3412; text-transform: uppercase; }
     .meal-box .place { font-size: 11px; }
+    .meal-head { page-break-inside: avoid; }
 
     .leg { margin: 5px 0 6px 84px; padding: 4px 9px; background: #f4f6f8; border-radius: 6px; color: #4b5563; font-size: 8.5px; page-break-inside: avoid; }
     .leg-arrow { color: #0f7a94; font-weight: bold; }
@@ -118,7 +119,8 @@
         h1 { font-size: 23px; }
         .facts td { display: block; width: auto; }
         .g-time { width: auto; white-space: normal; }
-        .stop-head td { display: block; width: auto; text-align: left; }
+        .stop-head td, .meal-head td { display: block; width: auto; text-align: left; }
+        .meal-head .t-photo { padding-left: 0; }
         .t-time { padding: 0 0 2px; }
         .t-start, .t-end { display: inline; }
         .t-photo { padding: 6px 0 0 13px; }
