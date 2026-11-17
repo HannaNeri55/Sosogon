@@ -6,7 +6,9 @@ export default function DestinationCard({ destination }) {
   const image =
     destination.images?.find((img) => img.is_primary) ||
     destination.images?.[0]
-  const imageUrl = getImageUrl(image, { thumbnail: true })
+  // The full photo, as on the detail page: the 400px thumbnail is stretched 2–3× in a card
+  // this wide and looks blurry. Photos are stored at most 1600px wide in WebP and load lazily.
+  const imageUrl = getImageUrl(image)
   const location = destination.municipality?.name || ''
   const rating = Number(destination.average_rating) || 0
 
@@ -21,6 +23,7 @@ export default function DestinationCard({ destination }) {
           alt={destination.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
+          decoding="async"
           onError={(e) => { e.target.onerror = null; e.target.src = IMAGE_FALLBACK_SVG }}
         />
         {destination.category?.name && (
