@@ -384,7 +384,7 @@ class ItineraryDocumentService
             ])->all(),
             'costNote' => $stop->cost_note,
             'cost' => (float) $stop->cost_max > 0 ? $this->pesoRange($stop->cost_min, $stop->cost_max) : null,
-            'image' => $isVisit ? $this->embedImage($place) : null,
+            'image' => $this->embedImage($place),
         ];
     }
 
