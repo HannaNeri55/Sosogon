@@ -39,6 +39,9 @@ class ItineraryService
     /** A preference-matching listing wins if it is at most this much farther than the nearest one. */
     private const PREFERENCE_RADIUS_KM = 3;
 
+    /** A better-rated or better-priced stay may be at most this much farther than the nearest one of its type. */
+    private const STAY_CHOICE_KM = 10;
+
     /** "Near" for breakfast (the stay), lunch (the destination) and dinner (where the day ends). */
     private const NEARBY_KM = 3;
 
@@ -2187,20 +2190,21 @@ class ItineraryService
      * The approved accommodation for $town's days, in $town when it has any (else among the stays
      * about as near as the nearest one elsewhere). The stay type the tourist asked for comes
      * first (stayMatch()): an exact match whenever one is listed, however much nearer another
-     * kind is; else a close kind; else any stay. Among those, the nearest to $center, preferring
-     * the tourist's budget within PREFERENCE_RADIUS_KM of it. Anything but an exact match in the
-     * town and budget comes with a note that says so, and what kind of stay it is instead.
+     * kind is; else a close kind; else any stay. Among those within STAY_CHOICE_KM of the
+     * nearest, the best by stayCost(): closeness to $center, the tourist's budget and genuine
+     * guest ratings. Anything but an exact match in the town and budget comes with a note that
+     * says so, and what kind of stay it is instead.
      *
      * @return array{0: ?Accommodation, 1: ?string, 2: ?string}
      */
     private function chooseStay(array $center, array $preferences, int $town, string $townName): array
     {
         $pool = Accommodation::approved()->with(['municipality:id,name', 'estimates'])->where('municipality_id', $town)
-            ->whereNotNull('latitude')->whereNotNull('longitude')->get();
+            ->whereNotNull('latitude')->whereNotNull('longitude')->tap(fn ($query) => $this->withGenuineRatings($query))->get();
         $inTown = $pool->isNotEmpty();
         if (! $inTown) {
             $pool = Accommodation::approved()->with(['municipality:id,name', 'estimates'])
-                ->whereNotNull('latitude')->whereNotNull('longitude')->get();
+                ->whereNotNull('latitude')->whereNotNull('longitude')->tap(fn ($query) => $this->withGenuineRatings($query))->get();
             // The right type at the far end of the province isn't worth a long drive every day.
             $nearest = $pool->min(fn ($a) => $this->km($center, $a));
             $pool = $pool->filter(fn ($a) => $this->km($center, $a) <= $nearest + self::NEARBY_TOWN_KM)->values();
@@ -2212,18 +2216,25 @@ class ItineraryService
         $rank = fn ($a) => ['exact' => 2, 'close' => 1][$this->stayMatch($preferences, $a)] ?? 0;
         $best = $pool->max($rank);
         $budget = $this->budgetLevel($preferences);
-        $pick = $this->pickPlace($pool->filter(fn ($a) => $rank($a) === $best), [], fn ($a) => $this->km($center, $a), null, fn () => true,
-            fn ($a) => $a->price_range === $budget ? 1 : 0);
-
-        $stay = $pick['place'];
-        $km = number_format($pick['km'], 1);
+        $candidates = $pool->filter(fn ($a) => $rank($a) === $best);
+        $nearest = $candidates->min(fn ($a) => $this->km($center, $a));
+        $stay = $candidates->filter(fn ($a) => $this->km($center, $a) <= $nearest + self::STAY_CHOICE_KM)
+            ->sortBy([
+                fn ($a, $b) => $this->stayCost($center, $a, $budget) <=> $this->stayCost($center, $b, $budget),
+                fn ($a, $b) => $a->id <=> $b->id,
+            ])
+            ->first();
+        $km = number_format($this->km($center, $stay), 1);
         $match = $this->stayMatch($preferences, $stay);
         $typeMatched = $match === 'exact';
         // A cheaper stay than the budget is no reason to apologize.
         $levels = ['budget' => 1, 'moderate' => 2, 'luxury' => 3];
         $budgetMatched = ($levels[$stay->price_range] ?? 0) <= ($levels[$budget] ?? 3);
 
-        $reason = "Your base in {$townName}, {$km} km from the center of the places you'll visit there, so those days start and end with a short trip.";
+        $rated = $this->genuineRating($stay);
+        $reason = "Your base in {$townName}, {$km} km from the center of the places you'll visit there, so those days start and end with a short trip."
+            .($rated ? ' Rated '.round($rated['average'], 1)."/5 by {$rated['count']} guests." : '')
+            .($stay->price_range === $budget ? ' In your '.ucfirst($budget).' price range.' : '');
 
         if ($typeMatched && $budgetMatched && $inTown) {
             return [$stay, $reason, null];
@@ -2247,6 +2258,28 @@ class ItineraryService
             .($match === 'close' ? " It's the closest alternative to a {$typeLabel}, not an exact match: {$this->closeMatchReason($preferences, $stay)}." : '');
 
         return [$stay, $reason, $note];
+    }
+
+    /**
+     * How well a stay suits the trip, as km of driving (lower is better): its distance from
+     * $center, plus 4 km per price level above the tourist's budget (2 when it lists none, 1
+     * when it's cheaper), less 4 km per point of a genuine guest rating above 3.5 (more when
+     * it's lower). A stay without enough genuine ratings is neither helped nor held back.
+     */
+    private function stayCost(array $center, Accommodation $stay, string $budget): float
+    {
+        $levels = ['budget' => 1, 'moderate' => 2, 'luxury' => 3];
+        $level = $levels[$stay->price_range] ?? null;
+        $wanted = $levels[$budget] ?? 2;
+        $priceCost = match (true) {
+            $level === null => 2,
+            $level > $wanted => 4 * ($level - $wanted),
+            $level < $wanted => 1,
+            default => 0,
+        };
+        $rated = $this->genuineRating($stay);
+
+        return $this->km($center, $stay) + $priceCost - ($rated ? ($rated['average'] - 3.5) * 4 : 0);
     }
 
     /**
@@ -4004,12 +4037,12 @@ class ItineraryService
     }
 
     /**
-     * A destination's genuine visitor rating, ['average' => 4.3, 'count' => 12], or null with
-     * fewer than MIN_GENUINE_RATINGS. Loaded once for a destination that came from another query.
+     * A destination's or stay's genuine visitor rating, ['average' => 4.3, 'count' => 12], or null
+     * with fewer than MIN_GENUINE_RATINGS. Loaded once for a listing that came from another query.
      *
      * @return array{average: float, count: int}|null
      */
-    private function genuineRating(Destination $destination): ?array
+    private function genuineRating(Destination|Accommodation $destination): ?array
     {
         if (! array_key_exists('genuine_rating_count', $destination->getAttributes())) {
             $genuine = fn ($ratings) => $ratings->genuine();
