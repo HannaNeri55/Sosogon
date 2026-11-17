@@ -9,6 +9,7 @@ import {
   FiTrash2,
   FiRotateCcw,
   FiPlus,
+  FiThumbsUp,
   FiRepeat,
   FiAlertTriangle,
   FiCoffee,
@@ -155,9 +156,9 @@ const BACKUP_LINKS = { destination: '/destinations', food_beverage: '/food-bever
 
 // The day's Plan B for rain or delays: nearby indoor places not in the trip, and which outdoor
 // stop is easiest to shorten or skip (worked out by the server from verified listings).
-// Folded until the tourist needs it, so it doesn't lengthen the day.
+// Open by default; the tourist can fold it away.
 function PlanB({ backup }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   return (
     <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50">
       <button
@@ -320,10 +321,34 @@ function PicksList({ title, options, picks }) {
   )
 }
 
-// The names of the recommended dishes or souvenirs, for the stop's one-line summary.
-function pickNames(options, picks) {
-  const byId = new Map(options.map((o) => [o.id, o.name]))
-  return picks.map((pick) => byId.get(pick.id)).filter(Boolean)
+// A reminder that starts with its topic ("What to wear: …", "Food: …").
+const LABELLED = /^([A-Z][A-Za-z ]{2,24}):\s+(.+)$/
+
+/**
+ * The planner's reminders for a stop (what to wear, food, boat and weather checks, hours to
+ * confirm…), one per line instead of one long paragraph, each topic in bold.
+ */
+export function GoodToKnow({ note, className = 'mt-3' }) {
+  const lines = (note || '').split(/(?<=[.!?])\s+(?=[A-Z])/).map((line) => line.trim()).filter(Boolean)
+  if (lines.length === 0) return null
+  return (
+    <div className={`rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 ${className}`}>
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-800">
+        <FiAlertTriangle size={13} aria-hidden="true" /> Good to know
+      </p>
+      <ul className="mt-1.5 space-y-1 text-sm text-amber-950 leading-relaxed">
+        {lines.map((line, i) => {
+          const labelled = line.match(LABELLED)
+          return (
+            <li key={`${i}-${line.slice(0, 20)}`} className="flex gap-2">
+              <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+              <span>{labelled ? <><span className="font-semibold">{labelled[1]}:</span> {labelled[2]}</> : line}</span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
 }
 
 // The planner's default opener ("Visit Subic Beach.") says nothing the stop's name doesn't.
@@ -334,155 +359,146 @@ function shownNotes(stop, listing) {
 }
 
 /**
- * A stop at the trip's stay (arriving, checking in or out, a meal or a rest there): one slim
- * row, since the stay itself is shown with its photo above the days.
+ * A stop at the trip's stay (arriving, checking in or out, a meal or a rest there): a compact
+ * card with a small photo, since the stay is shown in full above the days.
  */
 function StayStopRow({ stop, action = null }) {
   const { listing, badge } = placeFor(stop)
-  const [open, setOpen] = useState(false)
   const notes = shownNotes(stop, listing)
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700">
-          <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
-        </span>
-        {badge && <span className="font-medium text-gray-800">{badge}</span>}
-        <span className="text-gray-500">· {listing?.name || 'Your stay'}</span>
-        {action}
+    <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 sm:px-4">
+      <div className="flex gap-3">
+        <img
+          src={getImageUrl(listing?.images?.[0]?.image_path)}
+          alt={listing?.name || 'Your stay'}
+          className="h-14 w-14 shrink-0 rounded-lg object-cover bg-gray-200"
+          loading="lazy"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="inline-flex items-center gap-1 font-semibold text-primary-700">
+              <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
+            </span>
+            {badge && <span className="font-medium text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded">{badge}</span>}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="font-heading font-semibold text-gray-900">{listing?.name || 'Your stay'}</p>
+            {action}
+          </div>
+          {notes && <p className="mt-0.5 text-sm text-gray-600 leading-relaxed">{notes}</p>}
+        </div>
       </div>
-      {notes && <p className="mt-1 text-sm text-gray-600 leading-relaxed line-clamp-2">{notes}</p>}
-      {stop.preference_note && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((shown) => !shown)}
-            aria-expanded={open}
-            className="mt-1 inline-flex items-center gap-1 py-0.5 text-xs font-semibold text-primary-600 hover:text-primary-700"
-          >
-            {open ? 'Hide note' : 'Note'} {open ? <FiChevronUp size={13} aria-hidden="true" /> : <FiChevronDown size={13} aria-hidden="true" />}
-          </button>
-          {open && <PreferenceNote note={stop.preference_note} className="mt-2" />}
-        </>
-      )}
+      <GoodToKnow note={stop.preference_note} className="mt-2.5" />
     </div>
   )
 }
 
 /**
- * One stop, kept short so the day reads at a glance: when, where, why in a line or two, and
- * what to do there as a timed list. The rest (the place's description, tips and reminders,
- * what each activity involves, the dishes or souvenirs with photos) opens under "More details".
+ * One stop, in clear sections: the photo beside when, where and what it costs; the place's
+ * description (two lines, "Read more" for the rest); why it's recommended; the schedule there,
+ * one activity per row; the recommended dishes or souvenirs; and the reminders as a list.
  * action: a button shown beside the place's name.
  */
 function StopDetails({ stop, compact = false, action = null, hideDescription = false }) {
   const { listing, link, badge } = placeFor(stop)
-  const [open, setOpen] = useState(false)
+  const [readMore, setReadMore] = useState(false)
   const picks = stop.item_type === 'food_beverage'
     ? { title: 'Recommended dishes', options: dishOptions(stop), picks: picksFrom(stop.dishes) }
     : stop.item_type === 'retail_shop'
       ? { title: 'Recommended souvenirs', options: souvenirOptions(stop), picks: picksFrom(stop.souvenirs) }
       : null
-  const picked = picks ? pickNames(picks.options, picks.picks) : []
   const notes = shownNotes(stop, listing)
-  const described = (stop.activities || []).filter((activity) => activity.description)
   const description = listing?.description && !hideDescription ? listing.description : ''
-  const hasMore = Boolean(description || stop.preference_note || described.length > 0 || picked.length > 0)
-  const detailsId = `stop-details-${stop.id ?? stop.tempId ?? listing?.id ?? 'x'}`
 
   return (
-    <div className={`flex gap-3 sm:gap-4 ${compact ? '' : 'p-3 sm:p-4 rounded-xl border border-gray-100 bg-white'}`}>
-      <div className={`${compact ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-16 h-16 sm:w-20 sm:h-20'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
-        <img
-          src={getImageUrl(listing?.images?.[0]?.image_path)}
-          alt={listing?.name || 'Stop'}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
+    <div className={compact ? '' : 'rounded-xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm'}>
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <div className={`${compact ? 'w-full h-28 sm:w-24 sm:h-20' : 'w-full h-44 sm:w-40 sm:h-28'} rounded-lg overflow-hidden shrink-0 bg-gray-100`}>
+          <img
+            src={getImageUrl(listing?.images?.[0]?.image_path)}
+            alt={listing?.name || 'Stop'}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="inline-flex items-center gap-1 font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
+              <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
+            </span>
+            {badge && <span className="font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{badge}</span>}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5">
+            {link ? (
+              <Link to={link} className="text-base font-heading font-semibold text-gray-900 hover:text-primary-600 transition-colors">
+                {listing.name}
+              </Link>
+            ) : (
+              <p className="text-base font-heading font-semibold text-gray-900">{listing?.name || 'Listing no longer available'}</p>
+            )}
+            {action}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
+            {listing?.average_rating > 0 && <StarDisplay rating={listing.average_rating} size={12} />}
+            {listing?.municipality?.name && (
+              <span className="flex items-center gap-1">
+                <FiMapPin size={11} aria-hidden="true" /> {listing.municipality.name}
+              </span>
+            )}
+            {stop.duration_minutes > 0 && <span>{stop.duration_minutes} min</span>}
+            {stop.cost_note && (
+              <span>
+                {Number(stop.cost_max) > 0 && <span className="font-medium text-gray-700">{formatPesoRange(stop.cost_min, stop.cost_max)} · </span>}
+                {stop.cost_note}
+              </span>
+            )}
+          </div>
+
+          {description && (
+            <div className="mt-2">
+              <p className={`text-sm text-gray-500 leading-relaxed ${readMore ? '' : 'line-clamp-2'}`}>{description}</p>
+              {description.length > 140 && (
+                <button type="button" onClick={() => setReadMore((open) => !open)} className="mt-0.5 text-xs font-semibold text-primary-600 hover:text-primary-700">
+                  {readMore ? 'Show less' : 'Read more'}
+                </button>
+              )}
+            </div>
+          )}
+          {notes && <p className="text-sm text-gray-700 mt-1.5 leading-relaxed">{notes}</p>}
+        </div>
       </div>
 
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="inline-flex items-center gap-1 font-semibold text-primary-700">
-            <FiClock size={11} aria-hidden="true" /> {stop.time_slot}
+      {stop.reason && (
+        <p className="mt-3 flex gap-2 rounded-lg bg-primary-50/70 px-3 py-2 text-sm text-gray-700 leading-relaxed">
+          <FiThumbsUp size={14} className="mt-0.5 shrink-0 text-primary-600" aria-hidden="true" />
+          <span>
+            <span className="font-semibold text-primary-800">Why we recommend it:</span> {stop.reason}
           </span>
-          {badge && <span className="font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{badge}</span>}
         </p>
+      )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1">
-          {link ? (
-            <Link to={link} className="font-heading font-semibold text-gray-900 hover:text-primary-600 transition-colors">
-              {listing.name}
-            </Link>
-          ) : (
-            <p className="font-heading font-semibold text-gray-900">{listing?.name || 'Listing no longer available'}</p>
-          )}
-          {action}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
-          {listing?.average_rating > 0 && <StarDisplay rating={listing.average_rating} size={12} />}
-          {listing?.municipality?.name && (
-            <span className="flex items-center gap-1">
-              <FiMapPin size={11} aria-hidden="true" /> {listing.municipality.name}
-            </span>
-          )}
-          {stop.duration_minutes > 0 && <span>{stop.duration_minutes} min</span>}
-          {Number(stop.cost_max) > 0
-            ? <span className="font-medium text-gray-700">{formatPesoRange(stop.cost_min, stop.cost_max)}</span>
-            : stop.cost_note && <span>{stop.cost_note}</span>}
-        </div>
-
-        {stop.reason && <p className="text-sm text-gray-700 mt-2 leading-relaxed line-clamp-2">{stop.reason}</p>}
-        {notes && <p className="text-sm text-gray-600 mt-1.5 leading-relaxed line-clamp-2">{notes}</p>}
-        {picked.length > 0 && (
-          <p className="text-sm text-gray-700 mt-1.5">
-            <span className="font-medium">Try:</span> {picked.join(', ')}
-          </p>
-        )}
-
-        {stop.activities?.length > 0 && (
-          <ul className="mt-2.5 space-y-1 text-sm">
+      {stop.activities?.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Your schedule here</p>
+          <ol className="divide-y divide-gray-100 rounded-lg border border-gray-100">
             {stop.activities.map((activity, i) => (
-              <li key={`${i}-${activity.name}`} className="flex gap-3">
-                <span className="w-[7.5rem] sm:w-36 shrink-0 whitespace-nowrap text-[11px] sm:text-xs font-medium text-gray-500 pt-0.5 tabular-nums">{activity.time}</span>
-                <span className="text-gray-800">{activity.name}</span>
+              <li key={`${i}-${activity.name}`} className="flex gap-3 px-3 py-2">
+                <span className="w-[7.5rem] sm:w-36 shrink-0 whitespace-nowrap pt-0.5 text-[11px] sm:text-xs font-semibold text-primary-700 tabular-nums">{activity.time}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{activity.name}</p>
+                  {activity.description && <p className="text-xs text-gray-500 leading-relaxed">{activity.description}</p>}
+                </div>
               </li>
             ))}
-          </ul>
-        )}
+          </ol>
+        </div>
+      )}
 
-        {hasMore && (
-          <button
-            type="button"
-            onClick={() => setOpen((shown) => !shown)}
-            aria-expanded={open}
-            aria-controls={detailsId}
-            className="mt-2.5 inline-flex items-center gap-1 py-1 text-xs font-semibold text-primary-600 hover:text-primary-700"
-          >
-            {open ? 'Less details' : stop.preference_note ? 'More details & tips' : 'More details'}
-            {open ? <FiChevronUp size={13} aria-hidden="true" /> : <FiChevronDown size={13} aria-hidden="true" />}
-          </button>
-        )}
-
-        {hasMore && open && (
-          <div id={detailsId} className="mt-2 space-y-3 border-t border-gray-100 pt-3">
-            {description && <p className="text-sm text-gray-600 leading-relaxed">{description}</p>}
-            {described.length > 0 && (
-              <ul className="space-y-1.5 text-sm">
-                {described.map((activity, i) => (
-                  <li key={`${i}-${activity.name}`} className="text-gray-600 leading-relaxed">
-                    <span className="font-medium text-gray-800">{activity.name}:</span> {activity.description}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {stop.cost_note && Number(stop.cost_max) > 0 && <p className="text-xs text-gray-500">Cost: {stop.cost_note}</p>}
-            <PreferenceNote note={stop.preference_note} className="" />
-            {picks && <PicksList title={picks.title} options={picks.options} picks={picks.picks} />}
-          </div>
-        )}
-      </div>
+      {picks && <PicksList title={picks.title} options={picks.options} picks={picks.picks} />}
+      <GoodToKnow note={stop.preference_note} />
     </div>
   )
 }

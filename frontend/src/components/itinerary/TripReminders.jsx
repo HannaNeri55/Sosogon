@@ -74,9 +74,9 @@ function Section({ icon: Icon, title, items }) {
   )
 }
 
-// Folded by default, so the days come first; one tap opens the checklist.
+// Open by default, in four short lists; the tourist can fold it away.
 export default function TripReminders({ itinerary }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const { bring, arrange, safety, notes } = tripReminders(itinerary)
   return (
     <div className="bg-white rounded-xl border border-gray-100 mb-6">
