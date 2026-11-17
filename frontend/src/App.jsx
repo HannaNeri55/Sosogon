@@ -74,6 +74,7 @@ const ReviewSubmissions = lazy(() => import('./pages/admin/ReviewSubmissions'))
 const ReviewListings = lazy(() => import('./pages/admin/ReviewListings'))
 const AdminGuestReviews = lazy(() => import('./pages/admin/GuestReviews'))
 const FeedbackConcerns = lazy(() => import('./pages/admin/FeedbackConcerns'))
+const InformationVerification = lazy(() => import('./pages/admin/InformationVerification'))
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'))
 const ViolationRecords = lazy(() => import('./pages/admin/ViolationRecords'))
 const AccountAppeals = lazy(() => import('./pages/admin/AccountAppeals'))
@@ -186,6 +187,7 @@ export default function App() {
           <Route path="item-reviews" element={<ReviewItems />} />
           <Route path="guest-reviews" element={<AdminGuestReviews />} />
           <Route path="feedback" element={<FeedbackConcerns />} />
+          <Route path="verification" element={<InformationVerification />} />
           <Route path="users" element={<ManageUsers />} />
           <Route path="violations" element={<ViolationRecords />} />
           <Route path="appeals" element={<AccountAppeals />} />

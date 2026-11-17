@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\Destination;
+use App\Services\ListingVerifications;
 use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,6 +87,6 @@ class DestinationController extends Controller
 
         // Ranked purely by straight-line distance; a destination without usable
         // coordinates gets empty lists rather than a same-municipality guess.
-        return response()->json(['destination' => PublicData::strip($destination)] + $this->nearbyPlaces($destination, precision: 3));
+        return response()->json(['destination' => PublicData::strip($destination), 'verification' => app(ListingVerifications::class)->publicSummary($destination)] + $this->nearbyPlaces($destination, precision: 3));
     }
 }

@@ -875,6 +875,34 @@ export const updateAdminFeedback = async (id, payload) => {
   return response.data
 }
 
+// Information Verification. params: status (needs_attention, not_verified, changed, overdue, verified, all), type, municipality_id, search, page
+export const getVerifications = async (params = {}) => {
+  const response = await api.get('/admin/verifications', { params })
+  return response.data
+}
+
+export const getVerification = async (type, id) => {
+  const response = await api.get(`/admin/verifications/${type}/${id}`)
+  return response.data
+}
+
+// payload: { aspects: ['price', ...], note, fingerprints: { price: '…' } }
+export const verifyListing = async (type, id, payload) => {
+  const response = await api.post(`/admin/verifications/${type}/${id}`, payload)
+  return response.data
+}
+
+export const getVerificationSettings = async () => {
+  const response = await api.get('/admin/verification-settings')
+  return response.data
+}
+
+// payload: { overdue_days: { price, hours, contact, location } }
+export const updateVerificationSettings = async (payload) => {
+  const response = await api.put('/admin/verification-settings', payload)
+  return response.data
+}
+
 export const addAdminFeedbackNote = async (id, note) => {
   const response = await api.post(`/admin/feedback/${id}/notes`, { note })
   return response.data
