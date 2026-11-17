@@ -2,7 +2,7 @@
 import usePageTitle from '../../hooks/usePageTitle'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiTarget, FiMapPin, FiUsers, FiHome, FiCoffee, FiShoppingBag, FiArrowRight, FiCompass } from 'react-icons/fi'
+import { FiTarget, FiMapPin, FiUsers, FiHome, FiCoffee, FiShoppingBag, FiArrowRight, FiCompass, FiMessageSquare } from 'react-icons/fi'
 import { getDestinations } from '../../api/destinations'
 import { getAccommodations } from '../../api/accommodations'
 import { getFoodBeverages } from '../../api/foodBeverages'
@@ -142,6 +142,26 @@ export default function About() {
 
       {/* ==================== MUNICIPALITIES ==================== */}
       <MunicipalitiesSection />
+
+      {/* ==================== FEEDBACK ==================== */}
+      <section className="pb-16 sm:pb-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal className="flex flex-col gap-4 rounded-2xl border border-gray-200/70 bg-white p-6 shadow-(--shadow-card) sm:flex-row sm:items-center sm:justify-between sm:p-8">
+            <div className="flex gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                <FiMessageSquare size={19} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="font-heading text-xl font-semibold text-gray-900">Help us keep Sorsogon&apos;s information right</h2>
+                <p className="mt-1 text-sm text-gray-600">Spotted a wrong price, schedule or location, or have a suggestion? Tell the Tourism Office.</p>
+              </div>
+            </div>
+            <Link to="/feedback" className="btn-primary shrink-0 justify-center">
+              Feedback &amp; Concerns <FiArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </Reveal>
+        </div>
+      </section>
     </div>
   )
 }

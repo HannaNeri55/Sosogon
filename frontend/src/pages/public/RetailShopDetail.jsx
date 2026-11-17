@@ -11,6 +11,7 @@ import GuestReviewCarousel from '../../components/common/GuestReviewCarousel'
 import NearbyPlaces from '../../components/common/NearbyPlaces'
 import DetailHero from '../../components/common/DetailHero'
 import DetailLayout from '../../components/detail/DetailLayout'
+import ReportInfoLink from '../../components/detail/ReportInfoLink'
 import DetailSection from '../../components/detail/DetailSection'
 import FactsCard from '../../components/detail/FactsCard'
 import ProductDetailModal from '../../components/shops/ProductDetailModal'
@@ -96,6 +97,7 @@ export default function RetailShopDetail() {
 
       <DetailLayout
         aside={
+          <>
           <FactsCard
             facts={[
               { icon: FiMapPin, label: 'Address', value: shop.address },
@@ -110,6 +112,8 @@ export default function RetailShopDetail() {
             longitude={shop.longitude}
             website={shop.website}
           />
+          <ReportInfoLink type="retail_shop" id={shop.id} name={shop.name} />
+          </>
         }
       >
         {shop.products?.length > 0 ? (

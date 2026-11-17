@@ -13,6 +13,7 @@ import GuestReviewCarousel from "../../components/common/GuestReviewCarousel";
 import ReviewSection from "../../components/common/ReviewSection";
 import NearbyPlaces from "../../components/common/NearbyPlaces";
 import DetailLayout from "../../components/detail/DetailLayout";
+import ReportInfoLink from "../../components/detail/ReportInfoLink";
 import DetailSection from "../../components/detail/DetailSection";
 import DiningInfo from "../../components/detail/DiningInfo";
 import FactsCard from "../../components/detail/FactsCard";
@@ -93,6 +94,7 @@ export default function DestinationDetail() {
 
       <DetailLayout
         aside={
+          <>
           <FactsCard
             facts={[
               { icon: FiMapPin, label: "Municipality", value: destination.municipality?.name },
@@ -117,6 +119,8 @@ export default function DestinationDetail() {
               </Link>
             )}
           </FactsCard>
+          <ReportInfoLink type="destination" id={destination.id} name={destination.name} />
+          </>
         }
       >
         <DetailSection title="About this destination">

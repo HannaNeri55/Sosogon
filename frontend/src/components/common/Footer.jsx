@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FiArrowRight, FiMail, FiMapPin } from 'react-icons/fi'
+import { FiArrowRight, FiMail, FiMapPin, FiMessageSquare } from 'react-icons/fi'
 
 const EXPLORE = [
   { to: '/destinations', label: 'Destinations' },
@@ -12,6 +12,7 @@ const INFORMATION = [
   { to: '/events', label: 'Events' },
   { to: '/about', label: 'About' },
   { to: '/plan-trip', label: 'Plan Your Trip' },
+  { to: '/feedback', label: 'Feedback & Concerns' },
 ]
 
 export default function Footer() {
@@ -68,6 +69,10 @@ export default function Footer() {
               <li className="flex items-start gap-2">
                 <FiMail size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <a href="mailto:tourism@bulan.gov.ph" className="hover:text-white transition-colors break-all">tourism@bulan.gov.ph</a>
+              </li>
+              <li className="flex items-start gap-2">
+                <FiMessageSquare size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <Link to="/feedback" className="font-medium text-white hover:text-accent-400 transition-colors">Send feedback or report a concern</Link>
               </li>
             </ul>
           </div>

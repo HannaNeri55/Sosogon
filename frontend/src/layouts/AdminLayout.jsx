@@ -23,7 +23,9 @@ import {
   FiClipboard,
   FiAlertTriangle,
   FiMap,
+  FiMessageSquare,
 } from 'react-icons/fi'
+import { FEEDBACK_COUNT_CHANGED, getAdminFeedbackCount } from '../api/admin'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
 import NotificationBell from '../components/notifications/NotificationBell'
 import useAdminScope from '../hooks/useAdminScope'
@@ -93,6 +95,13 @@ const sidebarLinks = [
     label: 'Guest Reviews',
   },
   {
+    // Feedback & Concerns from the public site; the badge counts open feedback this admin handles.
+    to: '/admin/feedback',
+    icon: FiMessageSquare,
+    label: 'Feedback & Concerns',
+    badge: 'feedback',
+  },
+  {
     to: '/admin/users',
     icon: FiUsers,
     label: 'Users',
@@ -131,6 +140,21 @@ export default function AdminLayout() {
   const inApprovals = isApprovalPath(pathname)
   const [approvalsToggled, setApprovalsToggled] = useState(false)
   const approvalsOpen = inApprovals || approvalsToggled
+
+  // Open feedback waiting on this admin: counted on load, on each page change and after a change.
+  const [badges, setBadges] = useState({})
+  useEffect(() => {
+    let current = true
+    const count = () => getAdminFeedbackCount()
+      .then((data) => current && setBadges((b) => ({ ...b, feedback: data.open_count })))
+      .catch(() => {})
+    count()
+    window.addEventListener(FEEDBACK_COUNT_CHANGED, count)
+    return () => {
+      current = false
+      window.removeEventListener(FEEDBACK_COUNT_CHANGED, count)
+    }
+  }, [pathname])
 
   // Phones only: the sidebar is a slide-in drawer.
   // From md up, it stays visible as before.
@@ -256,7 +280,13 @@ export default function AdminLayout() {
                 className="shrink-0"
               />
 
-              <span>{link.label}</span>
+              <span className="flex-1">{link.label}</span>
+              {link.badge && badges[link.badge] > 0 && (
+                <span className="min-w-5 rounded-full bg-accent-400 px-1.5 py-0.5 text-center text-[11px] font-bold leading-none text-gray-900">
+                  {badges[link.badge] > 99 ? '99+' : badges[link.badge]}
+                  <span className="sr-only"> open</span>
+                </span>
+              )}
             </NavLink>
           ),
           ])}
