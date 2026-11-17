@@ -10,6 +10,7 @@ import GuestReviewCarousel from '../../components/common/GuestReviewCarousel'
 import NearbyPlaces from '../../components/common/NearbyPlaces'
 import DetailHero from '../../components/common/DetailHero'
 import DetailLayout from '../../components/detail/DetailLayout'
+import ReportInfoLink from '../../components/detail/ReportInfoLink'
 import DetailSection from '../../components/detail/DetailSection'
 import FactsCard from '../../components/detail/FactsCard'
 import DiningInfo from '../../components/detail/DiningInfo'
@@ -95,6 +96,7 @@ export default function FoodBeverageDetail() {
 
       <DetailLayout
         aside={
+          <>
           <FactsCard
             facts={[
               { icon: FiMapPin, label: 'Address', value: item.address },
@@ -115,6 +117,8 @@ export default function FoodBeverageDetail() {
             longitude={item.longitude}
             website={item.website}
           />
+          <ReportInfoLink type="food_beverage" id={item.id} name={item.name} />
+          </>
         }
       >
         <DetailSection title="About this place">

@@ -849,3 +849,33 @@ export const downloadReviewReportEvidence = async (id) => {
   const response = await api.get(`/admin/review-reports/${id}/evidence`, { responseType: 'blob' })
   return response.data
 }
+
+// Feedback & Concerns from the public site. params: status (open, all, pending, under_review, resolved, rejected), category, search, page
+export const getAdminFeedback = async (params = {}) => {
+  const response = await api.get('/admin/feedback', { params })
+  return response.data
+}
+
+export const getAdminFeedbackItem = async (id) => {
+  const response = await api.get(`/admin/feedback/${id}`)
+  return response.data
+}
+
+// Sent on window after an admin changes feedback, so the menu badge counts again.
+export const FEEDBACK_COUNT_CHANGED = 'feedback-count-changed'
+
+export const getAdminFeedbackCount = async () => {
+  const response = await api.get('/admin/feedback-count')
+  return response.data
+}
+
+// payload: { status, note }
+export const updateAdminFeedback = async (id, payload) => {
+  const response = await api.put(`/admin/feedback/${id}`, payload)
+  return response.data
+}
+
+export const addAdminFeedbackNote = async (id, note) => {
+  const response = await api.post(`/admin/feedback/${id}/notes`, { note })
+  return response.data
+}

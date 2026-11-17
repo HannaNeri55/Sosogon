@@ -26,7 +26,7 @@ class PageViewController extends Controller
 {
     /** Public pages without an id in their address. */
     private const PAGES = ['/', '/destinations', '/accommodations', '/food-beverage', '/shops', '/events', '/about',
-        '/plan-trip', '/search', '/photo-credits', '/privacy-policy', '/terms-and-conditions'];
+        '/plan-trip', '/search', '/photo-credits', '/privacy-policy', '/terms-and-conditions', '/feedback'];
 
     public function store(Request $request): Response
     {

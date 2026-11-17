@@ -18,6 +18,7 @@ const SECTIONS = [
       'Business submission details — business name, type, address, municipality and barangay, contact number, operating hours, business permit number, and owner identification for business owner applications.',
       'Uploaded files — business permit documents and images of accommodations, food establishments, or products submitted for listing.',
       'Itinerary planner inputs — your travel preferences, trip duration, and selected destinations, used to generate personalized itineraries.',
+      'Feedback & Concerns messages — what you write, and your name and email address only if you choose to give them (see Feedback & Concerns below).',
       'Basic usage information such as pages visited, used to help the Tourism Office understand how the platform is used.',
     ],
   },
@@ -25,6 +26,13 @@ const SECTIONS = [
     title: 'How We Use Your Information',
     body: [
       'We use the information we collect to create and authenticate your account, display approved business listings to the public, generate itinerary recommendations, allow Tourism Office administrators to review and approve business submissions, and send you transactional emails such as submission status updates and password reset links.',
+    ],
+  },
+  {
+    title: 'Feedback & Concerns',
+    body: [
+      'You can send feedback, suggestions or concerns through the Feedback & Concerns form without giving your name or email address. If you choose to give them, we use your name only to address you, and your email address only to reply to your message when you ask for a reply. They are seen only by the Tourism Office administrators who handle your message, are never shown on the website, and are not used for marketing or shared with third parties.',
+      'To prevent spam and repeated messages, we keep a scrambled code made from your internet connection’s address instead of the address itself. Your message and any contact details are kept with its reference number for as long as the Tourism Office needs them to handle it and keep a record; you may ask the Tourism Office to delete them.',
     ],
   },
   {
@@ -94,7 +102,7 @@ export default function PrivacyPolicy() {
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-4">
         <h1 className="text-3xl font-heading font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500">Last updated: September 23, 2026</p>
+        <p className="text-sm text-gray-500">Last updated: November 18, 2026</p>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16 space-y-6">

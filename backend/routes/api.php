@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminDestinationController;
 use App\Http\Controllers\Api\Admin\AdminEventController;
+use App\Http\Controllers\Api\Admin\AdminFeedbackController;
 use App\Http\Controllers\Api\Admin\AdminFoodBeverageController;
 use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
 use App\Http\Controllers\Api\Admin\AdminItemReviewController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\Api\Public\AmenitySuggestionController;
 use App\Http\Controllers\Api\Public\AnnouncementController;
 use App\Http\Controllers\Api\Public\DestinationController;
 use App\Http\Controllers\Api\Public\EventController;
+use App\Http\Controllers\Api\Public\FeedbackController;
 use App\Http\Controllers\Api\Public\FoodBeverageController;
 use App\Http\Controllers\Api\Public\HeroSlideController;
 use App\Http\Controllers\Api\Public\ItineraryFileController;
@@ -105,6 +107,11 @@ Route::prefix('v1')->group(function () {
 
     // Search
     Route::get('/search', [SearchController::class, 'search'])->middleware('throttle:60,1');
+
+    // Feedback & Concerns (guests too). Sent messages have their own limit (FeedbackController);
+    // this one only stops a flood of requests, so correcting a form a few times is fine.
+    Route::get('/feedback/options', [FeedbackController::class, 'options']);
+    Route::post('/feedback', [FeedbackController::class, 'store'])->middleware('throttle:30,1');
 
     // A shared itinerary, read-only, for whoever holds the secret link its owner created.
     Route::middleware('throttle:60,1')->where(['token' => '[A-Za-z0-9]{48}'])->group(function () {
@@ -270,6 +277,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::get('/review-reports', [AdminReviewReportController::class, 'index']);
         Route::put('/review-reports/{id}', [AdminReviewReportController::class, 'update']);
         Route::get('/review-reports/{id}/evidence', [AdminReviewReportController::class, 'evidence']);
+        // Feedback & Concerns from the public site
+        Route::get('/feedback', [AdminFeedbackController::class, 'index']);
+        Route::get('/feedback-count', [AdminFeedbackController::class, 'openCount']);
+        Route::get('/feedback/{id}', [AdminFeedbackController::class, 'show']);
+        Route::put('/feedback/{id}', [AdminFeedbackController::class, 'update']);
+        Route::post('/feedback/{id}/notes', [AdminFeedbackController::class, 'storeNote']);
 
         // Content CRUD — explicitly named to avoid colliding with the public "show" route
         // names of the same resources (e.g. public `destinations.show` vs this `destinations.show`).

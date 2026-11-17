@@ -12,6 +12,7 @@ import ReviewSection from "../../components/common/ReviewSection";
 import GuestReviewCarousel from "../../components/common/GuestReviewCarousel";
 import DetailHero from "../../components/common/DetailHero";
 import DetailLayout from "../../components/detail/DetailLayout";
+import ReportInfoLink from "../../components/detail/ReportInfoLink";
 import DetailSection from "../../components/detail/DetailSection";
 import FactsCard from "../../components/detail/FactsCard";
 import AmenityGrid from "../../components/detail/AmenityGrid";
@@ -105,6 +106,7 @@ export default function AccommodationDetail() {
 
       <DetailLayout
         aside={
+          <>
           <FactsCard
             facts={[
               { icon: FiMapPin, label: "Address", value: item.address },
@@ -130,6 +132,8 @@ export default function AccommodationDetail() {
             longitude={item.longitude}
             website={item.website}
           />
+          <ReportInfoLink type="accommodation" id={item.id} name={item.name} />
+          </>
         }
       >
         <DetailSection title="About this place">
