@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Admin\AdminReviewController;
 use App\Http\Controllers\Api\Admin\AdminReviewReportController;
 use App\Http\Controllers\Api\Admin\AdminSubmissionController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminVerificationController;
 use App\Http\Controllers\Api\Admin\AdminViolationController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Business\Accommodation\AccommodationOwnerController;
@@ -283,6 +284,12 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::get('/feedback/{id}', [AdminFeedbackController::class, 'show']);
         Route::put('/feedback/{id}', [AdminFeedbackController::class, 'update']);
         Route::post('/feedback/{id}/notes', [AdminFeedbackController::class, 'storeNote']);
+        // Information Verification: "last verified" for each part of a published listing's information
+        Route::get('/verifications', [AdminVerificationController::class, 'index']);
+        Route::get('/verification-settings', [AdminVerificationController::class, 'settings']);
+        Route::put('/verification-settings', [AdminVerificationController::class, 'updateSettings'])->middleware('admin.provincial');
+        Route::get('/verifications/{type}/{id}', [AdminVerificationController::class, 'show'])->where('type', 'destination|accommodation|food_beverage|retail_shop');
+        Route::post('/verifications/{type}/{id}', [AdminVerificationController::class, 'store'])->where('type', 'destination|accommodation|food_beverage|retail_shop');
 
         // Content CRUD — explicitly named to avoid colliding with the public "show" route
         // names of the same resources (e.g. public `destinations.show` vs this `destinations.show`).
