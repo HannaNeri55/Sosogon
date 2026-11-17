@@ -1877,7 +1877,10 @@ class ItineraryService
         return collect([$dawn, ...$ordered, $anchor])->filter()->values();
     }
 
-    /** Trimmed, length-capped text, or null when the AI gave nothing usable. */
+    /**
+     * Trimmed, length-capped text, or null when the AI gave nothing usable. Over the cap it ends
+     * at the last whole sentence that fits, never mid-sentence with "...".
+     */
     private function cleanText($value, int $limit = 500): ?string
     {
         if (! is_string($value)) {
@@ -1886,7 +1889,7 @@ class ItineraryService
 
         $text = trim(preg_replace('/\s+/', ' ', $value));
 
-        return $text === '' ? null : Str::limit($text, $limit);
+        return $text === '' ? null : (mb_strlen($text) <= $limit ? $text : $this->promptExcerpt($text, $limit));
     }
 
     /**
@@ -3543,7 +3546,8 @@ class ItineraryService
             $tips[] = $this->once('Bring a hat, sunscreen and drinking water: most of the visit is in the open.');
         }
         if ($destination->dining_details) {
-            $tips[] = $this->once('Food: '.rtrim(Str::limit(trim($destination->dining_details), 140), '.').'.');
+            // In full: hours and what's served are often at its end.
+            $tips[] = $this->once('Food: '.rtrim(trim(preg_replace('/\s+/', ' ', $destination->dining_details)), '.').'.');
         }
         // Activities that depend on the sea, the weather or the season: never promised.
         $activityNames = $destination->activities->pluck('name')->implode(' ').' '.$destination->name;
