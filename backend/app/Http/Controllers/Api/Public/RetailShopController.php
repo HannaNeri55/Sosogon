@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Concerns\FindsNearbyPlaces;
 use App\Http\Controllers\Controller;
 use App\Models\RetailShop;
-use App\Services\ListingVerifications;
 use App\Support\PublicData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,6 +62,6 @@ class RetailShopController extends Controller
         $shop->setAttribute('average_rating', round((float) $shop->ratings->avg('score'), 2));
         $shop->setAttribute('total_reviews', $shop->ratings->count());
 
-        return response()->json(PublicData::strip($shop)->toArray() + ['verification' => app(ListingVerifications::class)->publicSummary($shop)] + $this->nearbyPlaces($shop, 6));
+        return response()->json(PublicData::strip($shop)->toArray() + $this->nearbyPlaces($shop, 6));
     }
 }

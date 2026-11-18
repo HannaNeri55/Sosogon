@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
+use App\Models\Concerns\TracksInfoUpdates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Destination extends Model
 {
-    use HasEstimates;
+    use HasEstimates, TracksInfoUpdates;
 
     protected $fillable = [
         'name',
@@ -51,9 +52,37 @@ class Destination extends Model
     /** Where a visit happens: indoors, in the open air, or partly under cover. */
     public const SETTINGS = ['indoor', 'outdoor', 'mixed'];
 
+    /** The columns visitors see; a real change to one while public is a "Last Updated" (TracksInfoUpdates). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'dining_details',
+            'meals_offered',
+            'visitor_guidelines',
+            'category_id',
+            'municipality_id',
+            'barangay_id',
+            'address',
+            'latitude',
+            'longitude',
+            'operating_hours',
+            'entrance_fee',
+            'contact_number',
+            'website',
+        ];
+    }
+
+    public static function isPublicStatus(?string $status): bool
+    {
+        return $status === 'published';
+    }
+
     protected function casts(): array
     {
         return [
+            'info_updated_at' => 'datetime',
             'meals_offered' => 'array',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',

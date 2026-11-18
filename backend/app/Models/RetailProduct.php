@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPendingChanges;
+use App\Models\Concerns\UpdatesListingInfo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class RetailProduct extends Model
 {
-    use HasPendingChanges;
+    use HasPendingChanges, UpdatesListingInfo;
 
     protected $fillable = [
         'user_id',
@@ -32,6 +33,22 @@ class RetailProduct extends Model
         'approved_at',
         'approved_by',
     ];
+
+    /** The published details that are part of the listing's information (UpdatesListingInfo). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'product_type',
+            'price',
+        ];
+    }
+
+    public function infoListing(): ?Model
+    {
+        return $this->shop;
+    }
 
     protected function casts(): array
     {

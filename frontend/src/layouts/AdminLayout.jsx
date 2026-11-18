@@ -24,7 +24,6 @@ import {
   FiAlertTriangle,
   FiMap,
   FiMessageSquare,
-  FiCheckCircle,
 } from 'react-icons/fi'
 import { FEEDBACK_COUNT_CHANGED, getAdminFeedbackCount } from '../api/admin'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
@@ -75,12 +74,6 @@ const sidebarLinks = [
     to: '/admin/announcements',
     icon: FiBell,
     label: 'Announcements',
-  },
-  {
-    // When each listing's prices, location, hours and contact details were last checked.
-    to: '/admin/verification',
-    icon: FiCheckCircle,
-    label: 'Information Verification',
   },
   {
     section: 'Approvals',
