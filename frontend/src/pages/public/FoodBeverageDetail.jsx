@@ -11,7 +11,7 @@ import NearbyPlaces from '../../components/common/NearbyPlaces'
 import DetailHero from '../../components/common/DetailHero'
 import DetailLayout from '../../components/detail/DetailLayout'
 import ReportInfoLink from '../../components/detail/ReportInfoLink'
-import VerificationInfo from '../../components/detail/VerificationInfo'
+import LastUpdated from '../../components/detail/LastUpdated'
 import DetailSection from '../../components/detail/DetailSection'
 import FactsCard from '../../components/detail/FactsCard'
 import DiningInfo from '../../components/detail/DiningInfo'
@@ -118,7 +118,7 @@ export default function FoodBeverageDetail() {
             longitude={item.longitude}
             website={item.website}
           />
-          <VerificationInfo verification={item.verification} />
+          <LastUpdated date={item.info_updated_at} />
           <ReportInfoLink type="food_beverage" id={item.id} name={item.name} />
           </>
         }

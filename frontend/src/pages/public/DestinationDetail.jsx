@@ -14,7 +14,7 @@ import ReviewSection from "../../components/common/ReviewSection";
 import NearbyPlaces from "../../components/common/NearbyPlaces";
 import DetailLayout from "../../components/detail/DetailLayout";
 import ReportInfoLink from "../../components/detail/ReportInfoLink";
-import VerificationInfo from "../../components/detail/VerificationInfo";
+import LastUpdated from "../../components/detail/LastUpdated";
 import DetailSection from "../../components/detail/DetailSection";
 import DiningInfo from "../../components/detail/DiningInfo";
 import FactsCard from "../../components/detail/FactsCard";
@@ -36,7 +36,6 @@ export default function DestinationDetail() {
   const { id } = useParams();
   const { isAuthenticated, isTourist } = useAuth();
   const [destination, setDestination] = useState(null);
-  const [verification, setVerification] = useState(null);
   usePageTitle(destination?.name);
   // The nearby_* lists and their radius, straight from the API response.
   const [nearby, setNearby] = useState(null);
@@ -48,7 +47,6 @@ export default function DestinationDetail() {
     try {
       const data = await getDestination(id);
       setDestination(data.destination);
-      setVerification(data.verification ?? null);
       setNearby(data);
       setLoadFailed(false);
     } catch (e) {
@@ -122,7 +120,7 @@ export default function DestinationDetail() {
               </Link>
             )}
           </FactsCard>
-          <VerificationInfo verification={verification} />
+          <LastUpdated date={destination.info_updated_at} source="tourismOffice" />
           <ReportInfoLink type="destination" id={destination.id} name={destination.name} />
           </>
         }
