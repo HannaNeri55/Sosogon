@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
 use App\Models\Concerns\HasPendingChanges;
+use App\Models\Concerns\UpdatesListingInfo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MenuItem extends Model
 {
-    use HasEstimates;
+    use HasEstimates, UpdatesListingInfo;
     use HasPendingChanges;
 
     protected $fillable = [
@@ -24,6 +25,21 @@ class MenuItem extends Model
         'approved_at',
         'approved_by',
     ];
+
+    /** The published details that are part of the listing's information (UpdatesListingInfo). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'price',
+        ];
+    }
+
+    public function infoListing(): ?Model
+    {
+        return $this->foodBeverage;
+    }
 
     protected function casts(): array
     {

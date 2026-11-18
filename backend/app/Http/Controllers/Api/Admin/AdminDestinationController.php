@@ -9,6 +9,7 @@ use App\Models\DestinationImage;
 use App\Models\ExperienceTag;
 use App\Services\ImageOptimizationService;
 use App\Support\AdminScope;
+use App\Support\InfoValue;
 use Database\Seeders\ExperienceTagSeeder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -298,6 +299,7 @@ class AdminDestinationController extends Controller
 
         // Save destination details together in one transaction
         DB::transaction(function () use ($destination, $validated, $details, $experiences, $request) {
+            $pricesBefore = $this->priceRows($destination);
             $destination->update($validated);
             $this->saveExperiences($destination, $experiences, $request);
 
@@ -329,6 +331,11 @@ class AdminDestinationController extends Controller
                 foreach ($details['amenities'] as $amenity) {
                     $destination->amenities()->create($amenity);
                 }
+            }
+
+            // Fees and rates are saved anew each time: only a real change is a "Last Updated".
+            if ($this->priceRows($destination) !== $pricesBefore) {
+                $destination->markInfoUpdated();
             }
         });
 
@@ -669,5 +676,14 @@ class AdminDestinationController extends Controller
         return response()->json([
             'message' => 'This save was already submitted. Please wait for it to finish.',
         ], 409);
+    }
+
+    /** The destination's fees and rates as visitors see them, to tell a real change from a re-save. */
+    private function priceRows(Destination $destination): array
+    {
+        $rows = fn ($relation) => $destination->{$relation}()->orderBy('sort_order')->orderBy('id')->get(['label', 'amount', 'description'])
+            ->map(fn ($row) => array_map([InfoValue::class, 'normalize'], [$row->label, $row->amount, $row->description]))->all();
+
+        return ['fees' => $rows('fees'), 'rates' => $rows('rates')];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPendingChanges;
+use App\Models\Concerns\UpdatesListingInfo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class AccommodationRoom extends Model
 {
-    use HasPendingChanges;
+    use HasPendingChanges, UpdatesListingInfo;
 
     public const UNIT_TYPES = ['room', 'villa', 'cottage', 'cabin', 'guest_house', 'entire_property', 'other'];
 
@@ -48,6 +49,33 @@ class AccommodationRoom extends Model
         'approved_at',
         'approved_by',
     ];
+
+    /** The published details that are part of the listing's information (UpdatesListingInfo). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'unit_type',
+            'unit_count',
+            'category',
+            'price',
+            'price_max',
+            'pricing_mode',
+            'price_note',
+            'max_guests',
+            'bedrooms',
+            'bed_configuration',
+            'size_sqm',
+            'room_features',
+            'breakfast_included',
+        ];
+    }
+
+    public function infoListing(): ?Model
+    {
+        return $this->accommodation;
+    }
 
     protected function casts(): array
     {

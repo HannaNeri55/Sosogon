@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
 use App\Models\Concerns\KeepsSubmissionMunicipality;
+use App\Models\Concerns\TracksInfoUpdates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Accommodation extends Model
 {
-    use HasEstimates, KeepsSubmissionMunicipality;
+    use HasEstimates, KeepsSubmissionMunicipality, TracksInfoUpdates;
 
     /** business_submissions.type for this kind of listing. */
     public const SUBMISSION_TYPE = 'accommodation';
@@ -63,9 +64,41 @@ class Accommodation extends Model
         });
     }
 
+    /** The columns visitors see; a real change to one while public is a "Last Updated" (TracksInfoUpdates). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'type',
+            'classifications',
+            'offering_arrangement',
+            'municipality_id',
+            'barangay_id',
+            'address',
+            'latitude',
+            'longitude',
+            'price_range',
+            'contact_number',
+            'email',
+            'website',
+            'operating_hours',
+            'check_in_time',
+            'check_out_time',
+            'amenities',
+            'dining_details',
+        ];
+    }
+
+    public static function isPublicStatus(?string $status): bool
+    {
+        return $status === 'approved';
+    }
+
     protected function casts(): array
     {
         return [
+            'info_updated_at' => 'datetime',
             'amenities' => 'array',
             'classifications' => 'array',
             'approved_at' => 'datetime',

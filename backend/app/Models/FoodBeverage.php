@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
 use App\Models\Concerns\KeepsSubmissionMunicipality;
+use App\Models\Concerns\TracksInfoUpdates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class FoodBeverage extends Model
 {
-    use HasEstimates, KeepsSubmissionMunicipality;
+    use HasEstimates, KeepsSubmissionMunicipality, TracksInfoUpdates;
 
     /** business_submissions.type for this kind of listing. */
     public const SUBMISSION_TYPE = 'food_beverage';
@@ -41,9 +42,36 @@ class FoodBeverage extends Model
         'approved_by',
     ];
 
+    /** The columns visitors see; a real change to one while public is a "Last Updated" (TracksInfoUpdates). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'cuisine_type',
+            'meals_served',
+            'specialties',
+            'municipality_id',
+            'barangay_id',
+            'address',
+            'latitude',
+            'longitude',
+            'price_range',
+            'contact_number',
+            'website',
+            'operating_hours',
+        ];
+    }
+
+    public static function isPublicStatus(?string $status): bool
+    {
+        return $status === 'approved';
+    }
+
     protected function casts(): array
     {
         return [
+            'info_updated_at' => 'datetime',
             'meals_served' => 'array',
             'approved_at' => 'datetime',
             'latitude' => 'decimal:7',

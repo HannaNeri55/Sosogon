@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasEstimates;
 use App\Models\Concerns\KeepsSubmissionMunicipality;
+use App\Models\Concerns\TracksInfoUpdates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class RetailShop extends Model
 {
-    use HasEstimates, KeepsSubmissionMunicipality;
+    use HasEstimates, KeepsSubmissionMunicipality, TracksInfoUpdates;
 
     /** business_submissions.type for this kind of listing. */
     public const SUBMISSION_TYPE = 'retail_product';
@@ -36,9 +37,32 @@ class RetailShop extends Model
         'approved_by',
     ];
 
+    /** The columns visitors see; a real change to one while public is a "Last Updated" (TracksInfoUpdates). */
+    protected function infoFields(): array
+    {
+        return [
+            'name',
+            'description',
+            'product_categories',
+            'municipality_id',
+            'barangay_id',
+            'address',
+            'latitude',
+            'longitude',
+            'contact_number',
+            'operating_hours',
+        ];
+    }
+
+    public static function isPublicStatus(?string $status): bool
+    {
+        return $status === 'approved';
+    }
+
     protected function casts(): array
     {
         return [
+            'info_updated_at' => 'datetime',
             'product_categories' => 'array',
             'approved_at' => 'datetime',
             'latitude' => 'decimal:7',
