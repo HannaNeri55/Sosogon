@@ -4787,6 +4787,14 @@ class ItineraryService
             ->first();
     }
 
+    /** Whether the planner can read $hours: times it understands, or always open ("24 hours", "Open Access"). */
+    public function readsHours(?string $hours): bool
+    {
+        $text = trim((string) $hours);
+
+        return $text !== '' && (preg_match('/24\s*(hours|\/\s*7)|open access|always open/i', $text) || $this->openingHours($text, null) !== null);
+    }
+
     /**
      * Opening hours on $date as [open, close] in minutes after midnight (close past midnight
      * when needed), or null when the place is always open or its hours can't be read.
@@ -4797,12 +4805,15 @@ class ItineraryService
     private function openingHours(?string $hours, ?Carbon $date): ?array
     {
         $text = trim((string) $hours);
-        if ($text === '' || preg_match('/24\s*(hours|\/\s*7)|open access/i', $text)) {
+        if ($text === '' || preg_match('/24\s*(hours|\/\s*7)|open access|always open/i', $text)) {
             return null;
         }
         if (preg_match('/^daytime$/i', $text)) {
             return [360, 1080];
         }
+        // "12:00 MN" / "midnight" and "12:00 NN" / "noon", as Philippine listings write them.
+        $text = preg_replace(['/\b12(?::00)?\s*(?:mn|midnight)\b/i', '/\b12(?::00)?\s*(?:nn|noon)\b/i', '/\bmidnight\b/i', '/\bnoon\b/i'],
+            ['12:00 AM', '12:00 PM', '12:00 AM', '12:00 PM'], $text);
 
         $days = ['mon' => 1, 'tue' => 2, 'wed' => 3, 'thu' => 4, 'fri' => 5, 'sat' => 6, 'sun' => 7];
         if ($date && preg_match_all('/\b(mon|tue|wed|thu|fri|sat|sun)\w*(?:\s*(?:-|–|to)\s*(mon|tue|wed|thu|fri|sat|sun)\w*)?\s*:\s*([^|]+)/i', $text, $segments, PREG_SET_ORDER)) {
@@ -4819,7 +4830,7 @@ class ItineraryService
         }
 
         $time = '(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?';
-        if (! preg_match("/{$time}\s*(?:-|–|to)\s*{$time}/i", $text, $m)) {
+        if (! preg_match("/{$time}\s*(?:-|–|to|until)\s*{$time}/i", $text, $m)) {
             return null;
         }
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\AdminAccommodationRoomController;
 use App\Http\Controllers\Api\Admin\AdminAccountEnforcementController;
 use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
+use App\Http\Controllers\Api\Admin\AdminDataChecksController;
 use App\Http\Controllers\Api\Admin\AdminDestinationController;
 use App\Http\Controllers\Api\Admin\AdminEventController;
 use App\Http\Controllers\Api\Admin\AdminFeedbackController;
@@ -283,6 +284,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::get('/feedback/{id}', [AdminFeedbackController::class, 'show']);
         Route::put('/feedback/{id}', [AdminFeedbackController::class, 'update']);
         Route::post('/feedback/{id}/notes', [AdminFeedbackController::class, 'storeNote']);
+        // Data Checks: problems in public listings that make trips worse (read-only)
+        Route::get('/data-checks', [AdminDataChecksController::class, 'index']);
 
         // Content CRUD — explicitly named to avoid colliding with the public "show" route
         // names of the same resources (e.g. public `destinations.show` vs this `destinations.show`).
