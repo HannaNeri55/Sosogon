@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Itinerary extends Model
 {
@@ -85,6 +86,29 @@ class Itinerary extends Model
         $ids = $this->municipalities()->pluck('municipalities.id')->map(fn ($id) => (int) $id)->all();
 
         return $ids ?: [(int) ($this->municipality_id ?? 1)];
+    }
+
+    /**
+     * Names of the towns the trip actually visits, in trip order: the towns of its destination
+     * stops. A planned town left with no stop isn't named; a trip with no destination stops
+     * falls back to the towns it was planned for.
+     *
+     * @return Collection<int, string>
+     */
+    public function visitedTownNames(): Collection
+    {
+        $this->loadMissing('items.destination.municipality:id,name');
+        $visited = $this->items->where('item_type', ItineraryItem::TYPE_DESTINATION)
+            ->map(fn ($item) => $item->destination?->municipality?->name)
+            ->filter()->unique()->values();
+        if ($visited->isNotEmpty()) {
+            return $visited;
+        }
+        $this->loadMissing(['municipalities:id,name', 'municipality:id,name']);
+
+        return $this->municipalities->pluck('name')
+            ->whenEmpty(fn ($names) => $names->push($this->municipality?->name)->filter())
+            ->values();
     }
 
     public function accommodation(): BelongsTo

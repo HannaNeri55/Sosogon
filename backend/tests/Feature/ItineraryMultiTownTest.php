@@ -174,9 +174,26 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertTrue($dayTowns->every(fn ($towns) => count($towns) === 1), 'A day never covers two towns.');
         $this->assertEqualsCanonicalizing(array_values($this->towns), $dayTowns->flatten()->all(), 'Each town gets a day of its own.');
 
-        // A 3-day trip has two nights, in the towns of days 1 and 2; the last town has no stay.
-        $this->assertCount(2, $itinerary->stays);
+        // A 3-day trip has two nights (a nearby town's day may be a day trip from the first stay).
+        $this->assertLessThanOrEqual(2, $itinerary->stays->count());
         $this->assertSame(2, $itinerary->stays->sum(fn ($s) => count($s->night_days)));
+    }
+
+    public function test_a_nearby_town_is_a_day_trip_from_the_stay_and_a_far_one_a_move(): void
+    {
+        // Irosin Falls is about 17 km from Bulan Inn: no packing up for it, though Irosin has a stay.
+        // Matnog is farther: the tourist moves there.
+        $irosinInn = $this->stay('irosin', 'Irosin Inn', 12.70, 124.03);
+        $this->reply = ['title' => 'Three towns', 'days' => [$this->day(1, 'bulanHill'), $this->day(2, 'irosinFalls'), $this->day(3, 'matnogCove'), $this->day(4, 'matnogIsland')]];
+
+        $this->generate(['bulan', 'irosin', 'matnog'], 4)->assertCreated();
+
+        $itinerary = Itinerary::with(['items', 'stays'])->latest('id')->firstOrFail();
+        $nights = $itinerary->stays->mapWithKeys(fn ($s) => [$s->accommodation_id => $s->night_days])->all();
+        $this->assertSame([1, 2], $nights[$this->ids['inn']], 'Both nights at Bulan Inn, Irosin as a day trip.');
+        $this->assertArrayNotHasKey($irosinInn, $nights);
+        $this->assertSame([3], collect($nights)->except([$this->ids['inn']])->flatten()->all(), 'Then the move to Matnog.');
+        $this->assertFalse($itinerary->items->contains(fn ($i) => $i->day_number === 2 && str_starts_with((string) $i->notes, 'Check out')), 'No check-out on the day trip.');
     }
 
     public function test_days_in_the_same_town_are_kept_together(): void
@@ -267,8 +284,10 @@ class ItineraryMultiTownTest extends TestCase
         $this->assertNotNull($picnic);
         // The lunch break starts where an activity ends between 11:00 and noon (here 11:30).
         $this->assertSame([690, 750], $this->minutes($picnic['time']));
-        // No activity ends between 11:00 and noon here, so the walk continues after lunch.
-        $this->assertCount(3, collect($visit->activities)->pluck('name')->map(fn ($n) => preg_replace('/ — your picnic lunch$/', '', $n))->unique());
+        // No activity ends between 11:00 and noon here, so the walk continues after lunch, and says so.
+        $names = collect($visit->activities)->pluck('name');
+        $this->assertCount(3, $names->map(fn ($n) => preg_replace('/ — your picnic lunch$| \(continued\)$/', '', $n))->unique());
+        $this->assertSame(1, $names->filter(fn ($n) => str_ends_with($n, ' (continued)'))->count());
     }
 
     public function test_a_stay_can_be_changed_within_its_town(): void

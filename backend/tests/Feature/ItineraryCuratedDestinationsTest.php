@@ -48,11 +48,13 @@ class ItineraryCuratedDestinationsTest extends TestCase
 
             public ?array $reply = null;
 
+            public string $title = 'Fixture trip';
+
             public function generate(string $prompt): string
             {
                 $this->prompts[] = $prompt;
                 if ($this->reply !== null) {
-                    return json_encode(['title' => 'Fixture trip', 'days' => $this->reply]);
+                    return json_encode(['title' => $this->title, 'days' => $this->reply]);
                 }
                 preg_match_all('/^ID:(\d+) \|/m', $prompt, $ids);
                 preg_match('/Create a (\d+)-day/', $prompt, $days);
@@ -62,7 +64,7 @@ class ItineraryCuratedDestinationsTest extends TestCase
                     $plan[] = ['day_number' => $n, 'title' => "Day {$n}", 'highlight_id' => $id, 'destinations' => $id ? [['destination_id' => $id, 'reason' => 'A fixture pick.']] : []];
                 }
 
-                return json_encode(['title' => 'Fixture trip', 'days' => $plan]);
+                return json_encode(['title' => $this->title, 'days' => $plan]);
             }
         };
         $this->app->instance(ItineraryAI::class, $this->ai);
@@ -287,16 +289,47 @@ class ItineraryCuratedDestinationsTest extends TestCase
         $this->assertGreaterThanOrEqual(360, (int) $subic->duration_minutes, 'Its activities are given the whole day.');
     }
 
-    public function test_a_late_start_at_subic_beach_still_includes_every_activity(): void
+    public function test_a_late_arrival_moves_subic_beach_to_a_whole_day(): void
     {
-        // Arriving at 11 AM, lunch comes right after registering, so the island hopping follows
-        // it and the swim's best time (midday) has passed by its turn: it's still done, and says
-        // when it's best, rather than being left out.
+        // Arriving at 11 AM leaves too little of Day 1 for a full-day destination, so it trades
+        // places with Day 2 and gets the whole day there.
+        $this->ai->reply = [
+            ['day_number' => 1, 'destinations' => [['destination_id' => $this->ids['subic'], 'reason' => 'The island.']]],
+            ['day_number' => 2, 'destinations' => [['destination_id' => $this->ids['matnogCove'], 'reason' => 'A picnic.']]],
+        ];
         $itinerary = $this->generate(['municipality_ids' => [$this->towns['Matnog']], 'interests' => ['beaches'], 'arrival_time' => '11:00'], 2);
 
         $subic = $this->stops($itinerary)->firstWhere('destination_id', $this->ids['subic']);
+        $this->assertSame(2, (int) $subic->day_number);
+        $this->assertGreaterThanOrEqual(360, (int) $subic->duration_minutes);
+        $this->assertSame(1, (int) $this->stops($itinerary)->firstWhere('destination_id', $this->ids['matnogCove'])->day_number);
+    }
+
+    public function test_subic_beach_on_the_departure_day_trades_places_with_a_whole_day(): void
+    {
+        // Leaving at 3 PM, the last day is too short for a full-day destination.
+        $this->ai->reply = [
+            ['day_number' => 1, 'destinations' => [['destination_id' => $this->ids['matnogCove'], 'reason' => 'A picnic.']]],
+            ['day_number' => 2, 'destinations' => [['destination_id' => $this->ids['subic'], 'reason' => 'The island.']]],
+        ];
+        $itinerary = $this->generate(['municipality_ids' => [$this->towns['Matnog']], 'interests' => ['beaches'], 'arrival_time' => '07:00', 'departure_time' => '15:00'], 2);
+
+        $subic = $this->stops($itinerary)->firstWhere('destination_id', $this->ids['subic']);
+        $this->assertSame(1, (int) $subic->day_number);
+        $this->assertGreaterThanOrEqual(360, (int) $subic->duration_minutes);
+        $this->assertSame(2, (int) $this->stops($itinerary)->firstWhere('destination_id', $this->ids['matnogCove'])->day_number);
+    }
+
+    public function test_a_late_start_at_subic_beach_still_includes_every_activity(): void
+    {
+        // A one-day trip arriving at 11 AM has no other day: lunch comes right after registering,
+        // so the island hopping follows it and the swim's best time (midday) has passed by its
+        // turn: it's still done, and says when it's best, rather than being left out.
+        $itinerary = $this->generate(['municipality_ids' => [$this->towns['Matnog']], 'interests' => ['beaches'], 'arrival_time' => '11:00'], 1);
+
+        $subic = $this->stops($itinerary)->firstWhere('destination_id', $this->ids['subic']);
         $this->assertNotNull($subic);
-        $this->assertSame(1, (int) $subic->day_number, 'Not pushed to another day.');
+        $this->assertSame(1, (int) $subic->day_number);
         $activities = collect($subic->activities);
         foreach (['Island hopping', 'Swimming & Snorkeling', 'Pink Sand Beach Walk'] as $name) {
             $this->assertTrue($activities->contains('name', $name), $name);
@@ -362,5 +395,47 @@ class ItineraryCuratedDestinationsTest extends TestCase
 
         // The saved trip opens as usual.
         $this->actingAs($this->tourist)->getJson("/api/v1/itineraries/{$itinerary->id}")->assertOk();
+    }
+
+    public function test_a_place_left_out_is_never_promised_by_the_title_the_town_note_or_the_header(): void
+    {
+        // Subic Beach opens too briefly to fit any day, so the planner leaves it out after the AI
+        // built its title around it.
+        DB::table('destinations')->where('id', $this->ids['subic'])->update(['operating_hours' => '6:00 AM - 7:00 AM']);
+        $this->ai->title = 'Lagoon, Surf and Pink Sand';
+        $this->ai->reply = [
+            ['day_number' => 1, 'destinations' => [['destination_id' => $this->ids['paguriran'], 'reason' => 'Lagoon.']]],
+            ['day_number' => 2, 'destinations' => [['destination_id' => $this->ids['lolaSayong'], 'reason' => 'Surf.']]],
+            ['day_number' => 3, 'destinations' => [['destination_id' => $this->ids['subic'], 'reason' => 'Pink sand.']]],
+        ];
+        $itinerary = $this->generate(['interests' => ['beaches']], 3);
+
+        $this->assertContains($this->ids['subic'], $this->offered(), 'The AI was offered it.');
+        $this->assertNotContains($this->ids['subic'], $this->stopIds($itinerary));
+        $this->assertStringStartsWith('3-Day Sorsogon Trip: ', $itinerary->title, 'Written again from the places that stayed.');
+        $this->assertStringNotContainsString('Subic', $itinerary->title);
+        $kept = $this->stops($itinerary)->pluck('destination.name')->all();
+        foreach (explode(', ', str_replace(' and ', ', ', substr($itinerary->title, strlen('3-Day Sorsogon Trip: ')))) as $name) {
+            $this->assertContains($name, $kept, "{$name} is in the trip.");
+        }
+
+        $note = (string) $itinerary->items->sortBy(['day_number', 'sequence'])->first()->preference_note;
+        $this->assertStringContainsString('You let SOSOGON choose the municipalities', $note);
+        $this->assertStringNotContainsString('Subic Beach', $note);
+        $visited = $this->stops($itinerary)->map(fn ($stop) => $stop->destination->municipality_id)->unique();
+        $towns = DB::table('municipalities')->whereIn('id', $visited)->pluck('name');
+        foreach (DB::table('municipalities')->whereNotIn('id', $visited)->pluck('name') as $town) {
+            $this->assertStringNotContainsString("{$town},", $note.',', "{$town} has no stop, so it isn't named.");
+        }
+        $this->assertEqualsCanonicalizing($towns->all(), $itinerary->visitedTownNames()->all(), 'The PDF header names the towns visited.');
+    }
+
+    public function test_a_title_that_promises_nothing_left_out_is_kept(): void
+    {
+        $this->ai->title = 'Lagoon, Surf and Pink Sand';
+        $itinerary = $this->generate(['interests' => ['beaches']], 3);
+
+        $this->assertContains($this->ids['subic'], $this->stopIds($itinerary));
+        $this->assertSame('Lagoon, Surf and Pink Sand', $itinerary->title);
     }
 }

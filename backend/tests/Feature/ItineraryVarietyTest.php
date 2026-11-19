@@ -186,18 +186,28 @@ class ItineraryVarietyTest extends TestCase
         }
         $place->load('activities');
 
-        foreach (['relaxed' => 300, 'moderate' => 240, 'packed' => 180] as $pace => $cap) {
+        $listed = ['Kite flying', 'Tree planting', 'Bird feeding', 'Fishing', 'Painting'];
+        foreach (['relaxed', 'moderate', 'packed'] as $pace) {
             $planned = collect($this->helper('plannedActivities', $place, $place, $pace, null))->reject(fn ($a) => $a['label'] === 'prep');
-            $this->assertCount(6, $planned, $pace);
-            $this->assertLessThanOrEqual($cap, $planned->sum('duration'), $pace);
+            $others = $planned->reject(fn ($a) => $a['name'] === 'Picnic')->values();
+            $this->assertTrue($planned->contains('name', 'Picnic'), "{$pace}: the picnic is the visit's lunch, so it always stays.");
+            $this->assertNotEmpty($others, $pace);
+            $this->assertLessThan(count($listed), $others->count(), "{$pace}: not every listed activity.");
+            $this->assertLessThanOrEqual($this->helper('visitBudget', $place, $pace), $others->sum('duration'), $pace);
             $this->assertGreaterThanOrEqual(30, $planned->min('duration'), 'Every activity keeps at least half an hour.');
+            $this->assertSame(array_slice($listed, 0, $others->count()), $others->pluck('name')->all(), "{$pace}: taken in their listed order.");
         }
 
-        // A length the listing gives is kept as listed.
-        DB::table('activities')->where('destination_id', $place->id)->where('name', 'Fishing')->update(['duration_minutes' => 180]);
+        // A length the listing gives is kept as listed; one longer than the whole visit is cut to it.
+        DB::table('activities')->where('destination_id', $place->id)->where('name', 'Kite flying')->update(['duration_minutes' => 45]);
         $place->load('activities');
         $planned = collect($this->helper('plannedActivities', $place, $place, 'moderate', null));
-        $this->assertSame(180, $planned->firstWhere('name', 'Fishing')['duration']);
+        $this->assertSame(45, $planned->firstWhere('name', 'Kite flying')['duration']);
+
+        DB::table('activities')->where('destination_id', $place->id)->where('name', 'Kite flying')->update(['duration_minutes' => 600]);
+        $place->load('activities');
+        $planned = collect($this->helper('plannedActivities', $place, $place, 'moderate', null));
+        $this->assertSame(intdiv($this->helper('visitBudget', $place, 'moderate'), 5) * 5, $planned->firstWhere('name', 'Kite flying')['duration']);
         $this->assertSame(30, $planned->firstWhere('name', 'Picnic')['duration'], 'The others share what is left, at least 30 minutes each.');
     }
 

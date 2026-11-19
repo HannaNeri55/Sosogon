@@ -242,7 +242,9 @@ class ItineraryTripOptionsTest extends TestCase
         // The last day holds fewer stops the earlier the tourist leaves; other days keep the pace's.
         $target = fn (string $time) => (new \ReflectionMethod(ItineraryService::class, 'dayTarget'))->invoke(app(ItineraryService::class), 2, $this->request(['departure_time' => $time]));
         $this->assertSame(0, $target('08:30'));
-        $this->assertSame(2, $target('12:00'));
+        // The plan ends an hour before leaving, to get to the bus, boat or flight.
+        $this->assertSame(1, $target('12:00'));
+        $this->assertSame(2, $target('13:00'));
         $this->assertSame(3, $target('20:00'));
         $this->assertSame(3, (new \ReflectionMethod(ItineraryService::class, 'dayTarget'))->invoke(app(ItineraryService::class), 2, $this->request()));
     }

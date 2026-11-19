@@ -152,10 +152,11 @@ class ListingEnrichmentTest extends TestCase
     public function test_a_destination_with_its_own_food_serves_lunch_without_a_restaurant_stop(): void
     {
         $itinerary = $this->generateWithOnSiteFood(true);
-        $day2 = $itinerary->items->where('day_number', 2);
-        $visit = $day2->firstWhere('item_type', 'destination');
+        // The day the beach is visited (it fits Day 1 or stays on Day 2).
+        $visit = $itinerary->items->firstWhere('item_type', 'destination');
+        $day = $itinerary->items->where('day_number', $visit->day_number);
 
-        $this->assertFalse($day2->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch')), 'No separate lunch stop.');
+        $this->assertFalse($day->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch')), 'No separate lunch stop.');
         $lunch = collect($visit->activities)->firstWhere('name', 'Lunch at the on-site dining area');
         $this->assertNotNull($lunch);
         // Lunch starts between 11:00 AM and noon, and lasts an hour.
