@@ -145,12 +145,12 @@ class ItineraryGenerationTest extends TestCase
         ]);
     }
 
-    private function generate(int $travelers = 2, string $pace = 'moderate', string $budget = 'budget', ?string $notes = null): Itinerary
+    private function generate(int $travelers = 2, string $pace = 'moderate', string $budget = 'budget', ?string $notes = null, array $interests = ['nature']): Itinerary
     {
         $this->actingAs($this->tourist)->postJson('/api/v1/itineraries/generate', array_filter([
             'municipality_id' => $this->town,
             'num_days' => 3,
-            'interests' => ['nature'],
+            'interests' => $interests,
             'travel_pace' => $pace,
             'budget' => $budget,
             'travelers' => $travelers,
@@ -279,6 +279,9 @@ class ItineraryGenerationTest extends TestCase
         $this->assertSame([300.0], $prices($luxury->items->first(fn ($i) => $i->food_beverage_id === $this->ids['foodByHill'])->dishes));
         $this->assertSame([60.0, 90.0, 400.0], $prices($luxury->items->first(fn ($i) => $i->retail_shop_id === $this->ids['shop'])->souvenirs));
         $this->assertSame(['Suite'], $luxury->rooms->pluck('category')->all(), 'The top room category.');
+        // One traveller: the best room that fits one, not a suite for four.
+        $solo = $this->generate(travelers: 1, budget: 'luxury');
+        $this->assertSame(['Deluxe'], $solo->rooms->pluck('category')->all());
         $this->assertGreaterThan((float) $moderate->accommodation_cost_max, (float) $luxury->accommodation_cost_max);
     }
 
@@ -304,7 +307,10 @@ class ItineraryGenerationTest extends TestCase
         $packed = $this->generate(pace: 'packed', notes: 'Early start, we want the sunrise.');
         [$start, $end] = $this->activityOn($packed, 2, 'Sunrise Viewing');
         $this->assertSame(45, $end - $start);
-        $this->assertTrue($packed->items->contains(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda')));
+        // A merienda isn't added just to fill a packed day: only for a tourist who picked Food.
+        $this->assertFalse($packed->items->contains(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda')));
+        $foodie = $this->generate(pace: 'packed', notes: 'Early start, we want the sunrise.', interests: ['nature', 'food']);
+        $this->assertTrue($foodie->items->contains(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda')));
     }
 
     public function test_each_visit_lists_only_its_own_activities(): void

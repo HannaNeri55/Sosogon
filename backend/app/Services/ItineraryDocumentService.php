@@ -73,9 +73,7 @@ class ItineraryDocumentService
      */
     public function filename(Itinerary $itinerary): string
     {
-        $towns = $itinerary->municipalities->pluck('name')->whenEmpty(
-            fn ($names) => $names->push($itinerary->municipality?->name)->filter()
-        );
+        $towns = $itinerary->visitedTownNames();
         $place = $towns->count() > 2 || $towns->isEmpty() ? 'Sorsogon' : $towns->implode(' ');
         $date = ($itinerary->start_date ?? $itinerary->created_at ?? now())->format('Y-m-d');
 
@@ -103,9 +101,7 @@ class ItineraryDocumentService
             'itinerary' => $itinerary,
             'logo' => $this->embedLogo(),
             'dates' => $this->datesLabel($itinerary),
-            'towns' => $itinerary->municipalities->pluck('name')->whenEmpty(
-                fn ($names) => $names->push($itinerary->municipality?->name)->filter()
-            )->implode(', '),
+            'towns' => $itinerary->visitedTownNames()->implode(', '),
             'transportLabel' => $guide[0],
             'travelers' => $travelers,
             'cost' => $itinerary->estimated_cost_max === null ? null : $this->pesoRange($itinerary->estimated_cost_min, $itinerary->estimated_cost_max),

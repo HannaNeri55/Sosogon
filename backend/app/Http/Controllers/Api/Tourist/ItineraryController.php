@@ -167,7 +167,7 @@ class ItineraryController extends Controller
     {
         $itinerary->load(['municipality:id,name', 'municipalities:id,name', 'stays.municipality:id,name', 'stays.accommodation:id,name', 'items.destination.images']);
         $destinationStops = $itinerary->items->where('item_type', ItineraryItem::TYPE_DESTINATION);
-        $towns = $itinerary->municipalities->pluck('name')->whenEmpty(fn () => collect([$itinerary->municipality?->name])->filter());
+        $towns = $itinerary->visitedTownNames();
 
         return [
             'title' => $itinerary->title,

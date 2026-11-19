@@ -331,7 +331,7 @@ class ItineraryMealQualityTest extends TestCase
         $this->assertStringNotContainsString('fast food', $note);
         // A cuisine that is listed in town but used up is explained (said once per trip, without apologizing).
         $note = $this->helper('foodNote', FoodBeverage::find($this->ids['eatery']), 'lunch', Destination::find($this->ids['camp']), ['budget' => 'budget', 'food_preference' => 'seafood'], true, false);
-        $this->assertStringContainsString('The closest seafood place near', $note);
+        $this->assertStringContainsString('No unused seafood place is listed close to', $note);
     }
 
     public function test_a_stay_with_an_unspecified_type_is_described_honestly(): void
