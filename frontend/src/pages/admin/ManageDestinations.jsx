@@ -312,6 +312,17 @@ export default function ManageDestinations() {
     resetPhotoChanges();
   };
 
+  // ?edit=<id> (a "Fix it" link from Data Checks) opens that destination's form once the list has loaded.
+  const editRequested = searchParams.get("edit");
+  useEffect(() => {
+    if (!editRequested || items.length === 0) return;
+    const item = items.find((d) => String(d.id) === editRequested);
+    setSearchParams((params) => { params.delete("edit"); return params; }, { replace: true });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (item && item.can_manage !== false) startEdit(item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequested, items]);
+
   const addPhotos = (files) => {
     const room = MAX_NEW_PHOTOS_PER_SAVE - newPhotos.length;
     if (files.length > room) {

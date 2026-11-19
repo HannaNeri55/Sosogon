@@ -879,3 +879,9 @@ export const addAdminFeedbackNote = async (id, note) => {
   const response = await api.post(`/admin/feedback/${id}/notes`, { note })
   return response.data
 }
+
+// Data Checks: problems in public listings (read-only)
+export const getAdminDataChecks = async () => {
+  const response = await api.get('/admin/data-checks')
+  return response.data
+}
