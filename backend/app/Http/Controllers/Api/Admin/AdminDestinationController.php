@@ -21,6 +21,10 @@ use Illuminate\Validation\ValidationException;
 
 class AdminDestinationController extends Controller
 {
+    private const MESSAGES = [
+        'dining_details.required_with' => "Say what's served here, or untick the meals.",
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $query = AdminScope::apply(Destination::query(), $request->user())->with([
@@ -95,15 +99,21 @@ class AdminDestinationController extends Controller
             'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
             // The same place's accommodation listing (a resort listed both ways).
             'accommodation_id' => 'nullable|integer',
+            // Food sold at the place itself: what tourists read, and the meals the trip planner serves there.
+            'dining_details' => 'nullable|string|max:1000|required_with:meals_offered',
+            'meals_offered' => 'sometimes|array',
+            'meals_offered.*' => 'in:'.implode(',', Destination::MEALS),
+            'meals_present' => 'sometimes|boolean',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             // Which of the uploaded photos (0-based) is the cover; defaults to the first.
             'cover_new_index' => 'nullable|integer|min:0',
-        ]);
+        ], self::MESSAGES);
         // A municipal admin adds destinations to their own municipality only.
         AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
         AdminScope::guardProvincialFields($request->user(), $validated, null);
         $this->checkAccommodationLink($validated['accommodation_id'] ?? null, (int) $validated['municipality_id'], null);
+        $validated = $this->withMeals($validated);
         $experiences = $this->experienceInput($request, $validated, null);
 
         $coverNewIndex = (int) ($validated['cover_new_index'] ?? 0);
@@ -273,6 +283,11 @@ class AdminDestinationController extends Controller
             'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
             // The same place's accommodation listing (a resort listed both ways).
             'accommodation_id' => 'nullable|integer',
+            // Food sold at the place itself: what tourists read, and the meals the trip planner serves there.
+            'dining_details' => 'nullable|string|max:1000|required_with:meals_offered',
+            'meals_offered' => 'sometimes|array',
+            'meals_offered.*' => 'in:'.implode(',', Destination::MEALS),
+            'meals_present' => 'sometimes|boolean',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'remove_image_ids' => 'sometimes|array',
@@ -280,10 +295,11 @@ class AdminDestinationController extends Controller
             // Cover choice: an existing photo's id, or the 0-based index of a new upload.
             'cover_image_id' => 'nullable|integer',
             'cover_new_index' => 'nullable|integer|min:0',
-        ]);
+        ], self::MESSAGES);
         // Moving a destination to another municipality is a provincial decision.
         AdminScope::authorizeTransfer($request->user(), $destination, $validated['municipality_id'] ?? null);
         AdminScope::guardProvincialFields($request->user(), $validated, $destination);
+        $validated = $this->withMeals($validated);
         if (array_key_exists('accommodation_id', $validated)) {
             $this->checkAccommodationLink($validated['accommodation_id'], (int) ($validated['municipality_id'] ?? $destination->municipality_id), $destination->id);
         } elseif (isset($validated['municipality_id']) && $destination->accommodation_id && (int) $validated['municipality_id'] !== (int) $destination->municipality_id) {
@@ -410,6 +426,20 @@ class AdminDestinationController extends Controller
      * administrator's ranking of places across the province, for any municipality's destination,
      * including one managed by its own municipal tourism office.
      */
+    /**
+     * The meals served on site as sent: the form says meals_present even when every box is
+     * unticked (an empty list isn't sent), and then none are served there.
+     */
+    private function withMeals(array $validated): array
+    {
+        if (! empty($validated['meals_present'])) {
+            $validated['meals_offered'] = array_values(array_intersect(Destination::MEALS, $validated['meals_offered'] ?? []));
+        }
+        unset($validated['meals_present']);
+
+        return $validated;
+    }
+
     /**
      * The approved accommodations a destination may be linked to (the same place listed for its
      * stays), in the admin's municipalities, with the destination each is already linked to.
