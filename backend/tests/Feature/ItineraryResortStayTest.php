@@ -167,4 +167,22 @@ class ItineraryResortStayTest extends TestCase
         $this->assertContains($this->ids['hillResort'], $visited);
         $this->assertContains($this->ids['beachResort'], $visited);
     }
+
+    public function test_staying_at_a_resort_linked_to_its_destination_is_no_separate_visit(): void
+    {
+        // Hilltop Resort is listed both ways: the destination for day visitors and an inn for its
+        // overnight guests (no pool listed on the inn, so only the link keeps the visit out).
+        $inn = Accommodation::create($this->listing('Hilltop Resort Rooms', 12.672, 123.884) + ['type' => 'Inn', 'price_range' => 'moderate', 'status' => 'approved'])->id;
+        DB::table('destinations')->where('id', $this->ids['hillResort'])->update(['accommodation_id' => $inn]);
+
+        $itinerary = $this->generate(['accommodation_id' => $inn]);
+
+        $this->assertNotContains($this->ids['hillResort'], $this->visited($itinerary), 'No trip to the place the tourist is staying at.');
+        $note = $itinerary->items->pluck('preference_note')->filter()->first(fn ($n) => str_contains($n, 'which is also the day-use Hilltop Resort'));
+        $this->assertNotNull($note);
+        $this->assertStringContainsString('confirm with the resort whether the entrance fee applies', $note);
+
+        // Staying elsewhere, it's an ordinary visit.
+        $this->assertContains($this->ids['hillResort'], $this->visited($this->generate(['accommodation_id' => $this->ids['hotel']])));
+    }
 }

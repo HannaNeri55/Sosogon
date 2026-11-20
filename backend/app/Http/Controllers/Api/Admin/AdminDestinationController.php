@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Accommodation;
 use App\Models\ActivityLog;
 use App\Models\Destination;
 use App\Models\DestinationImage;
@@ -33,6 +34,7 @@ class AdminDestinationController extends Controller
             'activities',
             'experienceTags',
             'experiencesReviewer:id,name',
+            'accommodation:id,name',
         ]);
 
         if ($request->filled('status')) {
@@ -91,6 +93,8 @@ class AdminDestinationController extends Controller
             'is_featured' => 'boolean',
             'tourism_priority' => 'nullable|in:'.implode(',', Destination::PRIORITIES),
             'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
+            // The same place's accommodation listing (a resort listed both ways).
+            'accommodation_id' => 'nullable|integer',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             // Which of the uploaded photos (0-based) is the cover; defaults to the first.
@@ -99,6 +103,7 @@ class AdminDestinationController extends Controller
         // A municipal admin adds destinations to their own municipality only.
         AdminScope::authorize($request->user(), (int) $validated['municipality_id']);
         AdminScope::guardProvincialFields($request->user(), $validated, null);
+        $this->checkAccommodationLink($validated['accommodation_id'] ?? null, (int) $validated['municipality_id'], null);
         $experiences = $this->experienceInput($request, $validated, null);
 
         $coverNewIndex = (int) ($validated['cover_new_index'] ?? 0);
@@ -266,6 +271,8 @@ class AdminDestinationController extends Controller
             'is_featured' => 'boolean',
             'tourism_priority' => 'nullable|in:'.implode(',', Destination::PRIORITIES),
             'setting' => 'nullable|in:'.implode(',', Destination::SETTINGS),
+            // The same place's accommodation listing (a resort listed both ways).
+            'accommodation_id' => 'nullable|integer',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'remove_image_ids' => 'sometimes|array',
@@ -277,6 +284,12 @@ class AdminDestinationController extends Controller
         // Moving a destination to another municipality is a provincial decision.
         AdminScope::authorizeTransfer($request->user(), $destination, $validated['municipality_id'] ?? null);
         AdminScope::guardProvincialFields($request->user(), $validated, $destination);
+        if (array_key_exists('accommodation_id', $validated)) {
+            $this->checkAccommodationLink($validated['accommodation_id'], (int) ($validated['municipality_id'] ?? $destination->municipality_id), $destination->id);
+        } elseif (isset($validated['municipality_id']) && $destination->accommodation_id && (int) $validated['municipality_id'] !== (int) $destination->municipality_id) {
+            // Moved to another municipality: its old town's accommodation is no longer the same place.
+            $validated['accommodation_id'] = null;
+        }
         $experiences = $this->experienceInput($request, $validated, $destination);
 
         $coverImageId = isset($validated['cover_image_id']) ? (int) $validated['cover_image_id'] : null;
@@ -397,6 +410,50 @@ class AdminDestinationController extends Controller
      * administrator's ranking of places across the province, for any municipality's destination,
      * including one managed by its own municipal tourism office.
      */
+    /**
+     * The approved accommodations a destination may be linked to (the same place listed for its
+     * stays), in the admin's municipalities, with the destination each is already linked to.
+     */
+    public function accommodationOptions(Request $request): JsonResponse
+    {
+        $towns = AdminScope::municipalityIds($request->user());
+        $options = Accommodation::approved()
+            ->when($towns !== null, fn ($q) => $q->whereIn('municipality_id', $towns))
+            ->with('dayUseDestination:id,name,accommodation_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'municipality_id'])
+            ->map(fn (Accommodation $stay) => [
+                'id' => $stay->id,
+                'name' => $stay->name,
+                'municipality_id' => $stay->municipality_id,
+                'linked_destination_id' => $stay->dayUseDestination?->id,
+            ]);
+
+        return response()->json(['data' => $options]);
+    }
+
+    /**
+     * A destination's accommodation link must name an approved accommodation in the same
+     * municipality that no other destination is linked to.
+     */
+    private function checkAccommodationLink(?int $accommodationId, int $municipalityId, ?int $destinationId): void
+    {
+        if ($accommodationId === null) {
+            return;
+        }
+        $stay = Accommodation::approved()->find($accommodationId);
+        $other = $stay ? Destination::where('accommodation_id', $stay->id)->when($destinationId, fn ($q) => $q->whereKeyNot($destinationId))->first() : null;
+        $message = match (true) {
+            ! $stay => 'Choose an approved accommodation on SOSOGON.',
+            (int) $stay->municipality_id !== $municipalityId => "{$stay->name} is in another municipality. Link an accommodation in the same municipality as this destination.",
+            $other !== null => "{$stay->name} is already linked to {$other->name}.",
+            default => null,
+        };
+        if ($message !== null) {
+            throw ValidationException::withMessages(['accommodation_id' => $message]);
+        }
+    }
+
     public function updateRanking(Request $request, int $id): JsonResponse
     {
         $destination = Destination::findOrFail($id);

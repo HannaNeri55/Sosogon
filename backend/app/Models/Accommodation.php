@@ -8,6 +8,7 @@ use App\Models\Concerns\TracksInfoUpdates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Accommodation extends Model
@@ -116,6 +117,12 @@ class Accommodation extends Model
     public function municipality(): BelongsTo
     {
         return $this->belongsTo(Municipality::class);
+    }
+
+    /** The destination listing of the same place, for day visitors (a resort listed both ways). */
+    public function dayUseDestination(): HasOne
+    {
+        return $this->hasOne(Destination::class);
     }
 
     public function barangay(): BelongsTo

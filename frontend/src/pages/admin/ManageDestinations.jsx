@@ -18,6 +18,7 @@ import {
   getMunicipalities,
   getCategories,
   getExperienceTags,
+  getDestinationAccommodationOptions,
 } from "../../api/admin";
 import { getImageUrl, oneTimeToken } from "../../utils/helpers";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
@@ -65,6 +66,8 @@ const EMPTY_FORM = {
   is_featured: false,
   tourism_priority: "",
   setting: "",
+  // The same place's accommodation listing (a resort visited for the day and stayed at).
+  accommodation_id: "",
 
   fees: [],
   rates: [],
@@ -117,6 +120,7 @@ export default function ManageDestinations() {
   const [municipalities, setMunicipalities] = useState([]);
   const [categories, setCategories] = useState([]);
   const [experienceTags, setExperienceTags] = useState([]);
+  const [stayOptions, setStayOptions] = useState([]);
   // The saved review of the destination being edited ({ at, by }), shown while it stays reviewed.
   const [savedReview, setSavedReview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -199,15 +203,18 @@ export default function ManageDestinations() {
   };
 
   const loadMeta = async () => {
-    const [m, c, tags] = await Promise.all([
+    const [m, c, tags, stays] = await Promise.all([
       getMunicipalities(),
       getCategories("destination"),
       // The form still works without the vocabulary (the Experiences section just stays empty).
       getExperienceTags().catch(() => []),
+      // Or without the accommodation list (the link field just has no choices).
+      getDestinationAccommodationOptions().catch(() => []),
     ]);
     setMunicipalities(m);
     setCategories(c);
     setExperienceTags(tags);
+    setStayOptions(stays);
   };
 
   useEffect(() => {
@@ -235,6 +242,7 @@ export default function ManageDestinations() {
       is_featured: !!item.is_featured,
       tourism_priority: item.tourism_priority || "",
       setting: item.setting || "",
+      accommodation_id: item.accommodation_id ? String(item.accommodation_id) : "",
 
       fees: (item.fees || []).map((fee) => ({
         label: fee.label || "",
@@ -383,7 +391,7 @@ export default function ManageDestinations() {
         if (scope.isMunicipal && ["is_featured", "tourism_priority"].includes(key)) return;
 
         // Sent even when empty, so a classification can be cleared.
-        if (["tourism_priority", "setting"].includes(key)) {
+        if (["tourism_priority", "setting", "accommodation_id"].includes(key)) {
           payload.append(key, formData[key] || "");
           return;
         }
@@ -934,6 +942,31 @@ export default function ManageDestinations() {
                 <option value="mixed">Partly covered</option>
               </select>
               <span className="mt-1 block text-xs text-gray-500">Only Indoor places are suggested as rainy-day alternatives.</span>
+            </label>
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 mb-1">Also an accommodation on SOSOGON?</span>
+              <select
+                name="accommodation_id"
+                value={formData.accommodation_id}
+                onChange={(e) => setFormData({ ...formData, accommodation_id: e.target.value })}
+                className="input-field"
+              >
+                <option value="">No, only visited for the day</option>
+                {stayOptions
+                  .filter((stay) => String(stay.municipality_id) === String(formData.municipality_id))
+                  .map((stay) => {
+                    const taken = stay.linked_destination_id && stay.linked_destination_id !== editingId;
+                    return (
+                      <option key={stay.id} value={stay.id} disabled={taken}>
+                        {stay.name}{taken ? " (linked to another destination)" : ""}
+                      </option>
+                    );
+                  })}
+              </select>
+              <span className="mt-1 block text-xs text-gray-500">
+                For a resort that has rooms too. Its guests aren&apos;t sent on a separate visit, and each page links to the other.
+              </span>
+              <FieldError form={form} name="accommodation_id" />
             </label>
           </div>
 

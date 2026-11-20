@@ -15,6 +15,7 @@ import NearbyPlaces from "../../components/common/NearbyPlaces";
 import DetailLayout from "../../components/detail/DetailLayout";
 import ReportInfoLink from "../../components/detail/ReportInfoLink";
 import LastUpdated from "../../components/detail/LastUpdated";
+import SamePlaceLink from "../../components/detail/SamePlaceLink";
 import DetailSection from "../../components/detail/DetailSection";
 import DiningInfo from "../../components/detail/DiningInfo";
 import FactsCard from "../../components/detail/FactsCard";
@@ -120,6 +121,11 @@ export default function DestinationDetail() {
               </Link>
             )}
           </FactsCard>
+          <SamePlaceLink
+            to={destination.accommodation && `/accommodations/${destination.accommodation.id}`}
+            title="You can stay here too"
+            text={`See the rooms and rates of ${destination.accommodation?.name}.`}
+          />
           <LastUpdated date={destination.info_updated_at} source="tourismOffice" />
           <ReportInfoLink type="destination" id={destination.id} name={destination.name} />
           </>

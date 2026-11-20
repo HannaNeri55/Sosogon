@@ -45,9 +45,12 @@ class ListingDataChecks
         $inTowns = fn (Builder $query) => $query->when($townIds !== null, fn ($q) => $q->whereIn('municipality_id', $townIds));
 
         $issues = collect();
-        $destinations = Destination::published()->tap($inTowns)->with(['municipality:id,name', 'activities'])->withCount(['images', 'fees'])->get();
+        $destinations = Destination::published()->tap($inTowns)->with(['municipality:id,name', 'category:id,name', 'activities'])->withCount(['images', 'fees'])->get();
+        // Approved stays, to spot a resort listed both ways but not linked.
+        $stays = Accommodation::approved()->get(['id', 'name', 'municipality_id']);
+        $linked = Destination::whereNotNull('accommodation_id')->pluck('accommodation_id')->map(fn ($id) => (int) $id)->all();
         foreach ($destinations as $place) {
-            $issues = $issues->concat($this->destination($place));
+            $issues = $issues->concat($this->destination($place, $stays->reject(fn ($stay) => in_array((int) $stay->id, $linked, true))));
         }
         $businesses = [
             'accommodation' => Accommodation::approved()->tap($inTowns)->with('municipality:id,name')->withCount(['images', 'rooms as priced_rooms_count' => fn ($q) => $q->where('status', 'approved')->where('price', '>', 0)]),
@@ -65,7 +68,7 @@ class ListingDataChecks
         return $issues->sortBy(fn ($i) => [$rank[$i['severity']], $i['municipality'] ?? '', $i['name'], $i['code']])->values();
     }
 
-    private function destination(Destination $place): array
+    private function destination(Destination $place, Collection $unlinkedStays): array
     {
         $issues = [];
         $add = function (string $severity, string $code, string $message) use (&$issues, $place) {
@@ -108,9 +111,28 @@ class ListingDataChecks
         if (mb_strlen(trim(strip_tags((string) $place->description))) < 80) {
             $add('low', 'short_description', 'The description is very short: tourists learn little about the place.');
         }
+        if ($place->accommodation_id === null && ($twin = $this->sameNameStay($place, $unlinkedStays))) {
+            $add('medium', 'unlinked_twin', "It looks like the same place as the accommodation \"{$twin->name}\". If it is, link them in its edit form (\"Also an accommodation on SOSOGON\"), so trips don't send its overnight guests on a separate visit.");
+        }
         $this->common($place, $add);
 
         return $issues;
+    }
+
+    /** An accommodation in the same municipality whose name is the destination's, apart from words like "resort" or "hotel" (see below). */
+    private function sameNameStay(Destination $place, Collection $stays): ?Model
+    {
+        $core = fn (string $name) => trim(preg_replace(['/[^\p{L}\p{N} ]+/u', '/\b(the|resort|hotel|inn|beach|and|place|spring|springs)\b/u', '/\s+/'], ['', ' ', ' '], mb_strtolower($name)));
+        $mine = $core((string) $place->name);
+        if (mb_strlen($mine) < 4) {
+            return null;
+        }
+
+        return $stays->first(fn ($stay) => (int) $stay->municipality_id === (int) $place->municipality_id
+            && ($theirs = $core((string) $stay->name)) !== '' && mb_strlen($theirs) >= 4
+            // The same name; or, for a resort, one name inside the other ("Isabel's" / "Isabel's Resort and Rooms").
+            // A beach that has a resort named after it ("Subic Beach" / "Arcadia Crystal Subic Beach Resort") isn't one.
+            && ($theirs === $mine || ($place->category?->name === 'Resort' && (str_contains($theirs, $mine) || str_contains($mine, $theirs)))));
     }
 
     private function business(string $type, Model $listing): array

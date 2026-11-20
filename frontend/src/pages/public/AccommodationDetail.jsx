@@ -14,6 +14,7 @@ import DetailHero from "../../components/common/DetailHero";
 import DetailLayout from "../../components/detail/DetailLayout";
 import ReportInfoLink from "../../components/detail/ReportInfoLink";
 import LastUpdated from "../../components/detail/LastUpdated";
+import SamePlaceLink from "../../components/detail/SamePlaceLink";
 import DetailSection from "../../components/detail/DetailSection";
 import FactsCard from "../../components/detail/FactsCard";
 import AmenityGrid from "../../components/detail/AmenityGrid";
@@ -132,6 +133,11 @@ export default function AccommodationDetail() {
             latitude={item.latitude}
             longitude={item.longitude}
             website={item.website}
+          />
+          <SamePlaceLink
+            to={item.day_use_destination && `/destinations/${item.day_use_destination.id}`}
+            title="Day visitors welcome"
+            text="Not staying overnight? See the entrance fees and swimming hours for day visits."
           />
           <LastUpdated date={item.info_updated_at} />
           <ReportInfoLink type="accommodation" id={item.id} name={item.name} />

@@ -289,6 +289,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
 
         // Content CRUD — explicitly named to avoid colliding with the public "show" route
         // names of the same resources (e.g. public `destinations.show` vs this `destinations.show`).
+        // The accommodations a destination can be linked to (the same place listed for stays)
+        Route::get('/destination-accommodation-options', [AdminDestinationController::class, 'accommodationOptions']);
         Route::apiResource('/destinations', AdminDestinationController::class)->names('admin.destinations');
         Route::delete('/destinations/{id}/images/{imageId}', [AdminDestinationController::class, 'destroyImage']);
         Route::patch('/destinations/{id}/images/{imageId}/cover', [AdminDestinationController::class, 'setCoverImage']);
