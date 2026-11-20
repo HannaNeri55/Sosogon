@@ -90,6 +90,8 @@ class AccommodationController extends Controller
                 'estimates',
                 // Legacy display-only room types; the stay's options are 'rooms'.
                 'roomTypes',
+                // The same place's destination listing, for day visitors (entrance fees, swimming hours).
+                'dayUseDestination' => fn ($query) => $query->published()->select('id', 'name', 'accommodation_id', 'operating_hours'),
             ])
             ->findOrFail($id);
 

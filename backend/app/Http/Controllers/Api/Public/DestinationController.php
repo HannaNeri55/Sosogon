@@ -77,6 +77,8 @@ class DestinationController extends Controller
                 'amenities',
                 // Typical hours / fee for what the listing doesn't state (shown as approximate).
                 'estimates',
+                // The same place's accommodation listing, for "You can stay here too".
+                'accommodation' => fn ($query) => $query->approved()->select('id', 'name'),
             ])
 
             ->findOrFail($id);

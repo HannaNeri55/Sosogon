@@ -34,6 +34,8 @@ class Destination extends Model
         'is_featured',
         'tourism_priority',
         'setting',
+        // The same place's accommodation listing (a resort listed both ways), set in Manage Destinations.
+        'accommodation_id',
         'average_rating',
         'total_reviews',
         'view_count',
@@ -71,6 +73,7 @@ class Destination extends Model
             'entrance_fee',
             'contact_number',
             'website',
+            'accommodation_id',
         ];
     }
 
@@ -116,6 +119,12 @@ class Destination extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /** This place's own accommodation listing: a resort that is visited for the day and also stayed at. */
+    public function accommodation(): BelongsTo
+    {
+        return $this->belongsTo(Accommodation::class);
     }
 
     public function municipality(): BelongsTo

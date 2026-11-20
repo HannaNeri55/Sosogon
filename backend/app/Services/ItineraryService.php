@@ -731,7 +731,7 @@ class ItineraryService
             ->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests']))
             ->with(['category:id,name', 'municipality:id,name', 'activities:id,destination_id,name,description,type,best_time_to_visit,duration_minutes,what_to_wear', 'estimates', 'fees', 'amenities:id,destination_id,name'])
             ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
-                'is_featured', 'tourism_priority', 'setting', 'view_count')
+                'is_featured', 'tourism_priority', 'setting', 'view_count', 'accommodation_id')
             ->tap(fn ($query) => $this->interests->prepare($query))
             ->tap(fn ($query) => $this->withGenuineRatings($query))
             ->get()
@@ -2526,6 +2526,18 @@ class ItineraryService
                     $dayNotes[] = $note;
                 }
             };
+            // A destination that is the stay itself (a resort listed both ways, linked in Manage
+            // Destinations) isn't a separate visit for its guests: no trip there and no entrance
+            // fee is planned, and the day says when its pool or beach is open instead.
+            foreach (array_filter([$home, $tonight]) as $stay) {
+                $twin = $stops->first(fn ($d) => (int) $d->accommodation_id === (int) $stay->id);
+                if ($twin) {
+                    $stops = $stops->reject(fn ($d) => $d === $twin)->values();
+                    $open = trim((string) $twin->operating_hours) !== '' ? " (open {$twin->operating_hours})" : '';
+                    $dayNotes[] = $this->once("You're staying at {$stay->name}, which is also the day-use {$twin->name}{$open}, so it isn't planned as a separate visit: enjoy it in your free time there. "
+                        .'Overnight guests usually get pool access, but confirm with the resort whether the entrance fee applies.', "twin-{$twin->id}");
+                }
+            }
 
             $add = function (string $type, $place, int $start, int $minutes, array $fields, $from) use (&$items, &$sequence, $dayNumber) {
                 $fields['notes'] = $this->withTravelNote($fields['notes'] ?? null, $from, $place, $start);
