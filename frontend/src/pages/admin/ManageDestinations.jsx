@@ -50,6 +50,9 @@ const PRIORITY_LABELS = {
   hidden_gem: "Hidden Gem",
 };
 
+// Meals a place may serve on site, in day order.
+const MEALS = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["merienda", "Merienda"], ["dinner", "Dinner"]];
+
 const EMPTY_FORM = {
   name: "",
   description: "",
@@ -68,6 +71,9 @@ const EMPTY_FORM = {
   setting: "",
   // The same place's accommodation listing (a resort visited for the day and stayed at).
   accommodation_id: "",
+  // Food sold at the place itself: what tourists read, and the meals trips plan there.
+  dining_details: "",
+  meals_offered: [],
 
   fees: [],
   rates: [],
@@ -243,6 +249,8 @@ export default function ManageDestinations() {
       tourism_priority: item.tourism_priority || "",
       setting: item.setting || "",
       accommodation_id: item.accommodation_id ? String(item.accommodation_id) : "",
+      dining_details: item.dining_details || "",
+      meals_offered: Array.isArray(item.meals_offered) ? item.meals_offered : [],
 
       fees: (item.fees || []).map((fee) => ({
         label: fee.label || "",
@@ -387,11 +395,11 @@ export default function ManageDestinations() {
 
       // Regular destination fields
       Object.keys(formData).forEach((key) => {
-        if (["images", "fees", "rates", "amenities", "activities", "experience_tags", "experiences_reviewed"].includes(key)) return;
+        if (["images", "fees", "rates", "amenities", "activities", "experience_tags", "experiences_reviewed", "meals_offered"].includes(key)) return;
         if (scope.isMunicipal && ["is_featured", "tourism_priority"].includes(key)) return;
 
         // Sent even when empty, so a classification can be cleared.
-        if (["tourism_priority", "setting", "accommodation_id"].includes(key)) {
+        if (["tourism_priority", "setting", "accommodation_id", "dining_details"].includes(key)) {
           payload.append(key, formData[key] || "");
           return;
         }
@@ -407,6 +415,10 @@ export default function ManageDestinations() {
       // Tell Laravel which detail sections should be replaced,
       // even when the arrays are empty.
       payload.append("details_present", "1");
+
+      // Meals served on site (sent even when none are ticked, so they can be cleared).
+      payload.append("meals_present", "1");
+      formData.meals_offered.forEach((meal) => payload.append("meals_offered[]", meal));
 
       // Multiple entrance fees
       formData.fees.forEach((fee, index) => {
@@ -969,6 +981,47 @@ export default function ManageDestinations() {
               <FieldError form={form} name="accommodation_id" />
             </label>
           </div>
+
+          <fieldset className="rounded-xl border border-gray-200 p-4">
+            <legend className="px-1 text-sm font-semibold text-gray-800">Food at this place</legend>
+            <p className="mb-3 text-xs text-gray-500">
+              Fill this in when the place sells food itself (its own kainan, canteen or restaurant). Trips then plan the ticked meals
+              here instead of sending tourists to a restaurant outside.
+            </p>
+            <label className="block">
+              <span className="block text-sm font-medium text-gray-700 mb-1">What&apos;s served here?</span>
+              <textarea
+                name="dining_details"
+                rows={2}
+                maxLength={1000}
+                value={formData.dining_details}
+                onChange={(e) => setFormData({ ...formData, dining_details: e.target.value })}
+                className="input-field"
+                placeholder="e.g. A canteen serves rice meals, grilled food and drinks. Last order at 8:00 PM."
+              />
+              <FieldError form={form} name="dining_details" />
+            </label>
+            <div className="mt-3">
+              <span className="block text-sm font-medium text-gray-700 mb-1">Meals served here</span>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {MEALS.map(([meal, label]) => (
+                  <label key={meal} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={formData.meals_offered.includes(meal)}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        meals_offered: e.target.checked ? [...prev.meals_offered, meal] : prev.meals_offered.filter((m) => m !== meal),
+                      }))}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <FieldError form={form} name="meals_offered" />
+            </div>
+          </fieldset>
 
           <DestinationExperiencesEditor
             vocabulary={experienceTags}

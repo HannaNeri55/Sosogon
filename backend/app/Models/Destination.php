@@ -51,6 +51,9 @@ class Destination extends Model
     /** How worth a trip a place is, set by the tourism office (empty until classified). */
     public const PRIORITIES = ['iconic', 'popular', 'recommended', 'hidden_gem'];
 
+    /** Meals a destination may serve on site (meals_offered); the trip planner serves lunch and dinner there. */
+    public const MEALS = ['breakfast', 'lunch', 'merienda', 'dinner'];
+
     /** Where a visit happens: indoors, in the open air, or partly under cover. */
     public const SETTINGS = ['indoor', 'outdoor', 'mixed'];
 
