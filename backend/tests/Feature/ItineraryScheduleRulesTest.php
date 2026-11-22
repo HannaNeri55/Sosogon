@@ -328,8 +328,9 @@ class ItineraryScheduleRulesTest extends TestCase
     {
         // The AI picks one Bulan stop; the planner tops the day up. Spot 4 is the farthest from
         // Spot 1, but the tourism office calls it a must-visit.
+        // (At a relaxed pace, so the day isn't given an extra place for an empty afternoon.)
         $this->reply = ['title' => 'Bulan', 'days' => [$this->day(1, 'bulan1'), $this->day(2, 'bulan3')]];
-        $plain = $this->generate(['bulan'], 2);
+        $plain = $this->generate(['bulan'], 2, ['travel_pace' => 'relaxed']);
         $this->assertFalse($plain->items->contains('destination_id', $this->ids['bulan4']), 'Unclassified, the closer place fills the day.');
 
         Destination::whereKey($this->ids['bulan4'])->update(['tourism_priority' => 'iconic']);
