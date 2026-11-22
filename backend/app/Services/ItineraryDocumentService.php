@@ -416,10 +416,13 @@ class ItineraryDocumentService
 
         $measured = str_contains((string) $to->notes, 'Google Maps');
         $facts = [];
-        if ($km > 0) {
+        // A couple of hundred metres (a kainan inside the camp, a shop next door) is a walk, not a drive.
+        if ($km > 0 && $km <= ItineraryService::WALK_KM) {
+            $facts = [max(10, (int) (round($km * 100) * 10)).' m away', 'a short walk'];
+        } elseif ($km > 0) {
             $facts[] = $measured ? "{$km} km by road (Google Maps)" : "{$km} km apart (straight line)";
         }
-        if ($timeWord && $minutes > 0) {
+        if ($timeWord && $minutes > 0 && $km > ItineraryService::WALK_KM) {
             $facts[] = $measured && $timeWord === 'drive'
                 ? "~{$minutes} min drive (Google Maps)"
                 : "~{$minutes} min ".($timeWord === 'drive' ? 'drive (estimate)' : $timeWord);
