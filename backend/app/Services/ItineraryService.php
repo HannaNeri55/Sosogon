@@ -61,6 +61,9 @@ class ItineraryService
 
     private const BASE_CAMP_KM_PUBLIC = 12;
 
+    /** Places this close (km) are a short walk apart, whatever the tourist travels by. */
+    public const WALK_KM = 0.2;
+
     /** The last day's plan ends this long before the departure time, to get to the bus, boat or flight. */
     private const EXIT_BUFFER_MINUTES = 60;
 
@@ -3904,6 +3907,11 @@ class ItineraryService
             return $notes;
         }
 
+        if ($this->kmBetween($from, $to) <= self::WALK_KM) {
+            $metres = max(10, (int) (round($this->kmBetween($from, $to) * 100) * 10));
+
+            return trim(($notes ?? '')." Walk over from {$from->name} at {$this->formatMinutes($start - $minutes)} (a short walk, about {$metres} m).");
+        }
         if ($this->transport === 'public_transport') {
             // Long trips late in the day: the last jeepneys and vans between towns leave early.
             if ($this->kmBetween($from, $to) > 15 && $start - $minutes >= 960 && ! str_contains((string) $notes, 'last trip')) {
@@ -4050,7 +4058,7 @@ class ItineraryService
                 if ($day === 1 && $arrivalGiven && $from < $arrive) {
                     $add("{$label} starts before the arrival at {$this->formatMinutes($arrive)}.");
                 }
-                if ($this->transport === 'public_transport' && $travel > 0 && ! preg_match('/min (on foot|by tricycle|by jeepney)/', $notes)) {
+                if ($this->transport === 'public_transport' && $travel > 0 && ! preg_match('/min (on foot|by tricycle|by jeepney)|a short walk/', $notes)) {
                     $add("{$label}: the travel time isn't a public-transport time.");
                 }
                 foreach ((array) ($row['activities'] ?? []) as $activity) {
@@ -4695,11 +4703,11 @@ class ItineraryService
         }
 
         if ($prev && $prev !== $place) {
-            $notes = preg_replace('/^(Breakfast|Lunch|Dinner|Afternoon merienda \(snack\)) near .+?\.(?= Leave |$)/u', "$1 near {$prev->name}.", $notes);
+            $notes = preg_replace('/^(Breakfast|Lunch|Dinner|Afternoon merienda \(snack\)) near .+?\.(?= Leave | Walk over |$)/u', "$1 near {$prev->name}.", $notes);
         }
 
-        // The current wording, and the one saved itineraries from before it use.
-        $pattern = '/\s*Leave .+? by \d{1,2}:\d{2} [AP]M(?:: about \d+ min \([^)]*\)| \(about \d+ min[^)]*\))\.$/u';
+        // The current wording (a drive or ride, or a short walk), and the one saved itineraries from before it use.
+        $pattern = '/\s*(?:Leave .+? by \d{1,2}:\d{2} [AP]M(?:: about \d+ min \([^)]*\)| \(about \d+ min[^)]*\))|Walk over from .+? at \d{1,2}:\d{2} [AP]M \(a short walk, about \d+ m\))\.$/u';
         if (! preg_match($pattern, $notes)) {
             return $notes;
         }
@@ -5142,6 +5150,10 @@ class ItineraryService
             return 0;
         }
 
+        // A place a couple of hundred metres away (a kainan inside a camp, a shop next door) is a short walk.
+        if ($this->kmBetween($from, $to) <= self::WALK_KM) {
+            return 5;
+        }
         $minutes = $this->roadLeg($from, $to)['duration_min'] ?? round($this->kmBetween($from, $to), 2) / 30 * 60;
         // By public transport: slower, plus the wait for a tricycle or a jeepney/bus/van; a place
         // a few hundred metres away is a walk.

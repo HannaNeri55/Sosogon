@@ -8,6 +8,9 @@
 import { toCoordinates, googleMapsRouteUrl } from '../components/maps/mapsConfig'
 import { placeFor } from './itineraryStops'
 
+// Stops this close (km) are a short walk apart, as the planner words them (ItineraryService::WALK_KM).
+const WALK_KM = 0.2
+
 export const TRANSPORT_GUIDES = {
   private_car: {
     label: 'Private Car',
@@ -85,9 +88,13 @@ export function legGuidance(from, to, preference) {
   const measured = /Google Maps/.test(to.notes || '')
   const facts = []
   const km = Number(to.distance_from_prev_km)
-  if (km > 0) facts.push(measured ? `${km} km by road (Google Maps)` : `${km} km apart (straight line)`)
+  // A couple of hundred metres (a kainan inside the camp, a shop next door) is a walk, not a drive
+  // (WALK_KM in the planner).
+  const walk = km > 0 && km <= WALK_KM
+  if (walk) facts.push(`${Math.max(10, Math.round(km * 100) * 10)} m away`, 'a short walk')
+  else if (km > 0) facts.push(measured ? `${km} km by road (Google Maps)` : `${km} km apart (straight line)`)
   const minutes = Number(to.travel_time_from_prev)
-  if (guide.time && minutes > 0) {
+  if (guide.time && minutes > 0 && !walk) {
     facts.push(measured && guide.time === 'drive' ? `~${minutes} min drive (Google Maps)` : `~${minutes} min ${guide.time === 'drive' ? 'drive (estimate)' : guide.time}`)
   }
 
