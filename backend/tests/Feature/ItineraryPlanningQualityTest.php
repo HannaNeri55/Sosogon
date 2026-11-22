@@ -413,7 +413,8 @@ class ItineraryPlanningQualityTest extends TestCase
 
     public function test_merienda_comes_in_the_middle_of_the_afternoon(): void
     {
-        $meriendas = $this->generate()->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda'));
+        // A merienda is for a tourist who picked Food.
+        $meriendas = $this->generate(['interests' => ['nature', 'culture', 'relaxation', 'food']])->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda'));
 
         $this->assertNotEmpty($meriendas);
         foreach ($meriendas as $merienda) {
@@ -581,7 +582,8 @@ class ItineraryPlanningQualityTest extends TestCase
 
     public function test_a_full_day_has_attractions_lunch_merienda_shopping_and_dinner_in_order(): void
     {
-        $day3 = $this->days($this->generate())[3]->values();
+        // With Food picked (a merienda is only for a tourist who did).
+        $day3 = $this->days($this->generate(['interests' => ['nature', 'culture', 'relaxation', 'food']]))[3]->values();
 
         $this->assertGreaterThanOrEqual(3, $day3->where('item_type', 'destination')->count());
         $order = $day3->map(fn ($i) => match (true) {

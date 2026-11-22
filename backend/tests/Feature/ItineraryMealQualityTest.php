@@ -200,7 +200,11 @@ class ItineraryMealQualityTest extends TestCase
     {
         $this->assertSame('nature', $this->helper('experienceKind', $this->place('viewpoint')), 'Only sunset watching: a viewpoint.');
         $this->assertSame('highland', $this->helper('experienceKind', $this->place('coffeeHill')), 'No listed activities: still a mountain stop.');
-        $this->assertSame('highland', $this->helper('experienceKind', $this->place('camp')), 'A camp is more than a view.');
+        // A camp's bonfire and picnic aren't a walk up the mountain, so it can share a day with
+        // a highland stop; a camp that lists camping or a trail is a highland stop.
+        $this->assertSame('nature', $this->helper('experienceKind', $this->place('camp')), 'A bonfire and a picnic are no hike.');
+        $tentCamp = $this->destination('Tent Ridge', 12.670, 123.880, '6:00 AM - 10:00 PM', ['Overnight camping']);
+        $this->assertSame('highland', $this->helper('experienceKind', Destination::with(['category', 'activities'])->find($tentCamp)));
 
         $trail = $this->destination('Trail Peak', 12.668, 123.884, '6:00 AM - 5:00 PM', ['Hiking', 'Sunset watching']);
         $this->assertSame('highland', $this->helper('experienceKind', Destination::with(['category', 'activities'])->find($trail)));
@@ -295,7 +299,8 @@ class ItineraryMealQualityTest extends TestCase
         $this->assertGreaterThan($this->helper('foodScore', $grill, $preferences, 'merienda'), $this->helper('foodScore', $cafe, $preferences, 'merienda'));
 
         // A packed pace always offers a merienda; it's at the café, open then and near the tourist.
-        $meriendas = $this->generate(['travel_pace' => 'packed'])->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda'));
+        // (A merienda is for a tourist who picked Food.)
+        $meriendas = $this->generate(['travel_pace' => 'packed', 'interests' => ['nature', 'food']])->items->filter(fn ($i) => str_starts_with((string) $i->notes, 'Afternoon merienda'));
         $this->assertNotEmpty($meriendas);
         $this->assertSame($this->ids['cafe'], $meriendas->first()->food_beverage_id);
         $this->assertCount(1, $meriendas->first()->dishes, 'One light item per traveler.');

@@ -144,6 +144,10 @@ class ItineraryAudit extends Command
             'irosin-bulusan-2d-relax' => ['label' => 'Irosin and Bulusan, 2 days, relaxation, homestay', 'days' => 2, 'towns' => ['Irosin', 'Bulusan'], 'prefs' => ['interests' => ['relaxation', 'nature'], 'travel_pace' => 'relaxed', 'accommodation_type' => 'homestay']],
             'matnog-2d-subic-last' => ['label' => 'Matnog, 2 days, beaches, leaving at 3 PM', 'days' => 2, 'towns' => ['Matnog'], 'prefs' => ['interests' => ['beaches'], 'departure_time' => '15:00', 'transport_preference' => 'private_car']],
             'matnog-3d-subic-wanted' => ['label' => 'Matnog, 3 days, Subic Beach asked for, leaving at noon', 'days' => 3, 'towns' => ['Matnog'], 'places' => ['Subic Beach'], 'prefs' => ['interests' => ['beaches', 'nature'], 'departure_time' => '12:00']],
+            'bulan-3d-bicolano' => ['label' => 'Bulan, 3 days, nature, beaches, history, adventure and culture, Filipino/Bicolano food', 'days' => 3, 'towns' => ['Bulan'],
+                'prefs' => ['interests' => ['nature', 'beaches', 'history', 'adventure', 'culture'], 'food_preference' => 'filipino_bicolano', 'transport_preference' => 'private_car']],
+            'bulan-3d-bicolano-food' => ['label' => 'Bulan, 3 days, the same plus the Food interest', 'days' => 3, 'towns' => ['Bulan'],
+                'prefs' => ['interests' => ['nature', 'beaches', 'history', 'adventure', 'culture', 'food'], 'food_preference' => 'filipino_bicolano', 'transport_preference' => 'private_car']],
             'bulan-matnog-3d' => ['label' => 'Bulan and Matnog, 3 days, beaches and culture', 'days' => 3, 'towns' => ['Bulan', 'Matnog'], 'prefs' => ['interests' => ['beaches', 'culture'], 'transport_preference' => 'private_car']],
             'donsol-2d-wildlife' => ['label' => 'Donsol, 2 days, nature and adventure', 'days' => 2, 'towns' => ['Donsol'], 'prefs' => ['interests' => ['nature', 'adventure'], 'transport_preference' => 'public_transport']],
             'pilar-donsol-3d' => ['label' => 'Pilar and Donsol, 3 days, nature, beaches and food', 'days' => 3, 'towns' => ['Pilar', 'Donsol'], 'prefs' => ['interests' => ['nature', 'beaches', 'food']]],
@@ -340,6 +344,18 @@ class ItineraryAudit extends Command
             if (Str::contains((string) $stop->preference_note.' '.$stop->notes, 'Coast Guard') && ! in_array($category, ['beach', 'island'], true)
                 && ! preg_match('/island|boat|sea\b|snorkel|div(e|ing)|whale|sandbar/i', $planned)) {
                 $add('medium', 'wrong_tip', "{$label}: Coast Guard / rough-sea warning at a place with no sea trip.");
+            }
+        }
+
+        // A trip about places, not restaurants: on a day with sightseeing, restaurant stops never
+        // outnumber the places visited, and at most two of them (lunch and dinner); a tourist who
+        // picked Food may have one more (a merienda).
+        $foodTrip = in_array('food', $preferences['interests'] ?? [], true) ? 1 : 0;
+        foreach ($items->groupBy('day_number') as $day => $dayItems) {
+            $places = $dayItems->where('item_type', ItineraryItem::TYPE_DESTINATION)->count();
+            $restaurants = $dayItems->filter(fn ($i) => $i->foodBeverage)->count();
+            if ($places > 0 && ($restaurants > $places + $foodTrip || $restaurants > 2 + $foodTrip)) {
+                $add('high', 'food_heavy', "Day {$day}: {$restaurants} restaurant stops for {$places} ".Str::plural('place', $places).' visited.');
             }
         }
 
