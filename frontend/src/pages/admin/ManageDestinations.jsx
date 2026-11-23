@@ -74,6 +74,7 @@ const EMPTY_FORM = {
   // Food sold at the place itself: what tourists read, and the meals trips plan there.
   dining_details: "",
   meals_offered: [],
+  outside_food_allowed: false,
 
   fees: [],
   rates: [],
@@ -251,6 +252,7 @@ export default function ManageDestinations() {
       accommodation_id: item.accommodation_id ? String(item.accommodation_id) : "",
       dining_details: item.dining_details || "",
       meals_offered: Array.isArray(item.meals_offered) ? item.meals_offered : [],
+      outside_food_allowed: Boolean(item.outside_food_allowed),
 
       fees: (item.fees || []).map((fee) => ({
         label: fee.label || "",
@@ -407,7 +409,7 @@ export default function ManageDestinations() {
         if (formData[key] !== "" && formData[key] !== null) {
           payload.append(
             key,
-            key === "is_featured" ? (formData[key] ? "1" : "0") : formData[key],
+            ["is_featured", "outside_food_allowed"].includes(key) ? (formData[key] ? "1" : "0") : formData[key],
           );
         }
       });
@@ -1021,6 +1023,21 @@ export default function ManageDestinations() {
               </div>
               <FieldError form={form} name="meals_offered" />
             </div>
+            <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                name="outside_food_allowed"
+                checked={formData.outside_food_allowed}
+                onChange={(e) => setFormData({ ...formData, outside_food_allowed: e.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600"
+              />
+              <span>
+                <span className="font-medium">Visitors may bring their own food (picnic allowed)</span>
+                <span className="block text-xs text-gray-500">
+                  Trips then plan a packed lunch here instead of a trip to a restaurant, and still name the nearest restaurant as an option.
+                </span>
+              </span>
+            </label>
           </fieldset>
 
           <DestinationExperiencesEditor

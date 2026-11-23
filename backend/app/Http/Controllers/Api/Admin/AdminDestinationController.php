@@ -104,6 +104,7 @@ class AdminDestinationController extends Controller
             'meals_offered' => 'sometimes|array',
             'meals_offered.*' => 'in:'.implode(',', Destination::MEALS),
             'meals_present' => 'sometimes|boolean',
+            'outside_food_allowed' => 'nullable|boolean',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             // Which of the uploaded photos (0-based) is the cover; defaults to the first.
@@ -288,6 +289,7 @@ class AdminDestinationController extends Controller
             'meals_offered' => 'sometimes|array',
             'meals_offered.*' => 'in:'.implode(',', Destination::MEALS),
             'meals_present' => 'sometimes|boolean',
+            'outside_food_allowed' => 'nullable|boolean',
             'images' => 'nullable|array|max:10',
             'images.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'remove_image_ids' => 'sometimes|array',

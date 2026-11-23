@@ -19,6 +19,8 @@ class Destination extends Model
         'description',
         'dining_details',
         'meals_offered',
+        // Visitors may bring their own food (picnic allowed): trips plan a packed lunch there.
+        'outside_food_allowed',
         'visitor_guidelines',
         'category_id',
         'municipality_id',
@@ -65,6 +67,7 @@ class Destination extends Model
             'description',
             'dining_details',
             'meals_offered',
+            'outside_food_allowed',
             'visitor_guidelines',
             'category_id',
             'municipality_id',
@@ -90,6 +93,7 @@ class Destination extends Model
         return [
             'info_updated_at' => 'datetime',
             'meals_offered' => 'array',
+            'outside_food_allowed' => 'boolean',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'entrance_fee' => 'decimal:2',
