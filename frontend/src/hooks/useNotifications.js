@@ -5,6 +5,9 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../api/notifications'
 
 const POLL_MS = 15000
+
+/** Window event with the notifications that just arrived (detail), for pages that show what they're about. */
+export const NOTIFICATIONS_ARRIVED = 'sosogon:notifications-arrived'
 const HIDDEN_POLL_MS = 60000
 const EMPTY = { items: [], unread: 0, loaded: false }
 
@@ -38,6 +41,7 @@ async function refresh() {
     seen = new Set([...(seen ?? []), ...data.notifications.map((n) => n.id)])
     emit({ items: data.notifications, unread: data.unread, loaded: true })
     if (fresh.length && announce) announce(fresh)
+    if (fresh.length) window.dispatchEvent(new CustomEvent(NOTIFICATIONS_ARRIVED, { detail: fresh }))
   } catch {
     // Offline or signed out: the next check tries again.
   }
