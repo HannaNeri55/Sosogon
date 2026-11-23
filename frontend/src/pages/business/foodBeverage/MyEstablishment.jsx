@@ -23,6 +23,7 @@ import toast from 'react-hot-toast'
 import { showApiError } from '../../../utils/apiErrors'
 import useFormErrors from '../../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
+import useRefreshWhileInReview from '../../../hooks/useRefreshWhileInReview'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -149,6 +150,9 @@ export default function MyEstablishment() {
       active = false
     }
   }, [])
+
+  // Approved or sent back by the Tourism Office: the new status shows without a page refresh.
+  useRefreshWhileInReview(locked, load)
 
   const refresh = async () => {
     try {

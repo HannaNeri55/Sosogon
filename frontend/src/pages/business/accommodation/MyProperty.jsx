@@ -27,6 +27,7 @@ import { getErrorMessage, showApiError } from '../../../utils/apiErrors'
 import { confirmDialog } from '../../../utils/dialogs'
 import useFormErrors from '../../../hooks/useFormErrors'
 import FieldError, { FormErrorSummary } from '../../../components/common/FieldError'
+import useRefreshWhileInReview from '../../../hooks/useRefreshWhileInReview'
 
 const MIN_IMAGES = 5
 const MAX_IMAGES = 100
@@ -205,6 +206,9 @@ export default function MyProperty() {
       active = false
     }
   }, [])
+
+  // Approved or sent back by the Tourism Office: the new status shows without a page refresh.
+  useRefreshWhileInReview(isSubmitted, load)
 
   const refresh = async () => {
     try {
