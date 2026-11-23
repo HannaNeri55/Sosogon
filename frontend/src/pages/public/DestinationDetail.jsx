@@ -150,9 +150,9 @@ export default function DestinationDetail() {
           </DetailSection>
         )}
 
-        {destination.dining_details && (
+        {(destination.dining_details || destination.outside_food_allowed) && (
           <DetailSection title="Food & Dining">
-            <DiningInfo details={destination.dining_details} meals={destination.meals_offered} />
+            <DiningInfo details={destination.dining_details} meals={destination.meals_offered} ownFood={destination.outside_food_allowed} />
           </DetailSection>
         )}
 

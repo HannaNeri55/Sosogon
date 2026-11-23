@@ -63,4 +63,14 @@ class DestinationOnSiteFoodTest extends TestCase
             ->assertJsonFragment(['dining_details' => ["Say what's served here, or untick the meals."]]);
         $this->save(['dining_details' => 'Canteen.', 'meals_offered' => ['brunch']])->assertUnprocessable()->assertJsonValidationErrors('meals_offered.0');
     }
+
+    public function test_an_admin_marks_that_visitors_may_bring_their_own_food(): void
+    {
+        $this->save(['outside_food_allowed' => '1'])->assertOk();
+        $this->assertTrue($this->camp->fresh()->outside_food_allowed);
+        $this->getJson("/api/v1/destinations/{$this->camp->id}")->assertOk()->assertJsonPath('destination.outside_food_allowed', true);
+
+        $this->save(['outside_food_allowed' => '0'])->assertOk();
+        $this->assertFalse($this->camp->fresh()->outside_food_allowed);
+    }
 }

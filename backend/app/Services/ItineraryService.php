@@ -744,7 +744,7 @@ class ItineraryService
             ->tap($inTowns)
             ->tap(fn ($query) => $this->interests->constrain($query, $preferences['interests']))
             ->with(['category:id,name', 'municipality:id,name', 'activities:id,destination_id,name,description,type,best_time_to_visit,duration_minutes,what_to_wear', 'estimates', 'fees', 'amenities:id,destination_id,name'])
-            ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
+            ->select('id', 'name', 'description', 'dining_details', 'meals_offered', 'outside_food_allowed', 'visitor_guidelines', 'category_id', 'municipality_id', 'latitude', 'longitude', 'operating_hours', 'entrance_fee',
                 'is_featured', 'tourism_priority', 'setting', 'view_count', 'accommodation_id')
             ->tap(fn ($query) => $this->interests->prepare($query))
             ->tap(fn ($query) => $this->withGenuineRatings($query))
@@ -3168,7 +3168,11 @@ class ItineraryService
                 // A full-day destination (an island beach) isn't left for lunch in town: lunch is
                 // brought along, unless it serves its own.
                 $fullDay = $this->priorities->isFullDay($destination);
-                if (! $hadLunch && ! $onSiteLunch && ! $fullDay) {
+                // Where visitors may bring their own food (a beach where day guests picnic), lunch
+                // is a packed one there too, with the nearest restaurant offered in its note.
+                $ownFood = (bool) $destination->outside_food_allowed && ! $onSiteLunch;
+                $ownFoodAlternative = null;
+                if (! $hadLunch && ! $onSiteLunch && ! $fullDay && ! $ownFood) {
                     [$lunchSpot, $lunchSpotReason] = $findMeal($destination, null, self::LUNCH_START, 'a short break from your visit', 'lunch');
                 }
                 $away = $lunchSpot ? $this->travelMinutes($destination, $lunchSpot['place']) : 0;
@@ -3186,7 +3190,10 @@ class ItineraryService
                     $options = collect([$restaurant, $stayForLunch])->filter()->sortBy(fn ($p) => $this->travelMinutes($destination, $p));
                     $elsewhere = $options->first();
                     // A restaurant a short drive away: a lunch break there, then back to the visit.
-                    if ($fullDay && $this->outdoorStop($destination)) {
+                    if ($ownFood) {
+                        $packedHere = true;
+                        $ownFoodAlternative = $restaurant;
+                    } elseif ($fullDay && $this->outdoorStop($destination)) {
                         $packedHere = true;
                     } elseif ($restaurant && $this->travelMinutes($destination, $restaurant) <= self::STAY_MEAL_MINUTES) {
                         $lunchSpot = ['place' => $restaurant, 'km' => $this->kmBetween($destination, $restaurant)];
@@ -3360,6 +3367,12 @@ class ItineraryService
                         unset($planned[$picnic]);
                         $mealHere(['at' => [self::LUNCH_START, self::LUNCH_END], 'name' => "{$activity['name']} — your picnic lunch", 'duration' => self::MEAL_MINUTES] + $activity);
                         $note = trim("{$note} Lunch is a picnic here: pack food from your accommodation or a store on the way.");
+                    } elseif ($ownFood) {
+                        $mealHere(['at' => [self::LUNCH_START, self::LUNCH_END], 'name' => 'Lunch — your packed lunch', 'duration' => self::MEAL_MINUTES, 'label' => 'midday', 'window' => null,
+                            'description' => "Visitors may bring their own food here, so have a picnic lunch at {$destination->name}: pack it from your accommodation or a store on the way."]);
+                        $note = trim($note.' '.($ownFoodAlternative
+                            ? "Rather not bring food? {$ownFoodAlternative->name} is about {$this->travelMinutes($destination, $ownFoodAlternative)} min away."
+                            : 'No restaurant is listed nearby, so bring enough food and water.'));
                     } else {
                         $mealHere(['at' => [self::LUNCH_START, self::LUNCH_END], 'name' => 'Lunch — your packed lunch', 'duration' => self::MEAL_MINUTES, 'label' => 'midday', 'window' => null,
                             'description' => 'No restaurant is listed close by, so bring a packed lunch and water from your accommodation; check first that outside food is allowed here.']);

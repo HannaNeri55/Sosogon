@@ -62,6 +62,7 @@ class ItineraryPlacesFirstTest extends TestCase
         $this->ids['park'] = $this->place('Mangrove Park', 7, 12.672, 123.874, [['Boardwalk stroll', 60, null]]);
         $this->ids['camp'] = $this->place('Hill Camp', 2, 12.676, 123.878, [['Bonfire', 60, 'Evening'], ['Picnic', 45, null]],
             ['dining_details' => 'A kainan inside the camp serves rice meals and grilled food.', 'meals_offered' => ['lunch', 'dinner']]);
+        $this->ids['beach'] = $this->place('Picnic Cove', 1, 12.674, 123.876, [['Swimming', 150, null]], ['outside_food_allowed' => true]);
         $this->ids['hotel'] = Accommodation::create($this->listing('Harbor Hotel', 12.671, 123.872) + [
             'type' => 'Hotel', 'price_range' => 'moderate', 'status' => 'approved', 'amenities' => ['Restaurant', 'Free Wi-Fi'],
             'dining_details' => 'The hotel restaurant serves Filipino dishes.',
@@ -150,5 +151,24 @@ class ItineraryPlacesFirstTest extends TestCase
         // A relaxed pace keeps its rest.
         $relaxed = $this->generate(['culture', 'nature'], ['travel_pace' => 'relaxed']);
         $this->assertNotContains($this->ids['park'], $relaxed->items->where('day_number', 1)->pluck('destination_id')->map(fn ($id) => (int) $id)->all());
+    }
+
+    public function test_where_visitors_may_bring_food_lunch_is_a_picnic_there_with_a_restaurant_offered(): void
+    {
+        // Arriving mid-morning, the swim runs through lunchtime.
+        $this->ai->days = [$this->day(1, 'beach'), $this->day(2, 'museum')];
+        $itinerary = $this->generate(['beaches', 'culture']);
+
+        $beach = $itinerary->items->firstWhere('destination_id', $this->ids['beach']);
+        $lunch = collect($beach->activities)->firstWhere('name', 'Lunch — your packed lunch');
+        $this->assertNotNull($lunch, 'A picnic lunch at the beach.');
+        $this->assertStringContainsString('Visitors may bring their own food here', $lunch['description']);
+        $this->assertMatchesRegularExpression('/Rather not bring food\? Carinderia \d is about \d+ min away\./', $beach->preference_note);
+        $this->assertFalse($this->restaurantStops($itinerary, 1)->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch')), 'No trip to a restaurant for lunch.');
+
+        // The same beach without it: lunch is at the nearby restaurant, as before.
+        Destination::whereKey($this->ids['beach'])->update(['outside_food_allowed' => null]);
+        $plain = $this->generate(['beaches', 'culture']);
+        $this->assertTrue($this->restaurantStops($plain, 1)->contains(fn ($i) => str_starts_with((string) $i->notes, 'Lunch')));
     }
 }

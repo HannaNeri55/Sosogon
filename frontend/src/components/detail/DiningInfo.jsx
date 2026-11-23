@@ -1,9 +1,9 @@
-import { FiCoffee } from 'react-icons/fi'
+import { FiCoffee, FiShoppingBag } from 'react-icons/fi'
 
 const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', merienda: 'Merienda', dinner: 'Dinner' }
 
 /** What a listing offers to eat on site, and which meals: shown only when the listing says. */
-export default function DiningInfo({ details, meals = [] }) {
+export default function DiningInfo({ details, meals = [], ownFood = false }) {
   const shown = (meals || []).filter((meal) => MEAL_LABELS[meal])
   return (
     <div>
@@ -19,6 +19,12 @@ export default function DiningInfo({ details, meals = [] }) {
             </span>
           ))}
         </div>
+      )}
+      {ownFood && (
+        <p className="mt-4 flex items-start gap-2 text-sm text-gray-700">
+          <FiShoppingBag size={15} className="mt-0.5 shrink-0 text-secondary-700" aria-hidden="true" />
+          You may bring your own food here, for a picnic.
+        </p>
       )}
     </div>
   )
