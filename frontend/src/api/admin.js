@@ -880,12 +880,6 @@ export const addAdminFeedbackNote = async (id, note) => {
   return response.data
 }
 
-// Data Checks: problems in public listings (read-only)
-export const getAdminDataChecks = async () => {
-  const response = await api.get('/admin/data-checks')
-  return response.data
-}
-
 // Approved accommodations a destination can be linked to (the same place listed for stays)
 export const getDestinationAccommodationOptions = async () => {
   const response = await api.get('/admin/destination-accommodation-options')
