@@ -74,7 +74,6 @@ const ReviewSubmissions = lazy(() => import('./pages/admin/ReviewSubmissions'))
 const ReviewListings = lazy(() => import('./pages/admin/ReviewListings'))
 const AdminGuestReviews = lazy(() => import('./pages/admin/GuestReviews'))
 const FeedbackConcerns = lazy(() => import('./pages/admin/FeedbackConcerns'))
-const DataChecks = lazy(() => import('./pages/admin/DataChecks'))
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'))
 const ViolationRecords = lazy(() => import('./pages/admin/ViolationRecords'))
 const AccountAppeals = lazy(() => import('./pages/admin/AccountAppeals'))
@@ -192,7 +191,6 @@ export default function App() {
           <Route path="appeals" element={<AccountAppeals />} />
           <Route path="account-log" element={<AccountActivityLog />} />
           <Route path="reports" element={<ReportsAnalytics />} />
-          <Route path="data-checks" element={<DataChecks />} />
         </Route>
       </Routes>
     </Suspense>

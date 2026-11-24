@@ -6,6 +6,7 @@ use App\Models\Accommodation;
 use App\Models\Destination;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ListingDataChecks;
 use App\Support\AdminScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +108,7 @@ class DestinationAccommodationLinkTest extends TestCase
 
     public function test_data_checks_find_a_resort_listed_both_ways_but_not_linked(): void
     {
-        $codes = fn () => collect($this->actingAs($this->provincial)->getJson('/api/v1/admin/data-checks')->json('issues'))
+        $codes = fn () => app(ListingDataChecks::class)->run()
             ->where('id', $this->resort->id)->where('type', 'destination')->pluck('code')->all();
 
         $this->assertContains('unlinked_twin', $codes());

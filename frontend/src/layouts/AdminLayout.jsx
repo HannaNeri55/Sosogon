@@ -24,7 +24,6 @@ import {
   FiAlertTriangle,
   FiMap,
   FiMessageSquare,
-  FiTool,
 } from 'react-icons/fi'
 import { FEEDBACK_COUNT_CHANGED, getAdminFeedbackCount } from '../api/admin'
 import { APPROVALS_LABEL, APPROVAL_STAGES, isApprovalPath } from './approvalStages'
@@ -127,12 +126,6 @@ const sidebarLinks = [
     to: '/admin/reports',
     icon: FiBarChart2,
     label: 'Reports',
-  },
-  {
-    // Problems in public listings that make trips worse (missing hours, typos, placeholder contacts…).
-    to: '/admin/data-checks',
-    icon: FiTool,
-    label: 'Data Checks',
   },
 ]
 

@@ -8,14 +8,14 @@ use App\Models\FoodBeverage;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ItineraryService;
-use App\Support\AdminScope;
+use App\Services\ListingDataChecks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Data Checks (ListingDataChecks, GET /admin/data-checks): problems in public listings that make
- * trips worse or mislead tourists, scoped like the rest of the admin. Read-only.
+ * Data checks (ListingDataChecks, `php artisan listings:data-checks`): problems in public listings
+ * that make trips worse or mislead tourists. Read-only.
  */
 class ListingDataChecksTest extends TestCase
 {
@@ -29,8 +29,6 @@ class ListingDataChecksTest extends TestCase
 
     private User $provincial;
 
-    private User $bulanAdmin;
-
     private User $owner;
 
     private int $category;
@@ -43,9 +41,6 @@ class ListingDataChecksTest extends TestCase
         $this->bulan = DB::table('municipalities')->insertGetId(['name' => 'Bulan', 'created_at' => now(), 'updated_at' => now()]);
         $this->irosin = DB::table('municipalities')->insertGetId(['name' => 'Irosin', 'created_at' => now(), 'updated_at' => now()]);
         $this->provincial = $this->admin(User::ADMIN_SCOPE_PROVINCIAL);
-        // Bulan has its own tourism office; Irosin has none, so the provincial admins handle it.
-        $this->bulanAdmin = $this->admin(User::ADMIN_SCOPE_MUNICIPAL, $this->bulan);
-        AdminScope::forgetOwnOffices();
         $this->owner = User::create(['role_id' => $ownerRole, 'name' => 'Owner', 'email' => 'owner@example.com', 'password' => 'Secret123!', 'status' => 'active']);
         $this->category = DB::table('categories')->insertGetId(['name' => 'Beach', 'type' => 'destination', 'created_at' => now(), 'updated_at' => now()]);
     }
@@ -74,9 +69,14 @@ class ListingDataChecksTest extends TestCase
         return $place;
     }
 
-    private function codes(User $admin, ?int $id = null, string $type = 'destination'): array
+    private function issues(?array $towns = null)
     {
-        return collect($this->actingAs($admin)->getJson('/api/v1/admin/data-checks')->assertOk()->json('issues'))
+        return app(ListingDataChecks::class)->run($towns);
+    }
+
+    private function codes(?int $id = null, string $type = 'destination'): array
+    {
+        return $this->issues()
             ->filter(fn ($i) => $i['type'] === $type && ($id === null || $i['id'] === $id))
             ->pluck('code')->sort()->values()->all();
     }
@@ -85,7 +85,7 @@ class ListingDataChecksTest extends TestCase
     {
         $place = $this->destination($this->irosin);
 
-        $this->assertSame([], $this->codes($this->provincial, $place->id));
+        $this->assertSame([], $this->codes($place->id));
     }
 
     public function test_destination_problems_are_found_and_explained(): void
@@ -98,14 +98,13 @@ class ListingDataChecksTest extends TestCase
         $empty = $this->destination($this->irosin, ['name' => 'Quiet Cove', 'operating_hours' => null], []);
 
         $this->assertSame(['activity_no_best_time', 'activity_no_length', 'duplicate_activity', 'name_typo', 'no_fee', 'not_an_attraction', 'unreadable_hours'],
-            $this->codes($this->provincial, $place->id));
-        $this->assertSame(['no_activities', 'no_hours'], $this->codes($this->provincial, $empty->id));
+            $this->codes($place->id));
+        $this->assertSame(['no_activities', 'no_hours'], $this->codes($empty->id));
 
-        $issues = collect($this->actingAs($this->provincial)->getJson('/api/v1/admin/data-checks')->json('issues'))->where('id', $place->id)->keyBy('code');
+        $issues = $this->issues()->where('id', $place->id)->keyBy('code');
         $this->assertStringContainsString('Island hopping', $issues['duplicate_activity']['message']);
         $this->assertStringContainsString('marked Iconic', $issues['not_an_attraction']['message']);
         $this->assertSame('high', $issues['not_an_attraction']['severity']);
-        $this->assertTrue($issues['no_fee']['can_fix'], 'Irosin has no office of its own: the provincial admins fix it.');
         $this->assertSame('admin', $issues['no_fee']['fixed_by']);
     }
 
@@ -128,32 +127,18 @@ class ListingDataChecksTest extends TestCase
         $inn = Accommodation::create($place + ['name' => 'Demo Inn', 'type' => 'Inn', 'price_range' => 'moderate', 'contact_number' => '(056) 000-0106', 'latitude' => 12.7, 'longitude' => 124.0]);
         $grill = FoodBeverage::create($place + ['name' => 'Irosin grill', 'price_range' => 'budget', 'operating_hours' => '9:00 AM - 9:00 PM', 'latitude' => 12.7, 'longitude' => 124.0]);
 
-        $this->assertSame(['no_photo', 'no_priced_rooms', 'placeholder_contact'], $this->codes($this->provincial, $inn->id, 'accommodation'));
-        $this->assertSame(['name_capitals', 'no_cuisine', 'no_menu', 'no_photo'], $this->codes($this->provincial, $grill->id, 'food_beverage'));
-        $issue = collect($this->actingAs($this->provincial)->getJson('/api/v1/admin/data-checks')->json('issues'))->firstWhere('code', 'placeholder_contact');
+        $this->assertSame(['no_photo', 'no_priced_rooms', 'placeholder_contact'], $this->codes($inn->id, 'accommodation'));
+        $this->assertSame(['name_capitals', 'no_cuisine', 'no_menu', 'no_photo'], $this->codes($grill->id, 'food_beverage'));
+        $issue = $this->issues()->firstWhere('code', 'placeholder_contact');
         $this->assertSame('owner', $issue['fixed_by']);
-        $this->assertFalse($issue['can_fix']);
     }
 
-    public function test_a_municipal_admin_sees_only_their_town_and_provincial_admins_see_who_manages_it(): void
+    public function test_a_town_report_has_only_that_towns_listings(): void
     {
         $bulanPlace = $this->destination($this->bulan, ['name' => 'Bulan Cove', 'operating_hours' => null]);
         $irosinPlace = $this->destination($this->irosin, ['name' => 'Irosin Falls', 'operating_hours' => null]);
 
-        $mine = collect($this->actingAs($this->bulanAdmin)->getJson('/api/v1/admin/data-checks')->assertOk()->json('issues'));
-        $this->assertSame([$bulanPlace->id], $mine->pluck('id')->unique()->values()->all());
-        $this->assertTrue($mine->first()['can_fix']);
-
-        $all = collect($this->actingAs($this->provincial)->getJson('/api/v1/admin/data-checks')->json('issues'));
-        $this->assertEqualsCanonicalizing([$bulanPlace->id, $irosinPlace->id], $all->pluck('id')->unique()->all());
-        $bulanIssue = $all->firstWhere('id', $bulanPlace->id);
-        $this->assertFalse($bulanIssue['can_fix'], "Bulan's own office fixes Bulan's destinations.");
-        $this->assertNotNull($bulanIssue['managed_by']);
-    }
-
-    public function test_only_admins_can_see_data_checks(): void
-    {
-        $this->getJson('/api/v1/admin/data-checks')->assertUnauthorized();
-        $this->actingAs($this->owner)->getJson('/api/v1/admin/data-checks')->assertForbidden();
+        $this->assertSame([$bulanPlace->id], $this->issues([$this->bulan])->pluck('id')->unique()->values()->all());
+        $this->assertEqualsCanonicalizing([$bulanPlace->id, $irosinPlace->id], $this->issues()->pluck('id')->unique()->all());
     }
 }
