@@ -162,9 +162,10 @@ export default function Home() {
     Promise.allSettled([
       getDestinations({ per_page: 5, sort: 'featured' }),
       getEvents({ per_page: 3, upcoming: 1 }), // soonest first; past events excluded by the API
-      getAccommodations({ per_page: 3 }),
-      getFoodBeverages({ per_page: 3 }),
-      getRetailShops({ per_page: 3 }),
+      // Featured stays, restaurants and shops: the best rated by visitors.
+      getAccommodations({ per_page: 3, sort: 'top_rated' }),
+      getFoodBeverages({ per_page: 3, sort: 'top_rated' }),
+      getRetailShops({ per_page: 3, sort: 'top_rated' }),
       getAnnouncements({ per_page: 3 }),
     ])
       .then((results) => {

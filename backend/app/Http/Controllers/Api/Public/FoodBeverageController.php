@@ -42,6 +42,11 @@ class FoodBeverageController extends Controller
             });
         }
 
+        // Home's Featured restaurants: best rated first, then the most reviewed; unrated last.
+        if ($request->input('sort') === 'top_rated') {
+            $query->orderByDesc('average_rating')->orderByDesc('total_reviews');
+        }
+
         $perPage = $this->perPage($request, 12, 50);
 
         return response()->json(PublicData::strip($query->orderBy('name')->paginate($perPage)));

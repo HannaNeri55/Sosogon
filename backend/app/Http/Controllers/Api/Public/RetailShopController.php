@@ -34,6 +34,14 @@ class RetailShopController extends Controller
             });
         }
 
+        // Home's Featured shops: best rated first, then the most reviewed; unrated last. Shops keep no
+        // stored average, so it is worked out from the reviews the public can see.
+        if ($request->input('sort') === 'top_rated') {
+            $query->withAvg(['ratings as average_rating' => fn ($ratings) => $ratings->visible()], 'score')
+                ->withCount(['ratings as total_reviews' => fn ($ratings) => $ratings->visible()])
+                ->orderByDesc('average_rating')->orderByDesc('total_reviews');
+        }
+
         $perPage = $this->perPage($request, 12, 50);
 
         return response()->json(PublicData::strip($query->orderBy('name')->paginate($perPage)));
