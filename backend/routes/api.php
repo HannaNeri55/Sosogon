@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\AdminHeroSlideController;
 use App\Http\Controllers\Api\Admin\AdminItemReviewController;
 use App\Http\Controllers\Api\Admin\AdminMenuItemController;
 use App\Http\Controllers\Api\Admin\AdminMunicipalityProfileController;
+use App\Http\Controllers\Api\Admin\AdminOfficeAccountController;
 use App\Http\Controllers\Api\Admin\AdminOwnerApplicationController;
 use App\Http\Controllers\Api\Admin\AdminRetailProductController;
 use App\Http\Controllers\Api\Admin\AdminRetailShopController;
@@ -374,6 +375,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'account.active'])->group(funct
         Route::post('/users/{id}/close', [AdminAccountEnforcementController::class, 'close']);
         // A municipal administrator's access (e.g. when they leave the office): provincial admins only.
         Route::post('/users/{id}/admin-access', [AdminAccountEnforcementController::class, 'adminAccess'])->middleware('admin.provincial');
+        // A municipality's tourism office account (municipal scope only): provincial admins only.
+        Route::post('/admin-accounts', [AdminOfficeAccountController::class, 'store'])->middleware(['admin.provincial', 'throttle:10,1']);
         Route::get('/account-violations', [AdminViolationController::class, 'violations']);
         Route::get('/account-violations/{id}/evidence/{index}', [AdminAccountEnforcementController::class, 'evidence']);
         Route::get('/account-appeals', [AdminViolationController::class, 'appeals']);

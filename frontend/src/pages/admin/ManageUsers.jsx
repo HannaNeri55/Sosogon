@@ -1,7 +1,7 @@
 // frontend/src/pages/admin/ManageUsers.jsx
 import { useCallback, useEffect, useState } from 'react'
 import {
-  FiSearch, FiUser, FiActivity, FiFileText, FiAlertTriangle, FiPauseCircle, FiSlash, FiRotateCcw, FiArchive, FiUserCheck,
+  FiSearch, FiUser, FiActivity, FiFileText, FiAlertTriangle, FiPauseCircle, FiSlash, FiRotateCcw, FiArchive, FiUserCheck, FiUserPlus,
 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { getAdminUsers, getEnforcementMeta, updateAdminUser } from '../../api/admin'
@@ -11,6 +11,7 @@ import StatusPill from '../../components/account/StatusPill'
 import ActionMenu from '../../components/admin/accounts/ActionMenu'
 import EnforcementModal from '../../components/admin/accounts/EnforcementModal'
 import ReasonActionModal from '../../components/admin/accounts/ReasonActionModal'
+import AddOfficeAdminModal from '../../components/admin/accounts/AddOfficeAdminModal'
 import UserAccountPanel from '../../components/admin/accounts/UserAccountPanel'
 import { displayName, formatDateTime } from '../../utils/accountStates'
 import { showApiError } from '../../utils/apiErrors'
@@ -53,7 +54,7 @@ export default function ManageUsers() {
   const [roleFilter, setRoleFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [categories, setCategories] = useState([])
-  // { type: 'panel' | 'enforce' | 'reactivate' | 'close', user, tab?, action? }
+  // { type: 'panel' | 'enforce' | 'reactivate' | 'close' | 'add_admin', user, tab?, action? }
   const [dialog, setDialog] = useState(null)
   const [panelKey, setPanelKey] = useState(0)
 
@@ -88,8 +89,8 @@ export default function ManageUsers() {
 
   // After an action: refresh the list and, if the panel was open, reopen it with fresh data.
   const afterAction = (user) => {
-    // A municipal admin's access changed: which municipalities have their own office may have too.
-    if (dialog?.type?.startsWith('admin_')) getUser().then((fresh) => updateUser({ admin: fresh.admin })).catch(() => {})
+    // A municipal admin's access changed or was added: which municipalities have their own office may have too.
+    if (dialog?.type?.startsWith('admin_') || dialog?.type === 'add_admin') getUser().then((fresh) => updateUser({ admin: fresh.admin })).catch(() => {})
     loadData()
     setPanelKey((key) => key + 1)
     setDialog(dialog?.from === 'panel' ? { type: 'panel', user, tab: 'violations' } : null)
@@ -162,6 +163,13 @@ export default function ManageUsers() {
             </p>
           )}
         </div>
+        {/* A municipality's tourism office gets its admin account from the provincial administrator. */}
+        {scope.isProvincial && (
+          <button type="button" onClick={() => setDialog({ type: 'add_admin' })} className="btn-primary">
+            <FiUserPlus size={16} aria-hidden="true" />
+            Add tourism office admin
+          </button>
+        )}
       </div>
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -263,6 +271,9 @@ export default function ManageUsers() {
       )}
       {['reactivate', 'close', 'admin_deactivate', 'admin_reactivate'].includes(dialog?.type) && (
         <ReasonActionModal user={dialog.user} mode={dialog.type} onClose={closeDialog} onDone={() => afterAction(dialog.user)} />
+      )}
+      {dialog?.type === 'add_admin' && (
+        <AddOfficeAdminModal onClose={closeDialog} onDone={() => afterAction(null)} />
       )}
     </div>
   )

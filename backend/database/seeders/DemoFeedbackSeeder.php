@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Local/demo only. Twenty Feedback & Concerns submissions that read like real ones, to show the
- * admin page with every category and status. Never seeded in production: the Tourism Office
- * would act on made-up concerns about real listings.
+ * Demo only. Twenty Feedback & Concerns submissions that read like real ones, to show the admin
+ * page with every category and status. Production only when SEED_DEMO_FEEDBACK_ON_LIVE=yes, for
+ * a site still used only for demos: a real Tourism Office would act on made-up concerns about
+ * real listings. DEMO_PREVIEW=1 lists what would be added and writes nothing.
  *
  * Senders use example.com addresses (a reserved domain that reaches no one). A submission about
  * a listing is matched by name; when that listing doesn't exist here it is still added, without
@@ -123,13 +124,14 @@ class DemoFeedbackSeeder extends Seeder
     public function run(): void
     {
         // Made-up concerns must never reach the real Tourism Office.
-        if (app()->environment('production')) {
-            throw new RuntimeException('Demo feedback cannot be seeded in production.');
+        if (app()->environment('production') && env('SEED_DEMO_FEEDBACK_ON_LIVE') !== 'yes') {
+            throw new RuntimeException('Set SEED_DEMO_FEEDBACK_ON_LIVE=yes to add demo feedback in production.');
         }
+        $preview = (bool) env('DEMO_PREVIEW');
 
         $admin = User::where('role_id', Role::where('name', 'admin')->value('id'))->orderBy('id')->first();
 
-        DB::transaction(function () use ($admin) {
+        DB::transaction(function () use ($admin, $preview) {
             $created = 0;
             foreach (self::SUBMISSIONS as [$category, $module, $about, $name, $wantsReply, $subject, $message, $status, $daysAgo, $note]) {
                 $hash = FeedbackSubmission::contentHash($subject, $message);
@@ -138,6 +140,12 @@ class DemoFeedbackSeeder extends Seeder
                 }
 
                 $listing = $about ? self::MODELS[$about[0]]::where('name', $about[1])->first() : null;
+                if ($preview) {
+                    $this->command?->line("  {$subject}".($about ? ' ('.($listing ? $about[1] : "{$about[1]} not found, added without the listing").')' : ''));
+                    $created++;
+
+                    continue;
+                }
                 $sent = now()->subDays($daysAgo)->setTime(random_int(7, 21), random_int(0, 59));
                 $handled = $status !== 'pending';
 
@@ -170,7 +178,7 @@ class DemoFeedbackSeeder extends Seeder
                 $created++;
             }
 
-            $this->command?->info("Feedback & Concerns: {$created} added.");
+            $this->command?->info("Feedback & Concerns: {$created} ".($preview ? 'would be added.' : 'added.'));
         });
     }
 
