@@ -549,7 +549,12 @@ class AdminDestinationController extends Controller
             $images->delete($activity->image_path, $activity->thumbnail_path);
         }
 
-        $destination->delete();
+        // Gone for good: its stops leave the trips that included it, and its reviews go with it.
+        DB::transaction(function () use ($destination) {
+            DB::table('itinerary_items')->where('destination_id', $destination->id)->delete();
+            $destination->ratings()->delete();
+            $destination->delete();
+        });
 
         return response()->json(['message' => 'Destination deleted.']);
     }
