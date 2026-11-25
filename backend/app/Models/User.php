@@ -166,7 +166,7 @@ class User extends Authenticatable
 
     // ==================== ADMIN SCOPE (see App\Support\AdminScope) ====================
     // admin_scope and municipality_id are not fillable: only the admin:create / admin:assign
-    // commands set them.
+    // commands set them, and a provincial admin's AdminOfficeAccountController (municipal only).
 
     /** Manages every municipality (the Provincial Tourism Office, or the system administrator). */
     public const ADMIN_SCOPE_PROVINCIAL = 'provincial';

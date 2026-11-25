@@ -434,6 +434,12 @@ export const setAdminAccess = async (id, action, reason) => {
   return response.data
 }
 
+/** Create a municipality's tourism office admin account (provincial admins only); the officer sets their password from an emailed link. */
+export const createOfficeAdmin = async (data) => {
+  const response = await api.post('/admin/admin-accounts', data)
+  return response.data
+}
+
 export const closeUserAccount = async (id, data) => {
   const response = await api.post(`/admin/users/${id}/close`, data)
   return response.data
