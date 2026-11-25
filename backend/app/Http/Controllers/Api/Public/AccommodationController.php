@@ -60,6 +60,11 @@ class AccommodationController extends Controller
             });
         }
 
+        // Home's Featured accommodations: best rated first, then the most reviewed; unrated last.
+        if ($request->input('sort') === 'top_rated') {
+            $query->orderByDesc('average_rating')->orderByDesc('total_reviews');
+        }
+
         $perPage = $this->perPage($request, 12, 50);
 
         return response()->json(
